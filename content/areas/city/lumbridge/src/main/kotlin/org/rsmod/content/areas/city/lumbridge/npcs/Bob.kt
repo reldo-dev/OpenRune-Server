@@ -20,7 +20,7 @@ class Bob @Inject constructor(private val shops: Shops) : PluginScript() {
         onUnimplementedOpNpc4("npc.bob") { repairOp(it.npc) }
     }
 
-    private fun Player.openShop(npc: Npc)    {
+    private fun Player.openShop(npc: Npc) {
         shops.open(this, npc, "Bob's Brilliant Axes", "inv.axeshop")
     }
 
