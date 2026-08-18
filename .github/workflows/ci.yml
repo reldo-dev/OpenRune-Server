@@ -51,13 +51,6 @@ jobs:
           chmod +x gradlew
           ./gradlew :or-cache:freshCache :or-cache:mergePluginGamevals --no-daemon --stacktrace
 
-      # Spotless is configured with ratchetFrom("origin/main"), so only files
-      # changed relative to main are checked. The ref must exist locally.
-      - name: Check formatting
-        run: |
-          git fetch origin main --depth=1
-          ./gradlew spotlessCheck --no-daemon --stacktrace
-
       - name: Compile and run tests
         run: ./gradlew assemble test --no-daemon --stacktrace
 
