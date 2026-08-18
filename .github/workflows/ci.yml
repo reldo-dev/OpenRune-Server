@@ -1,0 +1,83 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      # The downloaded game cache only changes when the revision in
+      # game.example.yml bumps (~monthly), so cache it across runs.
+      - name: Cache game data
+        uses: actions/cache@v4
+        with:
+          path: |
+            .data/cache
+            .data/xteas.json
+          key: game-cache-${{ hashFiles('game.example.yml') }}
+
+      # api/generated/src is gitignored and produced by the cache pipeline
+      # (or-cache TableGenerater and gameval codegen), so a clean checkout
+      # does not compile until these tasks run — same bootstrap as the
+      # Release Server workflow.
+      - name: Generate cache and gameval sources
+        run: |
+          chmod +x gradlew
+          ./gradlew :or-cache:freshCache :or-cache:mergePluginGamevals --no-daemon --stacktrace
+
+      # Spotless is configured with ratchetFrom("origin/main"), so only files
+      # changed relative to main are checked. The ref must exist locally.
+      - name: Check formatting
+        run: |
+          git fetch origin main --depth=1
+          ./gradlew spotlessCheck --no-daemon --stacktrace
+
+      - name: Compile and run tests
+        run: ./gradlew assemble test --no-daemon --stacktrace
+
+      # Config errors in a data-driven server surface at boot (unmapped
+      # gamevals throw by design), so start the server and require the
+      # "Server ready" line within the timeout.
+      - name: Boot server to ready
+        run: |
+          ./gradlew generateRsa --no-daemon
+          cp -n game.example.yml game.yml || true
+          ./gradlew run --no-daemon -q > boot.log 2>&1 &
+          GRADLE_PID=$!
+          for i in $(seq 1 300); do
+            grep -q "Server ready in" boot.log && break
+            kill -0 $GRADLE_PID 2>/dev/null || break
+            sleep 1
+          done
+          if grep -q "Server ready in" boot.log; then
+            grep -o "Server ready in [0-9.]*s" boot.log
+          else
+            echo "BOOT FAILED"; tail -40 boot.log; exit 1
+          fi
+          kill $GRADLE_PID 2>/dev/null || true
