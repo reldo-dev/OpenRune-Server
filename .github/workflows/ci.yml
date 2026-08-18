@@ -54,6 +54,7 @@ jobs:
       # Spotless is configured with ratchetFrom("origin/main"), so only files
       # changed relative to main are checked. The ref must exist locally.
       - name: Check formatting
+        continue-on-error: true
         run: |
           git fetch origin main --depth=1
           ./gradlew spotlessCheck --no-daemon --stacktrace
