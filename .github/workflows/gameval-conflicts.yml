@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  actions: write
   contents: write
   checks: write
   pull-requests: write
@@ -98,6 +99,11 @@ jobs:
                 summary: $summary
               }
             }' | gh api "repos/${{ github.repository }}/check-runs" --input -
+
+          # For the same reason the build never runs against the fixed head, so it
+          # would keep reporting the conflicting one. workflow_dispatch is exempt
+          # from the no-retrigger rule, so ask CI to build the branch as it stands.
+          gh workflow run ci.yml --ref "${{ github.head_ref }}"
 
           {
             echo "## Gameval conflicts auto-fixed"
