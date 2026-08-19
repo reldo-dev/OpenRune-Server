@@ -9,7 +9,7 @@
   <a href="https://github.com/OpenRune/OpenRune-Server/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/OpenRune/OpenRune-Server?style=for-the-badge&color=6f42c1"/></a>
   <a href="https://oldschool.runescape.wiki/w/Update:Leagues_V:_Raging_Echos_Rewards_Are_Here"><img alt="Revision 240" src="https://img.shields.io/badge/Revision-240-blueviolet?style=for-the-badge"/></a>
   <a href="https://trello.com/b/A0LefFDs/later"><img alt="Roadmap" src="https://img.shields.io/badge/Trello-Roadmap-026AA7?style=for-the-badge&logo=trello&logoColor=white"/></a>
-  <a href="https://github.com/Mark7625/OpenRune-Server/"><img alt="Lines of Code" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fghloc.vercel.app%2Fapi%2FOpenRune%2FOpenRune-Server%2Fbadge%3Fformat%3Dhuman&style=for-the-badge&color=teal"/></a>
+  <a href="https://github.com/OpenRune/OpenRune-Server/"><img alt="Lines of Code" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fghloc.vercel.app%2Fapi%2FOpenRune%2FOpenRune-Server%2Fbadge%3Fformat%3Dhuman&style=for-the-badge&color=teal"/></a>
   <a href="https://discord.gg/v2qcXzBCwf">
     <img alt="Discord" src="https://img.shields.io/discord/1445802914156249241?label=Discord&logo=discord&logoColor=white&style=for-the-badge&color=5865F2"/>
   </a>
@@ -36,7 +36,7 @@ OpenRune Server adheres to OSRS protocols, giving you the freedom to connect any
 
 1. **Clone the repository**
    - `File → New → Project from Version Control` in IntelliJ, then paste `https://github.com/OpenRune/OpenRune-Server.git`.
-   - OpenRune Servernatively, clone via Git CLI and open the project manually.
+   - Alternatively, clone via Git CLI and open the project manually.
 
 2. **Install dependencies**
    - Ensure you have [IntelliJ IDEA](https://www.jetbrains.com/idea/download/#section=windows).
@@ -49,16 +49,13 @@ OpenRune Server adheres to OSRS protocols, giving you the freedom to connect any
    <img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/7aa46983-1f84-4c08-abf8-2f17bc72f073" />
 
 
-4. **Gradle bootstrap**
+3. **Gradle bootstrap**
    - Open the Gradle tool window.
    - Run `OpenRune Server → Tasks → installation → install`.
    - When the task completes, run `OpenRune Server → Tasks → application → run`.
 
-5. **Verify startup**
-   - A successful boot prints `OpenRune Server Successfully initialized` in the terminal.
-   - If you only see `OpenRune Server Loaded up in x ms.` you likely skipped a step.
-
-Screenshots showcasing each step are available in the repo under `Resources/main/docs/resources/ReadMe_OpenRune Server/`.
+4. **Verify startup**
+   - A successful boot prints `Server ready in ...` followed by `Bound to ports: 43594` and the revision number in the terminal.
 
 ## 🎮 Client Setup
 > [!TIP]
@@ -83,12 +80,12 @@ Find the modulus in the project root `.data/client.key`, copy it exactly, and re
 Note: RSprox for Private Servers only works currently on Windows and Linux, NOT MacOS!
 
 > [!WARNING]
-> And stay away from client's like Devious, as they have been caught adding Account Stealer into their client.
+> And stay away from clients like Devious, as they have been caught adding an account stealer into their client.
 ## 📦 Release builds
 
 CI can produce a self-contained `openrune-server-release.zip` with `server.jar`, `game.yml`, and compiled `.data/`. Pushes to `production` publish automatically; other branches can be built manually from **Actions → Release Server**.
 
-See [.github/docs/RELEASE_CI.md](.github/docs/RELEASE_CI.md) for what the workflow does, how to run it manually, and how to build from `production` vs `main`/feature branches.
+See [docs/RELEASE_CI.md](docs/RELEASE_CI.md) for what the workflow does, how to run it manually, and how to build from `production` vs `main`/feature branches.
 
 ## 🗺️ Project Planning
 - Public roadmap and task board: [OpenRune Server Trello](https://trello.com/b/A0LefFDs/later).
@@ -96,7 +93,7 @@ See [.github/docs/RELEASE_CI.md](.github/docs/RELEASE_CI.md) for what the workfl
 
 ## 💬 Bug Reports & Support
 - Open an issue on [GitHub](https://github.com/OpenRune/OpenRune-Server/issues) with reproduction details.
-- Reach the team directly in the [Discord server](https://discord.gg/HAwN6N8F).
+- Reach the team directly in the [Discord server](https://discord.gg/v2qcXzBCwf).
 
 ## 🙏 Acknowledgments
 - Cache management powered by [OpenRune-FileStore](https://github.com/OpenRune/OpenRune-FileStore).
