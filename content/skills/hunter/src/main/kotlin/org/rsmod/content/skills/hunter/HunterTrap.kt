@@ -14,6 +14,7 @@ import org.rsmod.api.random.GameRandom
 import org.rsmod.api.repo.controller.ControllerRepository
 import org.rsmod.api.repo.loc.LocRepository
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.player.PlayerRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.utils.skills.SkillingSuccessRate
 import org.rsmod.game.MapClock
@@ -56,8 +57,42 @@ const val TRAP_SPRING_CYCLES: Int = 2
  */
 const val TRAP_COLLAPSE_LINGER_CYCLES: Int = 100
 
-/** Only a creature this close to the trap tile can spring it. */
-const val TRAP_TRIGGER_DISTANCE: Int = 1
+/**
+ * How close a creature has to be to a box trap to be lured into it, in tiles.
+ *
+ * "Any ferret or chinchompa within a 2-tile radius of the box trap (forming a 5x5 square centred on
+ * the trap) can be attracted." (wiki, *Box trap > Mechanics*).
+ */
+const val BOX_TRAP_TRIGGER_DISTANCE: Int = 2
+
+/**
+ * The bird snare's equivalent of [BOX_TRAP_TRIGGER_DISTANCE].
+ *
+ * Unsourced. Neither the *Bird snare* page nor *Hunter > Hunting techniques > Bird snaring* states
+ * a radius - the latter says only that snares "have a chance to attract and catch birds as they fly
+ * by" - and no cache record carries one, because the catch is entirely server-side. Adjacency is
+ * the conservative reading and is what has been in place since the snare landed; do not promote it
+ * to the box trap's 2 without a source.
+ */
+const val SNARE_TRIGGER_DISTANCE: Int = 1
+
+/**
+ * How often a laid box trap rolls for a catch, in cycles.
+ *
+ * "Once a box trap has been set, it will make an attempt every 3 ticks (1.8 seconds) to lure in an
+ * animal that is currently in range." (wiki, *Box trap > Mechanics*). Rolling every cycle instead
+ * would triple the effective catch rate at the same per-attempt chance.
+ */
+const val BOX_TRAP_ATTEMPT_CYCLES: Int = 3
+
+/**
+ * The bird snare's equivalent of [BOX_TRAP_ATTEMPT_CYCLES].
+ *
+ * Unsourced, like [SNARE_TRIGGER_DISTANCE]: the wiki gives the 3-tick cadence for the box trap
+ * only. One attempt per cycle is what the snare has always done here, kept as the accepted
+ * approximation rather than borrowed from the other family.
+ */
+const val SNARE_ATTEMPT_CYCLES: Int = 1
 
 /** The most traps any player can have laid, reached at level 80. */
 const val MAX_LAID_TRAPS: Int = 5
@@ -134,6 +169,7 @@ constructor(
     private val locRepo: LocRepository,
     private val conRepo: ControllerRepository,
     private val npcRepo: NpcRepository,
+    private val playerRepo: PlayerRepository,
     private val playerList: PlayerList,
     private val random: GameRandom,
     private val xpMods: XpModifiers,
@@ -229,11 +265,31 @@ constructor(
             return
         }
 
-        val target = nearbyCreature(family)
-        if (target == null) {
-            aiTimer(1)
+        // Re-armed every cycle whatever the family's attempt cadence is. This tick is also what
+        // notices the expiring lifetime above, and a controller whose duration runs out between two
+        // ticks is deleted by ControllerRepository without anything clearing its loc.
+        aiTimer(1)
+
+        // "Once a box trap has been set, it will make an attempt every 3 ticks (1.8 seconds) to
+        // lure in an animal that is currently in range." (wiki). Phased on the trap's own creation
+        // cycle rather than the raw map clock, so traps laid on different cycles do not all roll
+        // in lockstep.
+        if ((mapClock.cycle - creationCycle) % attemptCycles(family) != 0) {
             return
         }
+
+        // "A bird snare will not catch birds if the user is standing directly on the bird snare."
+        // (wiki, Bird snare) / "Box traps won't trap prey if players are standing on the trap
+        // itself." (wiki, Box trap > Mechanics). Any player, not just the owner: the box trap's
+        // wording is the plural, general one, and the same section describes the lure as reusing
+        // NPC aggression, which no creature resolves onto an occupied tile. Only the roll is
+        // blocked - the trap still ages toward collapse, otherwise standing on one would hold it
+        // open indefinitely.
+        if (playerRepo.findAll(coords).any()) {
+            return
+        }
+
+        val target = nearbyCreature(family) ?: return
 
         val (npc, creature) = target
 
@@ -284,20 +340,26 @@ constructor(
         val creature = HunterCreatures.all.getOrNull(controller.trapCreature)
         val trapObj = trapObj(family)
 
+        // Rolled once, up front: the space check below and the awards further down have to agree
+        // on the same numbers, and a second roll would let a collect be accepted for five feathers
+        // and then hand out ten.
+        val awards = creature?.caught.orEmpty().map { it.obj to rollQuantity(it.quantity) }
+
         // The trap item comes back alongside everything it caught. A stackable award only costs
         // a slot when the player isn't already carrying it - counting it unconditionally over-
         // rejects a legitimate collect (e.g. a chinchompa catch when the player already holds
         // that chinchompa type, or a feather catch when they already hold that feather colour).
-        val caught = creature?.caught.orEmpty()
-        val slotsNeeded = (caught + trapObj).count { needsInvSlot(inv, it) }
+        val slotsNeeded =
+            awards.sumOf { (obj, count) -> invSlotsNeeded(inv, obj, count) } +
+                invSlotsNeeded(inv, trapObj, 1)
         if (inv.freeSpace() < slotsNeeded) {
             mes("Your inventory is too full to hold any more.")
             soundSynth("synth.pillory_wrong")
             return false
         }
 
-        for (obj in caught) {
-            invAdd(inv, obj, 1)
+        for ((obj, count) in awards) {
+            invAdd(inv, obj, count)
         }
         invAdd(inv, trapObj, 1)
 
@@ -329,7 +391,7 @@ constructor(
         }
 
         val trapObj = trapObj(family)
-        if (needsInvSlot(inv, trapObj) && inv.freeSpace() < 1) {
+        if (inv.freeSpace() < invSlotsNeeded(inv, trapObj, 1)) {
             mes("Your inventory is too full to hold any more.")
             soundSynth("synth.pillory_wrong")
             return false
@@ -340,6 +402,10 @@ constructor(
         player.sweepTrapCoords()
         return true
     }
+
+    /** A fixed quantity costs no random draw; only a real range consumes one. */
+    private fun rollQuantity(quantity: IntRange): Int =
+        if (quantity.first == quantity.last) quantity.first else random.of(quantity)
 
     /**
      * Drops every stored coord that no longer has a live trap of this player's on it, writes the
@@ -388,7 +454,7 @@ constructor(
             .findAll(ZoneKey.from(coords), zoneRadius = 1)
             .filter { npc ->
                 npc.coords.level == coords.level &&
-                    npc.coords.chebyshevDistance(coords) <= TRAP_TRIGGER_DISTANCE
+                    npc.coords.chebyshevDistance(coords) <= triggerDistance(family)
             }
             .mapNotNull { npc ->
                 val internal = RSCM.getReverseMapping(RSCMType.NPC, npc.visType.id)
@@ -414,14 +480,18 @@ constructor(
     }
 
     /**
-     * Whether awarding one more [internal] to [inv] costs a free slot. A stackable item already
-     * present just grows its existing stack and needs none; everything else - including a stackable
-     * item not yet held at all - needs exactly one.
+     * How many free slots awarding [count] of [internal] to [inv] costs. A stackable item already
+     * present just grows its existing stack and needs none whatever the count; a stackable item not
+     * yet held at all needs exactly one; anything else needs one per item.
      */
-    private fun needsInvSlot(inv: Inventory, internal: String): Boolean {
+    private fun invSlotsNeeded(inv: Inventory, internal: String, count: Int): Int {
         val stackable =
             ServerCacheManager.getItem(internal.asRSCM(RSCMType.OBJ))?.isStackable == true
-        return !stackable || !inv.contains(internal)
+        return when {
+            !stackable -> count
+            inv.contains(internal) -> 0
+            else -> 1
+        }
     }
 
     private fun canTakeTrap(coords: CoordGrid): Boolean =
@@ -453,6 +523,20 @@ constructor(
             when (family) {
                 TrapFamily.SNARE -> "obj.hunting_ojibway_bird_snare"
                 TrapFamily.BOX -> "obj.hunting_box_trap"
+            }
+
+        /** Per-family, because only the box trap's radius is sourced. */
+        private fun triggerDistance(family: TrapFamily): Int =
+            when (family) {
+                TrapFamily.SNARE -> SNARE_TRIGGER_DISTANCE
+                TrapFamily.BOX -> BOX_TRAP_TRIGGER_DISTANCE
+            }
+
+        /** Per-family, because only the box trap's cadence is sourced. */
+        private fun attemptCycles(family: TrapFamily): Int =
+            when (family) {
+                TrapFamily.SNARE -> SNARE_ATTEMPT_CYCLES
+                TrapFamily.BOX -> BOX_TRAP_ATTEMPT_CYCLES
             }
     }
 }

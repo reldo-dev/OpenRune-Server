@@ -27,6 +27,12 @@ package org.rsmod.content.skills.hunter
  *   out-of-scope net-trap rabbit chain), not the box-trap catch chance.
  */
 object HunterCreatures {
+    /**
+     * How many feathers one bird snare catch awards. Declared ahead of [all] because [all] reads it
+     * during initialisation.
+     */
+    private val FEATHER_QUANTITY: IntRange = 5..10
+
     val all: List<HunterCreature> =
         listOf(
             // Bird snare. P(L) = (floor(m * (L - 1) / 98) + c) / 255 is not stated on any bird's
@@ -38,8 +44,7 @@ object HunterCreatures {
                 npc = "npc.hunting_bird_jungle",
                 level = 1,
                 xp = 340,
-                caught =
-                    listOf("obj.bones", "obj.spit_raw_bird_meat", "obj.hunting_jungle_feather"),
+                caught = birdCatch("obj.hunting_jungle_feather"),
                 successLow = 100,
                 successHigh = 420,
             ),
@@ -48,8 +53,7 @@ object HunterCreatures {
                 npc = "npc.hunting_bird_desert",
                 level = 5,
                 xp = 470,
-                caught =
-                    listOf("obj.bones", "obj.spit_raw_bird_meat", "obj.hunting_desert_feather"),
+                caught = birdCatch("obj.hunting_desert_feather"),
                 successLow = 92,
                 successHigh = 400,
             ),
@@ -58,8 +62,7 @@ object HunterCreatures {
                 npc = "npc.hunting_bird_woodland",
                 level = 9,
                 xp = 612,
-                caught =
-                    listOf("obj.bones", "obj.spit_raw_bird_meat", "obj.hunting_woodland_feather"),
+                caught = birdCatch("obj.hunting_woodland_feather"),
                 successLow = 85,
                 successHigh = 390,
             ),
@@ -70,7 +73,7 @@ object HunterCreatures {
                 // The creature's own infobox states 64.5 xp; the parent "Bird snare" summary
                 // table states 64.6 xp. Used the creature-page value as primary.
                 xp = 645,
-                caught = listOf("obj.bones", "obj.spit_raw_bird_meat", "obj.hunting_polar_feather"),
+                caught = birdCatch("obj.hunting_polar_feather"),
                 successLow = 82,
                 successHigh = 380,
             ),
@@ -81,7 +84,7 @@ object HunterCreatures {
                 npc = "npc.hunting_chinchompa",
                 level = 53,
                 xp = 1984,
-                caught = listOf("obj.chinchompa_captured"),
+                caught = listOf(HunterCatch("obj.chinchompa_captured")),
                 successLow = 6,
                 successHigh = 268,
                 bait = "obj.bowl_spicytomato",
@@ -91,7 +94,7 @@ object HunterCreatures {
                 npc = "npc.hunting_chinchompa_big",
                 level = 63,
                 xp = 2650,
-                caught = listOf("obj.chinchompa_big_captured"),
+                caught = listOf(HunterCatch("obj.chinchompa_big_captured")),
                 // "Carnivorous and Black Chinchompas have the same catch rate" - stated on both
                 // wiki pages, and the two per-level charts are pointwise identical.
                 successLow = -78,
@@ -103,7 +106,7 @@ object HunterCreatures {
                 npc = "npc.hunting_chinchompa_black",
                 level = 73,
                 xp = 3150,
-                caught = listOf("obj.chinchompa_black"),
+                caught = listOf(HunterCatch("obj.chinchompa_black")),
                 successLow = -78,
                 successHigh = 228,
                 bait = "obj.bowl_spicymeat",
@@ -113,4 +116,17 @@ object HunterCreatures {
     private val byNpc: Map<String, HunterCreature> = all.associateBy { it.npc }
 
     fun byNpc(npc: String): HunterCreature? = byNpc[npc]
+
+    /**
+     * The three items every bird snare catch awards. Identical on all four birds bar the feather
+     * colour, and identical in quantity: each infobox reads "Bones | Quantity: 1 | Rarity: Always",
+     * "Raw bird meat | Quantity: 1 | Rarity: Always", "<colour> feather | Quantity: 5-10 | Rarity:
+     * Always". Only the feather is rolled.
+     */
+    private fun birdCatch(feather: String): List<HunterCatch> =
+        listOf(
+            HunterCatch("obj.bones"),
+            HunterCatch("obj.spit_raw_bird_meat"),
+            HunterCatch(feather, FEATHER_QUANTITY),
+        )
 }
