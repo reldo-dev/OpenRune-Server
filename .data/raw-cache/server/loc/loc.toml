@@ -1899,6 +1899,11 @@ inherit = "loc.hunting_boxtrap_empty"
 contentGroup = "content.hunter_box_trap"
 
 [[object]]
+id = "loc.hunting_boxtrap_failed"
+inherit = "loc.hunting_boxtrap_failed"
+contentGroup = "content.hunter_box_trap"
+
+[[object]]
 id = "loc.hunting_boxtrap_full_chinchompa"
 inherit = "loc.hunting_boxtrap_full_chinchompa"
 contentGroup = "content.hunter_box_trap"
