@@ -314,6 +314,34 @@ constructor(
     }
 
     /**
+     * The whole of op1 on a trap loc: `Check` on a sprung trap, `Dismantle` on an armed or a
+     * collapsed one. All three are the same transaction - clear the tile, hand back whatever is on
+     * it - so they share one entry point rather than one per loc state.
+     *
+     * A collapsed trap outlives its controller by [TRAP_COLLAPSE_LINGER_CYCLES], so a *missing*
+     * controller is an ordinary case here, not an error. There is then nobody left to check
+     * ownership against, so whoever clears the tile keeps the trap item; the item was consumed once
+     * on lay and the loc is deleted in the same call, so this cannot mint a second one.
+     */
+    fun ProtectedAccess.takeTrap(loc: BoundLocInfo, family: TrapFamily): Boolean {
+        if (conRepo.findExact(loc.coords, TRAP_CONTROLLER) != null) {
+            return collectTrap(loc)
+        }
+
+        val trapObj = trapObj(family)
+        if (needsInvSlot(inv, trapObj) && inv.freeSpace() < 1) {
+            mes("Your inventory is too full to hold any more.")
+            soundSynth("synth.pillory_wrong")
+            return false
+        }
+
+        invAdd(inv, trapObj, 1)
+        clearTrapLoc(loc.coords)
+        player.sweepTrapCoords()
+        return true
+    }
+
+    /**
      * Drops every stored coord that no longer has a live trap of this player's on it, writes the
      * survivors back, and returns them.
      */

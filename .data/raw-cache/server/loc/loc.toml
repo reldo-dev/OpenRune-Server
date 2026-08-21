@@ -1864,6 +1864,11 @@ inherit = "loc.hunting_ojibway_trap"
 contentGroup = "content.hunter_bird_snare"
 
 [[object]]
+id = "loc.hunting_ojibway_trap_broken"
+inherit = "loc.hunting_ojibway_trap_broken"
+contentGroup = "content.hunter_bird_snare"
+
+[[object]]
 id = "loc.hunting_ojibway_trap_full_coloured"
 inherit = "loc.hunting_ojibway_trap_full_coloured"
 contentGroup = "content.hunter_bird_snare"
@@ -1886,11 +1891,6 @@ contentGroup = "content.hunter_bird_snare"
 [[object]]
 id = "loc.hunting_ojibway_trap_full_woodland"
 inherit = "loc.hunting_ojibway_trap_full_woodland"
-contentGroup = "content.hunter_bird_snare"
-
-[[object]]
-id = "loc.hunting_bird_snare_for_taking"
-inherit = "loc.hunting_bird_snare_for_taking"
 contentGroup = "content.hunter_bird_snare"
 
 [[object]]
