@@ -9,3 +9,15 @@ hunter_trap_creature = 6
 [gamevals.content]
 hunter_bird_snare = 54
 hunter_box_trap = 55
+
+# The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
+# lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom
+# varp ids grow downward from the lowest id in the packed cache's own varp table (65502); the block
+# 65481-65501 is already claimed by runecrafting, sandstorm, slayer, instances, herblore and
+# prayer, so hunter takes the next five below it.
+[gamevals.varp]
+hunter_trap_coord_1 = 65480
+hunter_trap_coord_2 = 65479
+hunter_trap_coord_3 = 65478
+hunter_trap_coord_4 = 65477
+hunter_trap_coord_5 = 65476
