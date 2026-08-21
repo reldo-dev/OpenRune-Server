@@ -12,8 +12,10 @@ enum class TrapFamily {
  * `SkillingSuccessRate.successRate(low, high, level, maxLevel)`. They are the raw `c` and `m + c`
  * coefficients read off each creature's wiki formula `P(L) = (floor(m * (L - 1) / 98) + c) / 255`
  * at level 1 and level 99 respectively - not the formula evaluated to a probability. A negative
- * [successLow] is expected and load-bearing: it reproduces "if the player's Hunter level is too
- * low, the trap will always fail" with no guard code.
+ * [successLow] (black/carnivorous chinchompa) reproduces "if the player's Hunter level is too low,
+ * the trap will always fail" on its own, with no guard code. Every other creature here has a
+ * non-negative [successLow] - regular chinchompa's is +6 - so that guard is *not* implicit for
+ * them; [HunterTrap.hunterTrapTick] gates the roll explicitly on `owner.hunterLvl >= level`.
  *
  * [caught] is a list because a single catch can award more than one item - a bird snare catch
  * always awards bones, raw bird meat, and a species feather in one go.

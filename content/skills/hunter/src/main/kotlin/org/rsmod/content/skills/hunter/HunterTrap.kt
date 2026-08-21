@@ -1,5 +1,6 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.ServerCacheManager
 import dev.openrune.rscm.RSCM
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
@@ -21,6 +22,7 @@ import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
 import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.entity.player.PlayerUid
+import org.rsmod.game.inv.Inventory
 import org.rsmod.game.loc.BoundLocInfo
 import org.rsmod.game.loc.LocAngle
 import org.rsmod.game.loc.LocShape
@@ -161,6 +163,8 @@ constructor(
 
         val trapObj = trapObj(family)
         if (invDel(inv, trapObj, 1).failure) {
+            val name = ServerCacheManager.getItem(trapObj.asRSCM(RSCMType.OBJ))?.name?.lowercase()
+            mes("You don't have a ${name ?: "trap"} to lay.")
             return false
         }
 
@@ -185,6 +189,9 @@ constructor(
     fun Controller.hunterTrapTick() {
         val family = TrapFamily.entries.getOrNull(trapFamily)
         if (family == null) {
+            // Defensive: the varcon defaults to 0 (SNARE), so this should be unreachable, but a
+            // corrupt ordinal must not strand a controller-less loc on the tile forever.
+            clearTrapLoc(coords)
             conRepo.del(this)
             return
         }
@@ -229,14 +236,20 @@ constructor(
         }
 
         val (npc, creature) = target
-        val rate =
-            SkillingSuccessRate.successRate(
-                low = creature.successLow,
-                high = creature.successHigh,
-                level = owner.hunterLvl,
-                maxLevel = MAX_HUNTER_LEVEL,
-            )
-        val caught = rate > random.randomDouble()
+
+        // "If the player's Hunter level is too low, the trap will always fail." (wiki). A
+        // negative `successLow` already reproduces this for black/carnivorous chinchompa, but
+        // regular chinchompa's `successLow` is positive (+6), so without this gate a level-1
+        // player would catch a level-53 creature at a small but non-zero rate. Short-circuits
+        // before the roll, so an under-levelled attempt never consumes a random draw.
+        val caught =
+            owner.hunterLvl >= creature.level &&
+                SkillingSuccessRate.successRate(
+                    low = creature.successLow,
+                    high = creature.successHigh,
+                    level = owner.hunterLvl,
+                    maxLevel = MAX_HUNTER_LEVEL,
+                ) > random.randomDouble()
 
         npcRepo.despawn(npc, npc.visType.respawnRate)
 
@@ -271,9 +284,13 @@ constructor(
         val creature = HunterCreatures.all.getOrNull(controller.trapCreature)
         val trapObj = trapObj(family)
 
-        // The trap item comes back alongside everything it caught.
+        // The trap item comes back alongside everything it caught. A stackable award only costs
+        // a slot when the player isn't already carrying it - counting it unconditionally over-
+        // rejects a legitimate collect (e.g. a chinchompa catch when the player already holds
+        // that chinchompa type, or a feather catch when they already hold that feather colour).
         val caught = creature?.caught.orEmpty()
-        if (inv.freeSpace() < caught.size + 1) {
+        val slotsNeeded = (caught + trapObj).count { needsInvSlot(inv, it) }
+        if (inv.freeSpace() < slotsNeeded) {
             mes("Your inventory is too full to hold any more.")
             soundSynth("synth.pillory_wrong")
             return false
@@ -366,6 +383,17 @@ constructor(
             dx >= 0 -> 'e'
             else -> 'w'
         }
+    }
+
+    /**
+     * Whether awarding one more [internal] to [inv] costs a free slot. A stackable item already
+     * present just grows its existing stack and needs none; everything else - including a stackable
+     * item not yet held at all - needs exactly one.
+     */
+    private fun needsInvSlot(inv: Inventory, internal: String): Boolean {
+        val stackable =
+            ServerCacheManager.getItem(internal.asRSCM(RSCMType.OBJ))?.isStackable == true
+        return !stackable || !inv.contains(internal)
     }
 
     private fun canTakeTrap(coords: CoordGrid): Boolean =
