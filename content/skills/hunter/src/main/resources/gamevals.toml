@@ -1,0 +1,7 @@
+[gamevals.controller]
+hunter_trap = 2
+
+[gamevals.varcon]
+hunter_trap_owner = 4
+hunter_trap_family = 5
+hunter_trap_creature = 6
