@@ -1,5 +1,6 @@
 package org.rsmod.api.bosses.dsl
 
+import java.io.File
 import org.rsmod.api.bosses.spec.BossSpec
 import org.rsmod.api.bosses.spec.Effect
 

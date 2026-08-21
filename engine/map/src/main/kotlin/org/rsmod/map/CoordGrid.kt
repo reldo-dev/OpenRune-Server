@@ -8,6 +8,9 @@ import org.rsmod.map.util.Bounds
 import org.rsmod.map.util.Translation
 
 @JvmInline
+//no space after the slashes
+
+
 public value class CoordGrid(public val packed: Int) {
     public val x: Int
         get() = (packed shr X_BIT_OFFSET) and X_BIT_MASK
