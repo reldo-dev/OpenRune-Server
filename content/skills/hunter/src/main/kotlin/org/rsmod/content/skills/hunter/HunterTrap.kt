@@ -7,6 +7,7 @@ import dev.openrune.rscm.RSCMType
 import jakarta.inject.Inject
 import kotlin.math.abs
 import org.rsmod.api.controller.vars.intVarCon
+import org.rsmod.api.player.isValidTarget
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.stat.hunterLvl
 import org.rsmod.api.player.vars.intVarp
@@ -285,7 +286,19 @@ constructor(
         // NPC aggression, which no creature resolves onto an occupied tile. Only the roll is
         // blocked - the trap still ages toward collapse, otherwise standing on one would hold it
         // open indefinitely.
-        if (playerRepo.findAll(coords).any()) {
+        //
+        // `isValidTarget()` is required here, not `.any()` alone: `PlayerRegistry.findAll`'s own
+        // KDoc warns it does not filter out hidden players or those mid-logout, and an invisible or
+        // logging-out player parked on the tile would otherwise suppress every catch silently, with
+        // no message and nothing observable to diagnose it by.
+        //
+        // Known consequence, accepted rather than fixed: a second, visible player can stand here to
+        // camp someone else's trap, suppressing every roll while the lifetime keeps decaying toward
+        // a forced collapse. Every trap loc is blockwalk=no (confirmed in cache), so nothing stops
+        // them physically standing on it. The trap item still comes back via the wreck on collapse,
+        // so this only costs time, and it matches live's plural "players" wording - this is a known
+        // griefing/denial-of-service vector, not an oversight.
+        if (playerRepo.findAll(coords).any { it.isValidTarget() }) {
             return
         }
 
