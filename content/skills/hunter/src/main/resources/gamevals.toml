@@ -1,3 +1,19 @@
+[gamevals.dbtable]
+# 55543-55544 continue the bottom-up 555xx dbtable run (firemaking's end at 55537).
+hunter_snare_creatures = 55543
+hunter_box_creatures = 55544
+
+# Append-only block, clear of the 555xx dbrow run with headroom. Ids ascend in the order the
+# creatures appear in the combined list, which a sprung trap persists an index into.
+[gamevals.dbrow]
+hunter_jungle_bird = 56300
+hunter_desert_bird = 56301
+hunter_woodland_bird = 56302
+hunter_polar_bird = 56303
+hunter_chinchompa = 56304
+hunter_carnivorous_chinchompa = 56305
+hunter_black_chinchompa = 56306
+
 [gamevals.controller]
 hunter_trap = 2
 
