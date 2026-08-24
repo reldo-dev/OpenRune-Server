@@ -92,6 +92,7 @@ constructor(private val traps: HunterTrap, private val conRepo: ControllerReposi
 
     private companion object {
         private const val BOX_TRAP_LEVEL_REQ = 27
-        private val SET_LOC = HunterTrapStates.setLoc(TrapFamily.BOX).asRSCM(RSCMType.LOC)
+        private val SET_LOC =
+            checkNotNull(HunterTrapStates.setLoc(TrapFamily.BOX)).asRSCM(RSCMType.LOC)
     }
 }

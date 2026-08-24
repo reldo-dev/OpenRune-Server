@@ -1,5 +1,12 @@
 package org.rsmod.content.skills.hunter
 
+/**
+ * Which technique a creature is caught with, and the whole of how its trap behaves.
+ *
+ * **The order is persisted.** A laid trap stores this enum's `ordinal` in
+ * `varcon.hunter_trap_family`, so a new family may only ever be *appended*: inserting one would
+ * silently re-file every trap standing in the world when the server restarts.
+ */
 enum class TrapFamily {
     SNARE,
     BOX,
@@ -11,18 +18,76 @@ enum class TrapFamily {
      * [HunterTrap.takeTrap]) reject it, and every state it moves through is a `locRepo.change` on
      * the boulder rather than a spawn and a delete.
      */
-    DEADFALL;
+    DEADFALL,
 
     /**
-     * True for the two families laid from an inventory item onto an empty tile, false for the
-     * deadfall.
+     * The net trap, the only family that is **two locs**: a young tree, which is a permanent map
+     * loc exactly like the deadfall's boulder, plus a spawned "Net trap" on the tile the tree's own
+     * angle points at ([netTrapCoords]).
      *
-     * The distinction is not cosmetic: deleting a deadfall boulder the way a portable trap's tile
-     * is cleared would take that boulder out of the world permanently, because `LocRepository` only
-     * schedules a respawn for a delete with a finite duration.
+     * The split is not ours - it is how the cache names the eight states. `up`, `setting` and `set`
+     * are all `name=Young tree` and live on the tree's tile; `net_set`, `catching`, `full`,
+     * `failing` and `failed` are all `name=Net trap` and live on the tile beside it. The wiki's own
+     * *Net trap* scenery infobox lists only the second five, confirming the first three belong to a
+     * different object.
+     *
+     * Which half carries a given op therefore decides which tile an op arrives on, and every op
+     * that lands on the net has to walk back to the tree, where the controller is anchored.
+     */
+    NETTRAP,
+
+    /**
+     * The magic box, which is portable and reuses the [SNARE]/[BOX] path wholesale - but is not a
+     * [BOX].
+     *
+     * `HunterTrapStates` builds a box trap's loc names from its npc's own name, and the imp
+     * (`npc.imp`) has no `hunting_` prefix to strip, its states are the unsuffixed
+     * `hunting_imptrap_*` set, and it is laid from `obj.magic_imp_box`. Filing it under [BOX] would
+     * resolve to loc names that do not exist - an RSCM throw at the first catch.
+     */
+    MAGICBOX;
+
+    /**
+     * True for the three families laid from an inventory item onto an empty tile, false for the two
+     * that are armed in place on a loc the map already supplied.
+     *
+     * The distinction is not cosmetic: deleting a deadfall boulder or a young tree the way a
+     * portable trap's tile is cleared would take that loc out of the world permanently, because
+     * `LocRepository` only schedules a respawn for a delete with a finite duration.
      */
     val portable: Boolean
-        get() = this != DEADFALL
+        get() =
+            when (this) {
+                SNARE,
+                BOX,
+                MAGICBOX -> true
+                DEADFALL,
+                NETTRAP -> false
+            }
+
+    /**
+     * Whether a player standing on the trap stops it catching anything.
+     *
+     * Sourced per family, and *not* the same split as [portable]:
+     * - "A bird snare will not catch birds if the user is standing directly on the bird snare."
+     * - "Box traps won't trap prey if players are standing on the trap itself." (*Box trap >
+     *   Mechanics*)
+     * - "it may be caught, but only when the player is not standing on the trap" (*Magic box*)
+     * - "it may be caught, but only when the player is not standing on the net" (*Net trap*) - note
+     *   *the net*, which for this family is the second loc, not the tile the controller sits on.
+     * - "Deadfall traps are not prone to failure by standing where they are set." (*Deadfall*) The
+     *   one family the wiki exempts, and the one whose trap is a boulder rather than something
+     *   underfoot.
+     */
+    val suppressedByPlayerOnTile: Boolean
+        get() =
+            when (this) {
+                SNARE,
+                BOX,
+                MAGICBOX,
+                NETTRAP -> true
+                DEADFALL -> false
+            }
 }
 
 /**
@@ -55,9 +120,16 @@ data class HunterCatch(val obj: String, val quantity: IntRange = 1..1)
  *
  * [bait] is recorded but unread in v1.
  *
- * [trappingLoc], [trappingLocM] and [fullLoc] are deadfall-only and null for every other family:
- * the boulder's mid-catch and caught states are per-creature locs that live in the packed table,
- * where the portable families build theirs from a name suffix instead.
+ * The loc columns are all null for the three portable families, which build their state names from
+ * a suffix on the npc's own name instead:
+ * - [trappingLoc] and [fullLoc] are shared by the two fixed-loc families. The net trap's packed
+ *   `catching_loc` fills [trappingLoc] - the cache's word for the state differs, the meaning does
+ *   not: it is the frame shown between the catch landing and the trap settling.
+ * - [trappingLocM] is deadfall-only; nothing else has a mirrored approach model.
+ * - [upLoc], [settingLoc], [setLoc] and [netSetLoc] are net-trap-only, and split across that
+ *   family's two tiles: the first three are the young tree, the fourth is the net beside it.
+ * - [failingLoc] and [failedLoc] are net-trap-only too, because that family recolours its net per
+ *   salamander where every other family's failure frames are one loc for the whole table.
  */
 data class HunterCreature(
     val family: TrapFamily,
@@ -71,4 +143,10 @@ data class HunterCreature(
     val trappingLoc: String? = null,
     val trappingLocM: String? = null,
     val fullLoc: String? = null,
+    val upLoc: String? = null,
+    val settingLoc: String? = null,
+    val setLoc: String? = null,
+    val netSetLoc: String? = null,
+    val failingLoc: String? = null,
+    val failedLoc: String? = null,
 )

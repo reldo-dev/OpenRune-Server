@@ -17,6 +17,7 @@ import org.rsmod.api.registry.loc.LocRegistry
 import org.rsmod.api.registry.loc.LocRegistryNormal
 import org.rsmod.api.registry.loc.LocRegistryRegion
 import org.rsmod.api.registry.npc.NpcRegistry
+import org.rsmod.api.registry.obj.ObjRegistry
 import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.region.RegionRegistry
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
@@ -24,6 +25,7 @@ import org.rsmod.api.registry.zone.ZoneUpdateMap
 import org.rsmod.api.repo.controller.ControllerRepository
 import org.rsmod.api.repo.loc.LocRepository
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.repo.player.PlayerRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
@@ -39,6 +41,7 @@ import org.rsmod.game.entity.Player
 import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.inv.Inventory
 import org.rsmod.game.loc.BoundLocInfo
+import org.rsmod.game.loc.LocAngle
 import org.rsmod.game.loc.LocEntity
 import org.rsmod.game.loc.LocInfo
 import org.rsmod.game.loc.LocShape
@@ -205,10 +208,12 @@ class HunterTrapTestWorld {
     private val locRegRegion = LocRegistryRegion(zoneUpdates, collision, locZones, regionRegistry)
     private val locRegistry = LocRegistry(locZones, locRegNormal, locRegRegion)
     private val playerRegistry = PlayerRegistry(playerList, collision, zoneActivity, eventBus)
+    private val objRegistry = ObjRegistry(zoneUpdates)
 
     val locRepo: LocRepository = LocRepository(mapClock, locRegistry, regionRegistry)
     val conRepo: ControllerRepository = ControllerRepository(conRegistry, controllerList)
     val npcRepo: NpcRepository = NpcRepository(mapClock, npcRegistry, npcList)
+    val objRepo: ObjRepository = ObjRepository(mapClock, objRegistry)
     val playerRepo: PlayerRepository = PlayerRepository(playerRegistry)
 
     val trap: HunterTrap =
@@ -216,6 +221,7 @@ class HunterTrapTestWorld {
             locRepo = locRepo,
             conRepo = conRepo,
             npcRepo = npcRepo,
+            objRepo = objRepo,
             playerRepo = playerRepo,
             playerList = playerList,
             random = random,
@@ -241,6 +247,10 @@ class HunterTrapTestWorld {
         player.coords = coords
         player.slotId = playerList.nextFreeSlot() ?: error("No free player slot.")
         player.uuid = nextUuid++
+        // Set at login by the account layer, and never null on a real player. `Obj.fromOwner`
+        // errors without it, which the net trap's drop-on-fail path is the first hunter code to
+        // reach: a dropped obj is private to its receiver first, and this is who that is.
+        player.observerUUID = player.uuid
         playerRegistry.add(player)
         playerRegistry.change(player, ZoneKey.NULL, ZoneKey.from(coords))
         player.statMap.setBaseLevel("stat.hunter", hunterLvl.toByte())
@@ -369,6 +379,43 @@ class HunterTrapTestWorld {
     fun deadfallPresent(coords: CoordGrid): Boolean =
         locRepo.findAll(coords).any { it.id in HunterTrapStates.deadfallLocIds }
 
+    /**
+     * True when [coords] still carries a young tree in any of its three states.
+     *
+     * The net trap's half of the never-delete invariant, and the exact analogue of
+     * [deadfallPresent]: a tree deleted with an infinite duration is gone from the world until the
+     * next restart, so "the tile still holds a tree" is the assertion every net-trap transition has
+     * to survive.
+     */
+    fun netTrapTreePresent(coords: CoordGrid): Boolean =
+        locRepo.findAll(coords).any { it.id in HunterTrapStates.netTrapTreeLocIds }
+
+    /** The name of the spawned "Net trap" loc belonging to the tree on [coords], if there is one. */
+    fun netLocNameAt(treeCoords: CoordGrid): String? {
+        val net = netLocAt(treeCoords) ?: return null
+        return dev.openrune.rscm.RSCM.getReverseMapping(RSCMType.LOC, net.id)
+    }
+
+    /** The spawned "Net trap" loc belonging to the tree on [coords], if there is one. */
+    fun netLocAt(treeCoords: CoordGrid): LocInfo? {
+        val tree = locRepo.findAll(treeCoords).firstOrNull {
+            it.id in HunterTrapStates.netTrapTreeLocIds
+        } ?: return null
+        val netCoords = netTrapCoords(treeCoords, tree.angle)
+        return locRepo.findAll(netCoords).firstOrNull {
+            it.id in HunterTrapStates.netTrapNetLocIds
+        }
+    }
+
+    /* Ground objs */
+
+    /** Every obj currently lying on [coords], by internal name. */
+    fun objNamesAt(coords: CoordGrid): List<String> =
+        objRepo
+            .findAll(coords)
+            .mapNotNull { dev.openrune.rscm.RSCM.getReverseMapping(RSCMType.OBJ, it.type) }
+            .toList()
+
     /* Traps */
 
     /**
@@ -377,10 +424,10 @@ class HunterTrapTestWorld {
      * state. Split out because `layTrap` is a `ProtectedAccess` extension and unreachable here.
      */
     fun layPortableTrap(family: TrapFamily, coords: CoordGrid, owner: Player): Controller {
-        require(family.portable) { "Use `armDeadfall` for the deadfall family." }
+        require(family.portable) { "Use `armDeadfall` or `armNetTrap` for the fixed-loc families." }
         locRepo.add(
             coords,
-            HunterTrapStates.setLoc(family),
+            checkNotNull(HunterTrapStates.setLoc(family)),
             Int.MAX_VALUE,
             org.rsmod.game.loc.LocAngle.West,
             LocShape.CentrepieceStraight,
@@ -406,6 +453,45 @@ class HunterTrapTestWorld {
             controller.trapDeadfallLog = log.asRSCM(RSCMType.OBJ)
         }
         return controller
+    }
+
+    /**
+     * Registers a young tree as a *map* loc on [coords], the way the game map supplies one.
+     *
+     * The angle is the whole point: it is what decides which tile the net half lands on, and it is
+     * the only thing that lets an op on the net walk back here. [addMapLoc]'s default of 0 is
+     * `LocAngle.West`.
+     */
+    fun addNetTrapTree(
+        coords: CoordGrid,
+        creature: HunterCreature,
+        angle: LocAngle = LocAngle.West,
+    ): LocInfo = addMapLoc(coords, HunterTrapStates.upLoc(creature), angle = angle.id)
+
+    /**
+     * Arms a net trap the way [HunterTrap.setNetTrap] does: the tree map loc is *changed* into its
+     * armed state - never deleted and respawned - the net is spawned on the tile the tree's angle
+     * points at, carrying the tree's angle, and a controller is anchored on the tree.
+     */
+    fun armNetTrap(coords: CoordGrid, owner: Player, creature: HunterCreature): Controller {
+        val tree =
+            locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.netTrapTreeLocIds }
+                ?: error("No young tree registered on $coords.")
+        val armed = HunterTrapStates.armedTreeLoc(creature)
+        val into =
+            ServerCacheManager.getObject(armed.asRSCM(RSCMType.LOC))
+                ?: error("Missing loc type: $armed")
+        locRepo.change(tree, into, Int.MAX_VALUE)
+
+        locRepo.add(
+            netTrapCoords(coords, tree.angle),
+            HunterTrapStates.netSetLoc(creature),
+            Int.MAX_VALUE,
+            tree.angle,
+            LocShape.CentrepieceStraight,
+        )
+
+        return addTrapController(TrapFamily.NETTRAP, coords, owner)
     }
 
     private fun addTrapController(

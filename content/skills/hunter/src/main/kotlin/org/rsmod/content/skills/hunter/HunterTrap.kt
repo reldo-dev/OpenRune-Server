@@ -16,6 +16,7 @@ import org.rsmod.api.random.GameRandom
 import org.rsmod.api.repo.controller.ControllerRepository
 import org.rsmod.api.repo.loc.LocRepository
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.repo.player.PlayerRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.table.FiremakingLogsRow
@@ -196,6 +197,84 @@ private val DEADFALL_TRAIL_LOGS: Set<String> =
 fun isUsableDeadfallLog(objKey: String): Boolean =
     objKey !in DEADFALL_EXCLUDED_LOGS && objKey !in DEADFALL_TRAIL_LOGS
 
+/**
+ * The net trap's equivalent of [BOX_TRAP_TRIGGER_DISTANCE], measured from the **net**, not the tree.
+ *
+ * Unsourced, exactly like [SNARE_TRIGGER_DISTANCE] and [DEADFALL_TRIGGER_DISTANCE]: the *Net trap*
+ * page says only that a salamander "may be caught" as it "passes the trap", never a radius, and the
+ * catch is server-side so no cache record carries one either. Adjacency is the conservative reading
+ * and it should not be promoted to the box trap's 2 without a source.
+ *
+ * That it is measured from the net follows from the same sentence the occupancy guard comes from -
+ * "only when the player is not standing on the net" - which is the only tile the wiki treats as the
+ * business end of this family.
+ */
+const val NET_TRAP_TRIGGER_DISTANCE: Int = 1
+
+/**
+ * The net trap's equivalent of [BOX_TRAP_ATTEMPT_CYCLES].
+ *
+ * Unsourced. The wiki gives the 3-tick cadence for the box trap only. Borrowed here rather than the
+ * snare's every-cycle roll for the same reason [DEADFALL_ATTEMPT_CYCLES] borrows it: a net trap is
+ * a normal multi-trap technique with published per-level rates, and rolling three times as often as
+ * the family those rates were measured on would quietly triple them.
+ */
+const val NET_TRAP_ATTEMPT_CYCLES: Int = 3
+
+/**
+ * How long the tree shows `hunting_sapling_setting_*` before it becomes an armed trap.
+ *
+ * Unsourced, and the same placeholder as [DEADFALL_SET_CYCLES] for the same reasons: no source
+ * states how long stringing the net takes, and the state exists in the cache with no ops, so
+ * nothing outside the animation depends on the exact figure.
+ */
+const val NET_TRAP_SET_CYCLES: Int = 3
+
+/**
+ * How long the rope and net a failed net trap drops stay on the ground.
+ *
+ * Sourced: "the small fishing net and rope will appear on the ground, which the player should pick
+ * up, or it will eventually disappear in approximately a minute" (wiki, *Net trap*, oldid=15272929).
+ * 100 cycles is ~1 minute at 0.6s/cycle - the same arithmetic [TRAP_LIFETIME_CYCLES] uses, and by
+ * coincidence the same number.
+ */
+const val NET_TRAP_DROP_CYCLES: Int = 100
+
+/**
+ * The magic box's equivalent of [BOX_TRAP_TRIGGER_DISTANCE].
+ *
+ * Unsourced. The *Magic box* page states the occupancy rule and the bait bonus and nothing about
+ * range. Adjacency is the conservative reading, consistent with every other family whose radius is
+ * unstated; it is deliberately *not* borrowed from the box trap despite the shared name, since the
+ * only reason to think the two agree is that both are boxes.
+ */
+const val MAGIC_BOX_TRIGGER_DISTANCE: Int = 1
+
+/**
+ * The magic box's equivalent of [BOX_TRAP_ATTEMPT_CYCLES].
+ *
+ * Unsourced, like [MAGIC_BOX_TRIGGER_DISTANCE]. The box trap's 3-tick cadence is borrowed rather
+ * than the snare's every-cycle roll, on the same reasoning as [DEADFALL_ATTEMPT_CYCLES]: the imp's
+ * per-level rate is published, and rolling every cycle would treble the rate that curve describes.
+ */
+const val MAGIC_BOX_ATTEMPT_CYCLES: Int = 3
+
+private const val ROPE: String = "obj.rope"
+
+/** `obj.net` is the cache symbol for the Small fishing net (303); `obj.small_fishing_net` is not. */
+private const val SMALL_FISHING_NET: String = "obj.net"
+
+/**
+ * What a net trap is strung from, what a successful catch hands back, and what a failed one drops.
+ *
+ * "With the required Hunter level, a rope and small fishing net in the inventory, clicking on a
+ * young tree will set the trap." (wiki, *Net trap*, oldid=15272929.)
+ *
+ * Held in one place rather than duplicated between the set-trap path and the dismantle path, which
+ * is the duplicated-truth bug the reference implementation of this family has.
+ */
+private val NET_TRAP_COMPONENTS: List<String> = listOf(ROPE, SMALL_FISHING_NET)
+
 /** The most traps any player can have laid, reached at level 80. */
 const val MAX_LAID_TRAPS: Int = 5
 
@@ -269,7 +348,7 @@ var Player.hunterTrapCoords: List<Int>
     }
 
 /**
- * Lay, advance, collect and collapse for all three trap families.
+ * Lay, advance, collect and collapse for all five trap families.
  *
  * A laid trap is a [Controller] anchored at its tile, exactly as woodcutting models a felled tree.
  * The tile is the key for everything: the controller, the loc chain and the cap all resolve from
@@ -278,14 +357,20 @@ var Player.hunterTrapCoords: List<Int>
  * The player-facing ops are not registered here - they belong to the per-family scripts, which also
  * register `onAiConTimer(TRAP_CONTROLLER)` exactly once, since it is family-agnostic.
  *
- * **The deadfall is not a trap on a tile; it is a state machine on a boulder that was always
- * there.** Everything else here spawns a loc and deletes it again, and
+ * **Two of the five families are not traps on a tile; they are state machines on locs that were
+ * always there.** The three portable families spawn a loc and delete it again, and
  * [LocRepository.del] with an infinite duration is how a spawned loc is cleared. Running that
- * against a deadfall would delete a *map* loc, and `LocRepository` only schedules a respawn for a
- * delete with a finite duration (`LocRepository.kt:98-131`) - so the boulder would be gone from the
- * world until the next restart. Every deadfall transition therefore goes through
- * [changeDeadfallLoc], which is a `locRepo.change`, and [clearTrapLoc] carries a hard check that it
- * is never handed one.
+ * against a deadfall boulder or a net trap's young tree would delete a *map* loc, and
+ * `LocRepository` only schedules a respawn for a delete with a finite duration
+ * (`LocRepository.kt:98-131`) - so that boulder or tree would be gone from the world until the next
+ * restart. Every transition of either therefore goes through [changeDeadfallLoc] or
+ * [changeNetTrapTreeLoc], both of which are a `locRepo.change`, and [clearTrapLoc] carries a hard
+ * check that it is never handed one of their loc ids.
+ *
+ * **The net trap is the one family that owns two tiles.** Its controller is anchored at the young
+ * tree; its net is a spawned loc on [netTrapCoords] of that tree, carrying the tree's own angle so
+ * that an op landing on the net can walk back ([netTrapAnchor]). The tree is change-only; the net
+ * is an ordinary spawn and is deleted like any other.
  */
 class HunterTrap
 @Inject
@@ -293,6 +378,7 @@ constructor(
     private val locRepo: LocRepository,
     private val conRepo: ControllerRepository,
     private val npcRepo: NpcRepository,
+    private val objRepo: ObjRepository,
     private val playerRepo: PlayerRepository,
     private val playerList: PlayerList,
     private val random: GameRandom,
@@ -302,7 +388,8 @@ constructor(
     /**
      * Spawns the set-state loc and its controller at [coords], consuming one trap item.
      *
-     * Portable families only: a deadfall is armed in place on its boulder by [setDeadfall].
+     * Portable families only: a deadfall is armed in place on its boulder by [setDeadfall] and a
+     * net trap on its young tree by [setNetTrap].
      *
      * @return false, with a message already sent, if the player is at their cap or the tile cannot
      *   take a trap.
@@ -315,8 +402,9 @@ constructor(
             return false
         }
 
-        // Null only for the deadfall, which never reaches here: nothing is consumed to arm a
-        // boulder and nothing is spawned on an empty tile.
+        // Both null only for the two fixed-loc families, neither of which reaches here: nothing is
+        // consumed to arm a boulder or a tree, and nothing is spawned on an empty tile.
+        val setLoc = HunterTrapStates.setLoc(family) ?: return false
         val trapObj = trapObj(family) ?: return false
         if (invDel(inv, trapObj, 1).failure) {
             val name = ServerCacheManager.getItem(trapObj.asRSCM(RSCMType.OBJ))?.name?.lowercase()
@@ -324,7 +412,7 @@ constructor(
             return false
         }
 
-        spawnTrapLoc(coords, HunterTrapStates.setLoc(family))
+        spawnTrapLoc(coords, setLoc)
 
         val spawn = Controller(TRAP_CONTROLLER, coords)
         conRepo.add(spawn, TRAP_LIFETIME_CYCLES)
@@ -478,6 +566,196 @@ constructor(
     }
 
     /**
+     * Strings a net between the young tree [loc] and the tile its angle points at, and anchors a
+     * controller on the tree.
+     *
+     * "With the required Hunter level, a rope and small fishing net in the inventory, clicking on a
+     * young tree will set the trap." (wiki, *Net trap*.) The level is the creature's own, read off
+     * the tree the player clicked rather than a family-wide constant - every young tree belongs to
+     * exactly one salamander, so the tree already says which requirement applies.
+     *
+     * The tile the net wants may be occupied, and if it is **the set is refused outright** rather
+     * than shuffled to another neighbour. A net trap is two locs that have to find each other, and
+     * the only thing recording where the net went is the tree's own angle ([netTrapCoords]); a
+     * fallback tile would need state nothing else in the feature keeps, and half a trap - a tree
+     * that looks armed with no net beside it - would consume the rope and net for something that
+     * can never spring. Refusing costs the player a walk to the next tree and nothing else.
+     *
+     * @return false, with a message already sent, if the player cannot set a net trap here.
+     */
+    suspend fun ProtectedAccess.setNetTrap(loc: BoundLocInfo): Boolean {
+        val creature = HunterCreatures.byNetTrapLoc(loc.id) ?: return false
+        if (loc.id !in HunterTrapStates.netTrapUpLocIds) {
+            return false
+        }
+
+        if (player.hunterLvl < creature.level) {
+            mes("You need a Hunter level of ${creature.level} to set a trap on this tree.")
+            return false
+        }
+
+        if (conRepo.findExact(loc.coords, TRAP_CONTROLLER) != null) {
+            mes("This trap is already set.")
+            return false
+        }
+
+        val netCoords = netTrapCoords(loc.coords, loc.angle)
+        if (!canTakeTrap(netCoords)) {
+            mes("There isn't enough room to set a net trap here.")
+            return false
+        }
+
+        val laid = trapAllowance() ?: return false
+
+        if (!inv.contains(ROPE) || !inv.contains(SMALL_FISHING_NET)) {
+            mes("You need a rope and a small fishing net to set a net trap.")
+            return false
+        }
+
+        anim("seq.human_laytrap")
+
+        // Timed, for the reason [setDeadfall]'s setting state is: it reverts the tree on its own if
+        // the delay below never resumes, so a logout mid-set cannot strand a *permanent map loc*
+        // wearing an op-less setting state. The extra cycle keeps the safety net from racing the
+        // normal path.
+        changeNetTrapTreeLoc(
+            loc.coords,
+            HunterTrapStates.settingLoc(creature),
+            NET_TRAP_SET_CYCLES + 1,
+        )
+        delay(NET_TRAP_SET_CYCLES)
+
+        // Anything but the setting state (or the plain tree, if the safety revert above beat us to
+        // the resume) means someone else has taken the tree in the meantime. The net's tile is
+        // re-checked too: it was free when the set started, and three cycles is long enough for
+        // somebody to have laid a box trap on it.
+        val current = netTrapTree(loc.coords)
+        val stillOurs =
+            current != null &&
+                current.id in HunterTrapStates.netTrapSettableLocIds &&
+                conRepo.findExact(loc.coords, TRAP_CONTROLLER) == null &&
+                canTakeTrap(netCoords)
+        if (!stillOurs) {
+            mes("Someone else is already using this tree.")
+            return false
+        }
+
+        // Charged here, past the last path that can still refuse, for the reasons spelled out in
+        // [setDeadfall]. Taken as a pair: a player who loses the net mid-set gets the rope back
+        // rather than paying half the cost of a trap that was never built.
+        if (invDel(inv, ROPE, 1).failure) {
+            mes("You need a rope and a small fishing net to set a net trap.")
+            return false
+        }
+        if (invDel(inv, SMALL_FISHING_NET, 1).failure) {
+            invAdd(inv, ROPE, 1)
+            mes("You need a rope and a small fishing net to set a net trap.")
+            return false
+        }
+
+        changeNetTrapTreeLoc(loc.coords, HunterTrapStates.armedTreeLoc(creature))
+        // Spawned carrying the *tree's* angle, which is what makes [netTrapTreeCoords] able to walk
+        // back here from an op that landed on the net. Nothing else records the pairing.
+        locRepo.add(
+            netCoords,
+            HunterTrapStates.netSetLoc(creature),
+            Int.MAX_VALUE,
+            loc.angle,
+            LocShape.CentrepieceStraight,
+        )
+
+        val spawn = Controller(TRAP_CONTROLLER, loc.coords)
+        conRepo.add(spawn, TRAP_LIFETIME_CYCLES)
+        spawn.trapOwner = player.uid.packed
+        spawn.trapFamily = TrapFamily.NETTRAP.ordinal
+        spawn.trapCreature = CREATURE_NONE
+        spawn.aiTimer(1)
+
+        // Re-swept rather than reusing `laid`: three cycles is long enough for one of this player's
+        // other traps to have collapsed.
+        player.hunterTrapCoords = player.sweepTrapCoords() + loc.coords.packed
+        return true
+    }
+
+    /**
+     * Takes a net trap back apart from either of its two locs: hands the rope and net back, deletes
+     * the spawned net and returns the tree to its unset state.
+     *
+     * A net trap with no controller is not an error: it is a sprung-and-empty wreck whose trap
+     * already ended. Nothing is handed back in that case - a failed catch dropped the rope and net
+     * on the ground at the time it failed, and handing them back here as well would mint a second
+     * pair.
+     */
+    fun ProtectedAccess.dismantleNetTrap(loc: BoundLocInfo): Boolean {
+        val anchor = netTrapAnchor(loc) ?: return false
+        val controller = conRepo.findExact(anchor, TRAP_CONTROLLER)
+        if (controller != null && controller.trapOwner != player.uid.packed) {
+            mes("This isn't your trap.")
+            return false
+        }
+
+        if (controller != null) {
+            val slotsNeeded = NET_TRAP_COMPONENTS.sumOf { invSlotsNeeded(inv, it, 1) }
+            if (inv.freeSpace() < slotsNeeded) {
+                mes("Your inventory is too full to hold any more.")
+                soundSynth("synth.pillory_wrong")
+                return false
+            }
+            for (obj in NET_TRAP_COMPONENTS) {
+                invAdd(inv, obj, 1)
+            }
+        }
+
+        endTrapLoc(TrapFamily.NETTRAP, anchor)
+
+        if (controller != null) {
+            conRepo.del(controller)
+            player.sweepTrapCoords()
+        }
+        return true
+    }
+
+    /**
+     * `Check` on a full net. The op lands on the *net* loc, a tile away from the controller, so the
+     * anchor is walked back to before the shared collect transaction runs.
+     */
+    fun ProtectedAccess.collectNetTrap(loc: BoundLocInfo): Boolean {
+        val anchor = netTrapAnchor(loc) ?: return false
+        return collectTrapAt(anchor)
+    }
+
+    /**
+     * The controller of the net trap either half of [loc] belongs to, or null once it has ended.
+     *
+     * Exists so the `Investigate` handler can ask the same question the other families ask with a
+     * bare `conRepo.findExact(loc.coords, ...)`: for a net trap that call would look on the wrong
+     * tile whenever the player clicked the net.
+     */
+    fun netTrapController(loc: BoundLocInfo): Controller? {
+        val anchor = netTrapAnchor(loc) ?: return null
+        return conRepo.findExact(anchor, TRAP_CONTROLLER)
+    }
+
+    /**
+     * The tile a net trap's controller sits on, given either of its two locs, or null if [loc] is
+     * neither or its partner is missing.
+     *
+     * The tree half is its own anchor. The net half is walked back through [netTrapTreeCoords] and
+     * then **checked**: a net whose computed tree tile does not actually hold a young tree is a
+     * desynced pair, and acting on the wrong tile is worse than refusing. That check is the only
+     * thing standing between a wrong offset mapping and an op that changes an unrelated loc.
+     */
+    private fun netTrapAnchor(loc: BoundLocInfo): CoordGrid? =
+        when (loc.id) {
+            in HunterTrapStates.netTrapTreeLocIds -> loc.coords
+            in HunterTrapStates.netTrapNetLocIds -> {
+                val anchor = netTrapTreeCoords(loc.coords, loc.angle)
+                anchor.takeIf { netTrapTree(it) != null }
+            }
+            else -> null
+        }
+
+    /**
      * One cycle of a laid trap. Re-arms itself every tick, and deliberately does **not** call
      * [Controller.resetDuration] while nothing is near, so an unattended trap decays toward
      * collapse rather than sitting armed forever.
@@ -503,6 +781,12 @@ constructor(
             // Make sure the controller lived beyond a single tick; otherwise something is
             // recreating traps faster than the loc can be registered.
             check(mapClock > creationCycle + 1) { "Hunter trap loc deleted faster than expected." }
+            // A net trap's state loc is its net, a tile from the tree the controller is anchored
+            // to. Losing the net still has to put the tree back, or a permanent map loc is left
+            // bent over with nothing left alive to unbend it.
+            if (family == TrapFamily.NETTRAP) {
+                revertNetTrapTree(coords)
+            }
             conRepo.del(this)
             return
         }
@@ -525,9 +809,9 @@ constructor(
         if (trapCreature != CREATURE_NONE) {
             // Already sprung. Settle the intermediate loc into its terminal state (a no-op once
             // settled) and keep ticking so the collapse above can still reclaim an uncollected
-            // trap. A settle that ends the trap outright - the deadfall's failed catch - deletes
-            // the controller, so there is nothing left to tick.
-            if (settle(family)) {
+            // trap. A settle that ends the trap outright - the deadfall's and the net trap's failed
+            // catches - deletes the controller, so there is nothing left to tick.
+            if (settle(family, owner)) {
                 aiTimer(1)
             }
             return
@@ -568,12 +852,23 @@ constructor(
         //
         // The deadfall is explicitly exempt: "Deadfall traps are not prone to failure by standing
         // where they are set." (wiki, Deadfall). It is the one family the wiki says so of, and the
-        // one whose trap is a boulder rather than something underfoot.
-        if (family.portable && playerRepo.findAll(coords).any { it.isValidTarget() }) {
+        // one whose trap is a boulder rather than something underfoot. Every other family applies
+        // it, including the two added since - see [TrapFamily.suppressedByPlayerOnTile], which is
+        // deliberately *not* [TrapFamily.portable]: the net trap is not portable and is not exempt.
+        //
+        // `loc.coords`, not `coords`: the tile that matters is the one the trap's business end is
+        // on, which for the net trap is its net rather than the tree the controller sits on ("only
+        // when the player is not standing on the net", wiki, Net trap). Every other family's state
+        // loc is on the controller's own tile, so the two are the same tile for them.
+        val centre = loc.coords
+        if (
+            family.suppressedByPlayerOnTile &&
+                playerRepo.findAll(centre).any { it.isValidTarget() }
+        ) {
             return
         }
 
-        val target = nearbyCreature(family) ?: return
+        val target = nearbyCreature(family, centre) ?: return
 
         val (npc, creature) = target
 
@@ -595,12 +890,12 @@ constructor(
 
         if (caught) {
             trapCreature = HunterCreatures.all.indexOf(creature)
-            val dx = npc.coords.x - coords.x
-            val dz = npc.coords.z - coords.z
-            setTrapLoc(family, coords, HunterTrapStates.trappingLoc(creature, dx, dz))
+            val dx = npc.coords.x - centre.x
+            val dz = npc.coords.z - centre.z
+            advanceTrapLoc(family, coords, HunterTrapStates.trappingLoc(creature, dx, dz))
         } else {
             trapCreature = CREATURE_FAILED
-            setTrapLoc(family, coords, HunterTrapStates.failingLoc(family))
+            advanceTrapLoc(family, coords, HunterTrapStates.failingLoc(family, creature))
         }
 
         // A sprung trap waits for its owner rather than continuing to decay from wherever its
@@ -615,8 +910,16 @@ constructor(
      * @return false, with a message already sent where one is warranted, if the trap is not this
      *   player's or there is no room for what it holds.
      */
-    fun ProtectedAccess.collectTrap(loc: BoundLocInfo): Boolean {
-        val controller = conRepo.findExact(loc.coords, TRAP_CONTROLLER) ?: return false
+    fun ProtectedAccess.collectTrap(loc: BoundLocInfo): Boolean = collectTrapAt(loc.coords)
+
+    /**
+     * [collectTrap] keyed on the controller's tile rather than the clicked loc's.
+     *
+     * The two are the same tile for every family but the net trap, whose `Check` op lands on the
+     * net a tile away from the tree the controller is anchored to - see [collectNetTrap].
+     */
+    private fun ProtectedAccess.collectTrapAt(coords: CoordGrid): Boolean {
+        val controller = conRepo.findExact(coords, TRAP_CONTROLLER) ?: return false
         if (controller.trapOwner != player.uid.packed) {
             mes("This isn't your trap.")
             return false
@@ -630,10 +933,10 @@ constructor(
         // and then hand out ten.
         val awards = creature?.caught.orEmpty().map { it.obj to rollQuantity(it.quantity) }
 
-        // The trap item comes back alongside everything it caught - for the two families that have
-        // one. A deadfall contributes nothing here: its boulder stays where it is and the log it
-        // was armed with went with the catch, so the list is simply empty rather than a branch.
-        val returned = listOfNotNull(trapObj(family))
+        // Whatever the trap was built from comes back alongside everything it caught. A deadfall
+        // contributes nothing: its boulder stays where it is and the log it was armed with went
+        // with the catch. A net trap contributes two things, not one.
+        val returned = trapComponents(family)
 
         // A stackable award only costs a slot when the player isn't already carrying it - counting
         // it unconditionally over-rejects a legitimate collect (e.g. a chinchompa catch when the
@@ -661,7 +964,7 @@ constructor(
             statAdvance("stat.hunter", xp)
         }
 
-        endTrapLoc(family, loc.coords)
+        endTrapLoc(family, coords)
         conRepo.del(controller)
         player.sweepTrapCoords()
         return true
@@ -677,9 +980,10 @@ constructor(
      * ownership against, so whoever clears the tile keeps the trap item; the item was consumed once
      * on lay and the loc is deleted in the same call, so this cannot mint a second one.
      *
-     * Portable families only. The deadfall's op1 is routed by state instead - [setDeadfall],
-     * [dismantleDeadfall] or [collectTrap] - because its three states are three different
-     * transactions on a loc that must never be deleted.
+     * Portable families only. The deadfall's and the net trap's op1s are routed by state instead -
+     * [setDeadfall] / [dismantleDeadfall] / [collectTrap], [setNetTrap] / [dismantleNetTrap] /
+     * [collectNetTrap] - because their states are several different transactions on a loc that must
+     * never be deleted.
      */
     fun ProtectedAccess.takeTrap(loc: BoundLocInfo, family: TrapFamily): Boolean {
         if (conRepo.findExact(loc.coords, TRAP_CONTROLLER) != null) {
@@ -726,7 +1030,7 @@ constructor(
      * @return false if the trap is finished and its controller deleted, i.e. there is nothing left
      *   to tick.
      */
-    private fun Controller.settle(family: TrapFamily): Boolean {
+    private fun Controller.settle(family: TrapFamily, owner: Player?): Boolean {
         // A deadfall that sprang and caught nothing has no collectible failed state - the cache has
         // no `hunting_deadfall_failed` at all. The boulder goes straight back to unset and the log
         // is lost, so the controller has no reason to outlive the spring.
@@ -736,9 +1040,20 @@ constructor(
             return false
         }
 
+        // A net trap that sprang and caught nothing is over too, and it is the one family whose
+        // failure hands the player's materials back on the *ground* rather than into a wreck they
+        // dismantle: "If not successful, the tree will snap back to its original position, and the
+        // small fishing net and rope will appear on the ground" (wiki, Net trap). Both halves of
+        // that sentence are here - the tree reverts, the pair drops - and the controller ends,
+        // which is why the wreck the net is left as owes the player nothing.
+        if (family == TrapFamily.NETTRAP && trapCreature == CREATURE_FAILED) {
+            endNetTrap(owner)
+            return false
+        }
+
         val settled =
             if (trapCreature == CREATURE_FAILED) {
-                HunterTrapStates.failedLoc(family)
+                HunterTrapStates.failedLoc(family, netTrapCreature(family, coords))
             } else {
                 val creature = HunterCreatures.all.getOrNull(trapCreature) ?: return true
                 HunterTrapStates.fullLoc(creature)
@@ -747,7 +1062,7 @@ constructor(
         if (current.id == settled.asRSCM(RSCMType.LOC)) {
             return true
         }
-        setTrapLoc(family, coords, settled)
+        advanceTrapLoc(family, coords, settled)
         return true
     }
 
@@ -760,6 +1075,11 @@ constructor(
      * A deadfall leaves nothing behind - the boulder is simply unset again - so its owner is told,
      * where a portable trap's wreck on the ground says it for itself. [owner] is null when the
      * collapse *is* the owner logging out, and there is nobody to tell.
+     *
+     * A net trap collapses the same way it fails: the tree unbends, the net is left as a wreck and
+     * the rope and net drop. Sharing that path with [settle] is deliberate - an unattended net trap
+     * that simply timed out must not silently swallow two items that a failed catch would have
+     * given back.
      */
     private fun Controller.collapse(family: TrapFamily, owner: Player?) {
         if (family == TrapFamily.DEADFALL) {
@@ -770,7 +1090,36 @@ constructor(
             conRepo.del(this)
             return
         }
+        if (family == TrapFamily.NETTRAP) {
+            endNetTrap(owner)
+            return
+        }
         spawnTrapLoc(coords, HunterTrapStates.failedLoc(family), TRAP_COLLAPSE_LINGER_CYCLES)
+        conRepo.del(this)
+    }
+
+    /**
+     * The one way a net trap ends without its owner collecting it: the net becomes a wreck that
+     * lingers, the tree snaps back upright, the rope and net drop, and the controller goes.
+     *
+     * The pair is dropped **on the trap's own tile**, not the player's. The wiki says only that
+     * they "appear on the ground", and the trap is the only position that always exists - a net
+     * trap can fail while its owner is halfway across the map, or ([owner] null) while they are
+     * logged out entirely, and there is no player tile to use then. Dropping at the trap is also
+     * what a player walking back to check it expects to find. [owner] is passed as the receiver so
+     * the drop is private to them first, exactly like a kill's loot.
+     */
+    private fun Controller.endNetTrap(owner: Player?) {
+        val creature = netTrapCreature(TrapFamily.NETTRAP, coords)
+        changeNetLoc(
+            coords,
+            HunterTrapStates.failedLoc(TrapFamily.NETTRAP, creature),
+            TRAP_COLLAPSE_LINGER_CYCLES,
+        )
+        revertNetTrapTree(coords)
+        for (obj in NET_TRAP_COMPONENTS) {
+            objRepo.add(obj, coords, NET_TRAP_DROP_CYCLES, receiver = owner)
+        }
         conRepo.del(this)
     }
 
@@ -801,12 +1150,21 @@ constructor(
         return if (id == NO_TRAP_LOG) null else RSCM.getReverseMapping(RSCMType.OBJ, id)
     }
 
-    private fun Controller.nearbyCreature(family: TrapFamily): Pair<Npc, HunterCreature>? =
+    /**
+     * The first creature of [family] within its trigger distance of [centre].
+     *
+     * [centre] is the trap's business end rather than its controller's tile: the two differ only
+     * for the net trap, whose net sits a tile from the tree the controller is anchored to.
+     */
+    private fun nearbyCreature(
+        family: TrapFamily,
+        centre: CoordGrid,
+    ): Pair<Npc, HunterCreature>? =
         npcRepo
-            .findAll(ZoneKey.from(coords), zoneRadius = 1)
+            .findAll(ZoneKey.from(centre), zoneRadius = 1)
             .filter { npc ->
-                npc.coords.level == coords.level &&
-                    npc.coords.chebyshevDistance(coords) <= triggerDistance(family)
+                npc.coords.level == centre.level &&
+                    npc.coords.chebyshevDistance(centre) <= triggerDistance(family)
             }
             .mapNotNull { npc ->
                 val internal = RSCM.getReverseMapping(RSCMType.NPC, npc.visType.id)
@@ -836,35 +1194,144 @@ constructor(
             locRepo.findExact(coords, LocShape.CentrepieceDiagonal) == null
 
     /**
-     * Finds the trap on [coords].
+     * The loc carrying the trap's *state*, given the tile its controller is anchored to.
      *
      * A portable trap owns its tile's centrepiece layer outright, so its shape is enough to find
      * it. A deadfall does not: it is whichever of nineteen boulder states the tile is currently
-     * wearing, at whatever shape and angle the map gave it, so it is found by id instead.
+     * wearing, at whatever shape and angle the map gave it, so it is found by id instead. A net
+     * trap's state is not on the controller's tile at all - the tree stays `set` for the whole
+     * armed-and-sprung life of the trap and it is the net beside it that moves through
+     * `net_set` -> `catching`/`failing` -> `full`/`failed`.
      */
     private fun findTrapLoc(family: TrapFamily, coords: CoordGrid): LocInfo? =
-        if (family.portable) {
-            locRepo.findExact(coords, LocShape.CentrepieceStraight)
-        } else {
-            locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.deadfallLocIds }
+        when (family) {
+            TrapFamily.SNARE,
+            TrapFamily.BOX,
+            TrapFamily.MAGICBOX -> locRepo.findExact(coords, LocShape.CentrepieceStraight)
+            TrapFamily.DEADFALL ->
+                locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.deadfallLocIds }
+            TrapFamily.NETTRAP -> findNetLoc(coords)
         }
 
     /** Moves a trap into its next state, whichever way its family is allowed to change locs. */
-    private fun setTrapLoc(family: TrapFamily, coords: CoordGrid, internal: String) {
-        if (family.portable) {
-            spawnTrapLoc(coords, internal)
-        } else {
-            changeDeadfallLoc(coords, internal)
+    private fun advanceTrapLoc(family: TrapFamily, coords: CoordGrid, internal: String) {
+        when (family) {
+            TrapFamily.SNARE,
+            TrapFamily.BOX,
+            TrapFamily.MAGICBOX -> spawnTrapLoc(coords, internal)
+            TrapFamily.DEADFALL -> changeDeadfallLoc(coords, internal)
+            TrapFamily.NETTRAP -> changeNetLoc(coords, internal)
         }
     }
 
-    /** Clears a trap off its tile for good: the portable wreck goes, the boulder comes back. */
+    /**
+     * Clears a trap off its tile for good: the portable wreck goes, the boulder comes back, and a
+     * net trap's two locs are undone together - the spawned net deleted, the tree changed back.
+     */
     private fun endTrapLoc(family: TrapFamily, coords: CoordGrid) {
-        if (family.portable) {
-            clearTrapLoc(coords)
-        } else {
-            changeDeadfallLoc(coords, HunterTrapStates.DEADFALL_BOULDER)
+        when (family) {
+            TrapFamily.SNARE,
+            TrapFamily.BOX,
+            TrapFamily.MAGICBOX -> clearTrapLoc(coords)
+            TrapFamily.DEADFALL -> changeDeadfallLoc(coords, HunterTrapStates.DEADFALL_BOULDER)
+            TrapFamily.NETTRAP -> {
+                delNetLoc(coords)
+                revertNetTrapTree(coords)
+            }
         }
+    }
+
+    /** The young tree on [coords], whichever of its three states it is wearing. */
+    private fun netTrapTree(coords: CoordGrid): LocInfo? =
+        locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.netTrapTreeLocIds }
+
+    /**
+     * The creature a net trap on [coords] belongs to, read off its tree rather than off what it
+     * caught.
+     *
+     * The failure and collapse paths both need it while `trapCreature` still says "nothing caught",
+     * and the tree is the only thing that knows - every young tree in the world belongs to exactly
+     * one salamander. Null for every other family, whose branches never read it.
+     */
+    private fun netTrapCreature(family: TrapFamily, coords: CoordGrid): HunterCreature? =
+        if (family != TrapFamily.NETTRAP) {
+            null
+        } else {
+            netTrapTree(coords)?.let { HunterCreatures.byNetTrapLoc(it.id) }
+        }
+
+    /** The spawned net belonging to the tree on [coords]. */
+    private fun findNetLoc(treeCoords: CoordGrid): LocInfo? {
+        val tree = netTrapTree(treeCoords) ?: return null
+        val netCoords = netTrapCoords(treeCoords, tree.angle)
+        return locRepo.findAll(netCoords).firstOrNull {
+            it.id in HunterTrapStates.netTrapNetLocIds
+        }
+    }
+
+    /**
+     * Moves the spawned net into its next state, in place.
+     *
+     * `locRepo.change` rather than a delete and a fresh add, so the angle carries across - the net
+     * is the only record of where its tree is ([netTrapTreeCoords]), and a state change that reset
+     * it to some default would strand every op that lands on the net afterwards.
+     */
+    private fun changeNetLoc(
+        treeCoords: CoordGrid,
+        internal: String,
+        duration: Int = Int.MAX_VALUE,
+    ) {
+        val current = findNetLoc(treeCoords) ?: return
+        val into =
+            ServerCacheManager.getObject(internal.asRSCM(RSCMType.LOC))
+                ?: error("Missing net trap loc type: $internal")
+        locRepo.change(current, into, duration)
+    }
+
+    /**
+     * Deletes the spawned net.
+     *
+     * This is the *only* delete anywhere in the net trap, and it is checked: the loc it is about to
+     * remove has to be one of the twenty-five `name=Net trap` states. A young tree can never reach
+     * here - not merely because callers pass the tree's tile rather than the net's, but because a
+     * tree id would fail the check outright.
+     */
+    private fun delNetLoc(treeCoords: CoordGrid) {
+        val net = findNetLoc(treeCoords) ?: return
+        check(net.id in HunterTrapStates.netTrapNetLocIds) {
+            "Refusing to delete net trap loc ${net.id} at ${net.coords}: it is not a spawned net."
+        }
+        locRepo.del(net, Int.MAX_VALUE)
+    }
+
+    /**
+     * Puts a young tree back to its unset state.
+     *
+     * A `locRepo.change`, exactly like [changeDeadfallLoc] and for exactly the same reason: the
+     * tree is a permanent map loc, and reverting it by deleting whatever is on the tile would take
+     * that tree out of the world until the next restart.
+     */
+    private fun revertNetTrapTree(coords: CoordGrid) {
+        val creature = netTrapCreature(TrapFamily.NETTRAP, coords) ?: return
+        changeNetTrapTreeLoc(coords, HunterTrapStates.upLoc(creature))
+    }
+
+    /**
+     * The one and only way a young tree ever changes state; the net trap's [changeDeadfallLoc].
+     *
+     * `locRepo.change`, never `locRepo.del`. See that function for the full argument - it applies
+     * word for word, with "boulder" read as "tree".
+     */
+    private fun changeNetTrapTreeLoc(
+        coords: CoordGrid,
+        internal: String,
+        duration: Int = Int.MAX_VALUE,
+    ) {
+        val current = netTrapTree(coords) ?: return
+        val into =
+            ServerCacheManager.getObject(internal.asRSCM(RSCMType.LOC))
+                ?: error("Missing net trap tree loc type: $internal")
+        locRepo.change(current, into, duration)
     }
 
     /**
@@ -899,10 +1366,20 @@ constructor(
 
     private fun clearTrapLoc(coords: CoordGrid) {
         val loc = locRepo.findExact(coords, LocShape.CentrepieceStraight) ?: return
-        // A deadfall boulder must never reach here: this delete is permanent, and a permanent
-        // delete of a map loc is never respawned. See [changeDeadfallLoc].
-        check(loc.id !in HunterTrapStates.deadfallLocIds) {
-            "Refusing to delete deadfall loc ${loc.id} at $coords: it is a permanent map loc."
+        // Neither of the two fixed-loc families may ever reach here: this delete is permanent, and
+        // a permanent delete of a map loc is never respawned. See [changeDeadfallLoc].
+        //
+        // The net trap's *net* is a spawn and is deletable - but only through [delNetLoc], which
+        // checks that it really is one. All forty sapling ids are refused here rather than only the
+        // fifteen tree states, because nothing legitimately reaches this path holding a net either:
+        // the portable teardown is keyed on the controller's own tile, which for a net trap is
+        // always the tree's. A net id arriving here means the two halves have desynced, and that is
+        // worth a thrown tick.
+        check(
+            loc.id !in HunterTrapStates.deadfallLocIds &&
+                loc.id !in HunterTrapStates.netTrapLocIds
+        ) {
+            "Refusing to delete hunter loc ${loc.id} at $coords: it is a permanent map loc."
         }
         locRepo.del(loc, Int.MAX_VALUE)
     }
@@ -948,17 +1425,35 @@ constructor(
             }
 
         /**
-         * The inventory item a portable trap is laid from and comes back as.
+         * The single inventory item a portable trap is laid from.
          *
-         * Null for the deadfall, which has none: the boulder is a permanent map loc, armed in place
-         * with a log and never carried. A placeholder obj here to satisfy the `when` would mint
-         * bird snares out of boulders on every collect.
+         * Null for the two fixed-loc families, which have none: a boulder and a young tree are
+         * permanent map locs, armed in place and never carried. A placeholder obj here to satisfy
+         * the `when` would let [layTrap] spawn a bird snare on an empty tile in their name.
          */
         private fun trapObj(family: TrapFamily): String? =
             when (family) {
                 TrapFamily.SNARE -> "obj.hunting_ojibway_bird_snare"
                 TrapFamily.BOX -> "obj.hunting_box_trap"
-                TrapFamily.DEADFALL -> null
+                TrapFamily.MAGICBOX -> "obj.magic_imp_box"
+                TrapFamily.DEADFALL,
+                TrapFamily.NETTRAP -> null
+            }
+
+        /**
+         * Everything a trap was built from, which is what a successful collect hands back.
+         *
+         * Separate from [trapObj] because it is not one-to-one: a portable trap is laid from and
+         * returns the same single item, a deadfall returns nothing (its log went with the catch),
+         * and a net trap returns the two things it was strung from.
+         */
+        private fun trapComponents(family: TrapFamily): List<String> =
+            when (family) {
+                TrapFamily.SNARE,
+                TrapFamily.BOX,
+                TrapFamily.MAGICBOX -> listOfNotNull(trapObj(family))
+                TrapFamily.DEADFALL -> emptyList()
+                TrapFamily.NETTRAP -> NET_TRAP_COMPONENTS
             }
 
         /** Per-family, because only the box trap's radius is sourced. */
@@ -966,7 +1461,9 @@ constructor(
             when (family) {
                 TrapFamily.SNARE -> SNARE_TRIGGER_DISTANCE
                 TrapFamily.BOX -> BOX_TRAP_TRIGGER_DISTANCE
+                TrapFamily.MAGICBOX -> MAGIC_BOX_TRIGGER_DISTANCE
                 TrapFamily.DEADFALL -> DEADFALL_TRIGGER_DISTANCE
+                TrapFamily.NETTRAP -> NET_TRAP_TRIGGER_DISTANCE
             }
 
         /** Per-family, because only the box trap's cadence is sourced. */
@@ -974,7 +1471,9 @@ constructor(
             when (family) {
                 TrapFamily.SNARE -> SNARE_ATTEMPT_CYCLES
                 TrapFamily.BOX -> BOX_TRAP_ATTEMPT_CYCLES
+                TrapFamily.MAGICBOX -> MAGIC_BOX_ATTEMPT_CYCLES
                 TrapFamily.DEADFALL -> DEADFALL_ATTEMPT_CYCLES
+                TrapFamily.NETTRAP -> NET_TRAP_ATTEMPT_CYCLES
             }
     }
 }
