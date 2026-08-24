@@ -37,6 +37,15 @@ class DeadfallEvents
 constructor(private val traps: HunterTrap, private val conRepo: ControllerRepository) :
     PluginScript() {
     override fun ScriptContext.startup() {
+        // Forces the lazy set, so a deadfall loc gameval that does not resolve throws here rather
+        // than at whichever call site happens to touch it first. That matters because the set is
+        // read by [HunterTrap]'s guard on the *portable* teardown path: without this, a bad
+        // deadfall gameval would first surface as a failed bird snare pickup. The two loc ids in
+        // the companion below already resolve eagerly at class load for the same reason.
+        check(HunterTrapStates.deadfallLocIds.isNotEmpty()) {
+            "No deadfall loc ids resolved; the deadfall content group would never match."
+        }
+
         onOpContentLoc1("content.hunter_deadfall") { op1(it.loc) }
         onOpContentLoc2("content.hunter_deadfall") { investigate(it.loc) }
     }

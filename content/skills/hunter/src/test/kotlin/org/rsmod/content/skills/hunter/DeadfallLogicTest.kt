@@ -48,4 +48,33 @@ class DeadfallLogicTest {
         assertFalse(isUsableDeadfallLog("obj.redwood_logs"))
         assertFalse(isUsableDeadfallLog("obj.arctic_pine_log"))
     }
+
+    /**
+     * The obj keys below are transcribed from the packed firemaking logs table's own `input(...)`
+     * rows (`or-cache/.../skills/Firemaking.kt`), which is the independent source here: every one of
+     * them is a real row, so the deadfall's "any type of log" would otherwise accept it and the
+     * first-by-slot-order pick would destroy a clue step's log. Note the inconsistent naming in the
+     * table - three are `<colour>_logs` and two are `trail_logs_<colour>` - which is exactly the
+     * sort of thing a hand-written list gets wrong.
+     */
+    @Test
+    fun `treasure trails logs are rejected`() {
+        assertFalse(isUsableDeadfallLog("obj.blue_logs"))
+        assertFalse(isUsableDeadfallLog("obj.green_logs"))
+        assertFalse(isUsableDeadfallLog("obj.red_logs"))
+        assertFalse(isUsableDeadfallLog("obj.trail_logs_purple"))
+        assertFalse(isUsableDeadfallLog("obj.trail_logs_white"))
+    }
+
+    /**
+     * The near-misses that keep the exclusion from being a substring match: `obj.redwood_logs` is
+     * out but `obj.rosewood_logs` is a perfectly ordinary 92-firemaking log, and `obj.red_logs` is a
+     * clue log while `obj.redwood_logs` is not one.
+     */
+    @Test
+    fun `logs with similar names to the excluded ones are still accepted`() {
+        assertTrue(isUsableDeadfallLog("obj.rosewood_logs"))
+        assertTrue(isUsableDeadfallLog("obj.blisterwood_logs"))
+        assertTrue(isUsableDeadfallLog("obj.magic_logs"))
+    }
 }

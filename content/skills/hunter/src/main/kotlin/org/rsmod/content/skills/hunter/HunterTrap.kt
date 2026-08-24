@@ -123,7 +123,10 @@ const val DEADFALL_ATTEMPT_CYCLES: Int = 3
  *
  * Unsourced. No source states how long fitting the log takes, and the state exists in the cache
  * with no ops, so nothing outside the animation depends on the exact figure. Three cycles is a
- * placeholder chosen to roughly cover `seq.human_laytrap`.
+ * placeholder, and not a derivation from the animation either: `seq.human_laytrap` (5208) is 16
+ * frames whose delays sum to 152, longer than three cycles under any reading of that unit. The
+ * animation simply outlasts the state change, which costs nothing - the player keeps playing it
+ * while the boulder is already armed.
  */
 const val DEADFALL_SET_CYCLES: Int = 3
 
@@ -154,15 +157,44 @@ const val MAX_LAID_DEADFALLS: Int = 1
 private val DEADFALL_EXCLUDED_LOGS: Set<String> = setOf("obj.redwood_logs", "obj.arctic_pine_log")
 
 /**
+ * The Treasure Trails logs, withheld from the deadfall so a clue step cannot be eaten by one.
+ *
+ * These are ordinary firemaking rows - `obj.blue_logs`, `obj.green_logs`, `obj.red_logs`,
+ * `obj.trail_logs_purple` and `obj.trail_logs_white` all have an input row in the packed logs table
+ * - so reading "any type of log" off that table sweeps them in, and the set-trap path picks the
+ * first usable log by slot order. A player carrying a clue step's coloured logs above their
+ * ordinary ones would have the clue item destroyed to arm a boulder.
+ *
+ * Whether live accepts them is unsourced; the *Deadfall* page names only redwood and arctic pine.
+ * Refusing is the recoverable half of that uncertainty - a player told they need logs fetches
+ * ordinary ones, where a player whose coloured log was consumed has to redo the clue step. They are
+ * excluded outright rather than merely ranked last, so that a player holding *only* coloured logs
+ * is refused instead of quietly charged one.
+ */
+private val DEADFALL_TRAIL_LOGS: Set<String> =
+    setOf(
+        "obj.blue_logs",
+        "obj.green_logs",
+        "obj.red_logs",
+        "obj.trail_logs_purple",
+        "obj.trail_logs_white",
+    )
+
+/**
  * Whether a log can arm a deadfall.
  *
  * The domain is the packed firemaking logs table's inputs - "any type of log" is read off that
  * table rather than retyped as a list here, so a log added to firemaking is usable for deadfall on
- * the same day. This is only the exclusion half of that rule, kept pure and separate so the same
- * predicate the set-trap path applies to every packed row can be tested without a cache. It does
- * not itself assert that [objKey] is a log.
+ * the same day. This is only the exclusion half of that rule - the sourced
+ * [DEADFALL_EXCLUDED_LOGS] and the protective [DEADFALL_TRAIL_LOGS] - kept pure and separate so the
+ * same predicate the set-trap path applies to every packed row can be tested without a cache. It
+ * does not itself assert that [objKey] is a log.
+ *
+ * Because it is the whole of the eligibility decision, the set-trap path's own choice stays a plain
+ * first-by-slot-order pick with no second ranking pass to keep in step with this.
  */
-fun isUsableDeadfallLog(objKey: String): Boolean = objKey !in DEADFALL_EXCLUDED_LOGS
+fun isUsableDeadfallLog(objKey: String): Boolean =
+    objKey !in DEADFALL_EXCLUDED_LOGS && objKey !in DEADFALL_TRAIL_LOGS
 
 /** The most traps any player can have laid, reached at level 80. */
 const val MAX_LAID_TRAPS: Int = 5
@@ -339,17 +371,16 @@ constructor(
         }
 
         // First usable log in the inventory. Which one live picks when several are held is not
-        // stated anywhere; slot order is ours.
+        // stated anywhere; slot order is ours. Resolved to an obj *here* rather than after the
+        // delay so that the log type this check accepted is the log type the player is charged,
+        // even if they rearrange or add to their inventory while the set plays out.
         val log = inv.firstOrNull { it != null && it.id in usableLogIds }
         if (log == null) {
             mes("You need some logs to set up a deadfall trap.")
             return false
         }
-
-        val logObj = RSCM.getReverseMapping(RSCMType.OBJ, log.id)
-        if (invDel(inv, logObj, 1).failure) {
-            return false
-        }
+        val logId = log.id
+        val logObj = RSCM.getReverseMapping(RSCMType.OBJ, logId)
 
         anim("seq.human_laytrap")
 
@@ -373,6 +404,24 @@ constructor(
             return false
         }
 
+        // The log is consumed *here*, past the last path that can still refuse, and not before the
+        // delay. Charging it up front lost the player a log for nothing twice over: on the
+        // `stillOurs` failure above - two players can both start on the same boulder, because
+        // mid-set there is only an op-less `SETTING` loc and no controller for the pre-check at the
+        // top to see - and on a logout during the delay, where the timed change reverts the boulder
+        // but this coroutine never resumes to arm it. Nothing between the two positions needs the
+        // log to be gone. It is also what [dismantleDeadfall] already argues for in the other
+        // direction: an aborted set must not cost an item with no notice.
+        //
+        // Re-checked rather than assumed held: the set delay is long enough to bank, drop or trade
+        // the log away, and that earns the same refusal the pre-check gives rather than a boulder
+        // armed for free. The boulder needs no cleanup on this path - the timed change above is
+        // still pending and reverts it.
+        if (invDel(inv, logObj, 1).failure) {
+            mes("You need some logs to set up a deadfall trap.")
+            return false
+        }
+
         changeDeadfallLoc(loc.coords, HunterTrapStates.DEADFALL_ARMED)
 
         val spawn = Controller(TRAP_CONTROLLER, loc.coords)
@@ -380,7 +429,7 @@ constructor(
         spawn.trapOwner = player.uid.packed
         spawn.trapFamily = TrapFamily.DEADFALL.ordinal
         spawn.trapCreature = CREATURE_NONE
-        spawn.trapDeadfallLog = log.id
+        spawn.trapDeadfallLog = logId
         spawn.aiTimer(1)
 
         // Re-swept rather than reusing `laid`: three cycles is long enough for one of this player's
@@ -438,6 +487,12 @@ constructor(
         if (family == null) {
             // Defensive: the varcon defaults to 0 (SNARE), so this should be unreachable, but a
             // corrupt ordinal must not strand a controller-less loc on the tile forever.
+            //
+            // If a deadfall ever did reach here, [clearTrapLoc]'s check throws rather than deleting
+            // the boulder. That is deliberate and is the same priority as the `check` two lines
+            // below: a thrown tick is loud and recoverable by restarting, where a permanent delete
+            // silently takes a boulder spot out of the world until then. The cost is that one
+            // corrupt controller takes the tick down instead of tidying itself away.
             clearTrapLoc(coords)
             conRepo.del(this)
             return
