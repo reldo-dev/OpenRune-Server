@@ -1967,3 +1967,143 @@ contentGroup = "content.hunter_deadfall"
 id = "loc.hunting_deadfall_full_spike"
 inherit = "loc.hunting_deadfall_full_spike"
 contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_sapling_up_swamp"
+inherit = "loc.hunting_sapling_up_swamp"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_set_swamp"
+inherit = "loc.hunting_sapling_set_swamp"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_net_set_swamp"
+inherit = "loc.hunting_sapling_net_set_swamp"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_full_green"
+inherit = "loc.hunting_sapling_full_green"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_failed_swamp"
+inherit = "loc.hunting_sapling_failed_swamp"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_up_orange"
+inherit = "loc.hunting_sapling_up_orange"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_set_orange"
+inherit = "loc.hunting_sapling_set_orange"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_net_set_orange"
+inherit = "loc.hunting_sapling_net_set_orange"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_full_orange"
+inherit = "loc.hunting_sapling_full_orange"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_failed_orange"
+inherit = "loc.hunting_sapling_failed_orange"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_up_red"
+inherit = "loc.hunting_sapling_up_red"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_set_red"
+inherit = "loc.hunting_sapling_set_red"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_net_set_red"
+inherit = "loc.hunting_sapling_net_set_red"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_full_red"
+inherit = "loc.hunting_sapling_full_red"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_failed_red"
+inherit = "loc.hunting_sapling_failed_red"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_up_black"
+inherit = "loc.hunting_sapling_up_black"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_set_black"
+inherit = "loc.hunting_sapling_set_black"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_net_set_black"
+inherit = "loc.hunting_sapling_net_set_black"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_full_black"
+inherit = "loc.hunting_sapling_full_black"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_failed_black"
+inherit = "loc.hunting_sapling_failed_black"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_up_mountain"
+inherit = "loc.hunting_sapling_up_mountain"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_set_mountain"
+inherit = "loc.hunting_sapling_set_mountain"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_net_set_mountain"
+inherit = "loc.hunting_sapling_net_set_mountain"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_full_mountain"
+inherit = "loc.hunting_sapling_full_mountain"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_sapling_failed_mountain"
+inherit = "loc.hunting_sapling_failed_mountain"
+contentGroup = "content.hunter_net_trap"
+
+[[object]]
+id = "loc.hunting_imptrap_empty"
+inherit = "loc.hunting_imptrap_empty"
+contentGroup = "content.hunter_magic_box"
+
+[[object]]
+id = "loc.hunting_imptrap_failed"
+inherit = "loc.hunting_imptrap_failed"
+contentGroup = "content.hunter_magic_box"
+
+[[object]]
+id = "loc.hunting_imptrap_full"
+inherit = "loc.hunting_imptrap_full"
+contentGroup = "content.hunter_magic_box"

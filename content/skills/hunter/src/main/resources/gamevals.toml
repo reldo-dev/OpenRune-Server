@@ -1,9 +1,11 @@
 [gamevals.dbtable]
-# 55543-55545 sit above the whole 555xx dbtable run in use today - mining's 55520 and firemaking's
+# 55543-55547 sit above the whole 555xx dbtable run in use today - mining's 55520 and firemaking's
 # 55535-55537 - with 55538-55542 left clear for the fletching tables.
 hunter_snare_creatures = 55543
 hunter_box_creatures = 55544
 hunter_deadfall_creatures = 55545
+hunter_nettrap_creatures = 55546
+hunter_magicbox_creatures = 55547
 
 # Append-only block, clear of the 555xx and 56[0-2]xx dbrow runs with headroom. Ids ascend in the
 # order the creatures appear in the combined list, which a sprung trap persists an index into, so
@@ -21,6 +23,12 @@ hunter_barbtailed_kebbit = 56311
 hunter_prickly_kebbit = 56312
 hunter_sabretoothed_kebbit = 56313
 hunter_pyre_fox = 56314
+hunter_swamp_lizard = 56320
+hunter_orange_salamander = 56321
+hunter_red_salamander = 56322
+hunter_black_salamander = 56323
+hunter_tecu_salamander = 56324
+hunter_imp = 56330
 
 [gamevals.controller]
 hunter_trap = 2
@@ -39,6 +47,10 @@ hunter_box_trap = 55
 # One group for every op-carrying deadfall boulder state; the transient setting/trapping/failing
 # frames carry no ops and so need no group.
 hunter_deadfall = 56
+# Both net trap locs share one group: the young tree and the "Net trap" loc beside it are two halves
+# of one trap, and every op either can carry is dispatched by the same handler.
+hunter_net_trap = 57
+hunter_magic_box = 58
 
 # The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
 # lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom
