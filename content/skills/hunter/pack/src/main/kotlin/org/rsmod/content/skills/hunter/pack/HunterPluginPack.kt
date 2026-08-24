@@ -5,5 +5,9 @@ import dev.openrune.pack.PluginPack
 
 class HunterPluginPack : PluginPack() {
     override fun dbTables(): List<DBTable> =
-        listOf(HunterTables.snareCreatures(), HunterTables.boxCreatures())
+        listOf(
+            HunterTables.snareCreatures(),
+            HunterTables.boxCreatures(),
+            HunterTables.deadfallCreatures(),
+        )
 }

@@ -18,3 +18,6 @@ id = "varcon.hunter_trap_family"
 
 [[varcon]]
 id = "varcon.hunter_trap_creature"
+
+[[varcon]]
+id = "varcon.hunter_trap_deadfall_log"

@@ -1932,3 +1932,38 @@ contentGroup = "content.hunter_box_trap"
 id = "loc.hunting_boxtrap_full_letvek"
 inherit = "loc.hunting_boxtrap_full_letvek"
 contentGroup = "content.hunter_box_trap"
+
+[[object]]
+id = "loc.hunting_deadfall_boulder"
+inherit = "loc.hunting_deadfall_boulder"
+contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_deadfall_trap"
+inherit = "loc.hunting_deadfall_trap"
+contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_deadfall_full_barbed"
+inherit = "loc.hunting_deadfall_full_barbed"
+contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_deadfall_full_claw"
+inherit = "loc.hunting_deadfall_full_claw"
+contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_deadfall_full_fennec"
+inherit = "loc.hunting_deadfall_full_fennec"
+contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_deadfall_full_sabre"
+inherit = "loc.hunting_deadfall_full_sabre"
+contentGroup = "content.hunter_deadfall"
+
+[[object]]
+id = "loc.hunting_deadfall_full_spike"
+inherit = "loc.hunting_deadfall_full_spike"
+contentGroup = "content.hunter_deadfall"
