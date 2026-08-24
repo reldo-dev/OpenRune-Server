@@ -20,13 +20,17 @@ import dev.openrune.definition.util.VarType
  * assigned in that order.
  */
 object HunterTables {
-    // Column ids have to be a dense 0..n-1 run in declaration order, per table. The packer keys a
-    // row's values by the id passed here, but the generated accessor keys by the column's *ordinal*
-    // within the table's gameval block: `dbcol.<table>:<col>` is `(tableId shl 16) or ordinal`, and
-    // `DbHelper.getColumn` masks that back to the low 16 bits. Leave a gap and every column after it
-    // reads one slot early, with the last one falling off the end - silently, since the codegen just
-    // skips a column it cannot find in any row. So the per-technique columns below all start at 8:
-    // ids are shared across tables only for the common block, 0-7.
+    // Column ids must form a dense 0..n-1 *set* per table - declaration order does not matter, only
+    // which ids are used. Why: the gameval encoder writes a table's columns sorted by id and never
+    // writes the id itself, just a name per column; on read, each `dbcol.<table>:<col>` is assigned
+    // its ordinal purely from read position - a counter starting at 0, incremented per column - with
+    // no relation to the id passed to `column(name, id, type)` here. The packed *row* bytes, decoded
+    // separately, keep the original id explicit per column. Leave a gap and the two numbering
+    // schemes desync: every gameval ordinal past the gap resolves one row-id too low, so the
+    // generated accessor silently reads the next column's data, and the highest id has no ordinal
+    // left to reach it - dropped with no error, since the codegen just skips a column it cannot find
+    // in any sample row. So the per-technique columns below all start at 8: ids are shared across
+    // tables only for the common block, 0-7.
     const val COL_NPC = 0
     const val COL_LEVEL = 1
     const val COL_XP = 2
@@ -36,13 +40,21 @@ object HunterTables {
     const val COL_CAUGHT_MIN = 6
     const val COL_CAUGHT_MAX = 7
 
+    // Table-specific columns are nested so e.g. `COL_BAIT` cannot be typed inside deadfallCreatures()
+    // by mistake - both start at 8, and a slip would compile, pack, and silently write the wrong
+    // table's column 8.
+
     /** Box trap only. */
-    const val COL_BAIT = 8
+    private object Box {
+        const val COL_BAIT = 8
+    }
 
     /** Deadfall only. */
-    const val COL_TRAPPING_LOC = 8
-    const val COL_TRAPPING_LOC_M = 9
-    const val COL_FULL_LOC = 10
+    private object Deadfall {
+        const val COL_TRAPPING_LOC = 8
+        const val COL_TRAPPING_LOC_M = 9
+        const val COL_FULL_LOC = 10
+    }
 
     /**
      * Columns 0-7, shared verbatim by all three creature tables. Per-technique columns are declared
@@ -153,7 +165,7 @@ object HunterTables {
     fun boxCreatures(): DBTable =
         dbTable("dbtable.hunter_box_creatures", serverOnly = true) {
             creatureColumns()
-            column("bait", COL_BAIT, VarType.OBJ)
+            column("bait", Box.COL_BAIT, VarType.OBJ)
 
             row("dbrow.hunter_chinchompa") {
                 columnRSCM(COL_NPC, "npc.hunting_chinchompa")
@@ -164,7 +176,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.chinchompa_captured")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
-                columnRSCM(COL_BAIT, "obj.bowl_spicytomato")
+                columnRSCM(Box.COL_BAIT, "obj.bowl_spicytomato")
             }
 
             row("dbrow.hunter_carnivorous_chinchompa") {
@@ -178,7 +190,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.chinchompa_big_captured")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
-                columnRSCM(COL_BAIT, "obj.bowl_spicymeat")
+                columnRSCM(Box.COL_BAIT, "obj.bowl_spicymeat")
             }
 
             row("dbrow.hunter_black_chinchompa") {
@@ -190,7 +202,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.chinchompa_black")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
-                columnRSCM(COL_BAIT, "obj.bowl_spicymeat")
+                columnRSCM(Box.COL_BAIT, "obj.bowl_spicymeat")
             }
         }
 
@@ -208,12 +220,20 @@ object HunterTables {
      *
      * No deadfall creature states its `P(L)` formula on the wiki, so as with the birds each
      * `success_low`/`success_high` pair was fit against that creature's full per-level chart under
-     * *Drops > Hunting chance* and verified to reproduce every charted point exactly - 102 points
-     * across the five. The chart extract, the fitting script and its provenance oldids live in
-     * `.data/cache/wiki-hunter/`. Negative lows are the honest fit for the four steeper curves and
-     * must not be clamped: `SkillingSuccessRate` interpolates low..high across levels 1..99, and
-     * these creatures are only catchable from level 23+, so the sub-requirement end of the line is
-     * never evaluated.
+     * *Drops > Hunting chance*, against the exact formula `SkillingSuccessRate` implements
+     * (`api/utils/utils-skills/.../SkillingSuccessRate.kt`): chance = `(1 + floor(low*(99-L)/98 +
+     * high*(L-1)/98 + 0.5)) / 256`. Every charted point is reproduced exactly - 102 points across the
+     * five creatures. For wild kebbit (42 points) and prickly kebbit (45 points) the fit is
+     * mathematically pinned: exactly one integer pair satisfies every charted point. Barb-tailed,
+     * sabre-toothed and pyre fox chart far fewer levels each, so multiple integer pairs fit exactly;
+     * the pair shipped here is one member of that fit set, not the unique solution. Wiki revisions
+     * fitted against: wild kebbit oldid=15196478, barb-tailed oldid=15196228, prickly
+     * oldid=15196260, sabre-toothed oldid=15196422, pyre fox oldid=15197087. (A local, gitignored
+     * copy of the chart extract and fitting script lives in `.data/cache/wiki-hunter/` for
+     * convenience - it is not checked in and is not the source of truth; the oldids above are.)
+     * Negative lows are the honest fit for the four steeper curves and must not be clamped:
+     * `SkillingSuccessRate` interpolates low..high across levels 1..99, and these creatures are only
+     * catchable from level 23+, so the sub-requirement end of the line is never evaluated.
      *
      * Rewards are the infobox "Always" drops only. Kebbity tuft and Fox fluff are omitted on
      * purpose: both are 1/15 *and* conditional on an active Hunter's Rumour, which is not
@@ -223,9 +243,9 @@ object HunterTables {
     fun deadfallCreatures(): DBTable =
         dbTable("dbtable.hunter_deadfall_creatures", serverOnly = true) {
             creatureColumns()
-            column("trapping_loc", COL_TRAPPING_LOC, VarType.LOC)
-            column("trapping_loc_m", COL_TRAPPING_LOC_M, VarType.LOC)
-            column("full_loc", COL_FULL_LOC, VarType.LOC)
+            column("trapping_loc", Deadfall.COL_TRAPPING_LOC, VarType.LOC)
+            column("trapping_loc_m", Deadfall.COL_TRAPPING_LOC_M, VarType.LOC)
+            column("full_loc", Deadfall.COL_FULL_LOC, VarType.LOC)
 
             // Level and xp from the creature's own wiki infobox ("Hunter XP: 128"), which agrees
             // with the parent Deadfall page (oldid=15201193). `obj.huntingbeast_claws` is the item
@@ -245,9 +265,9 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 1)
                 column(COL_CAUGHT_MAX, 1, 1, 1)
-                columnRSCM(COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_claw")
-                columnRSCM(COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_claw_m")
-                columnRSCM(COL_FULL_LOC, "loc.hunting_deadfall_full_claw")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_claw")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_claw_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_claw")
             }
 
             row("dbrow.hunter_barbtailed_kebbit") {
@@ -267,9 +287,9 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 1)
                 column(COL_CAUGHT_MAX, 1, 1, 1)
-                columnRSCM(COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_barbed")
-                columnRSCM(COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_barbed_m")
-                columnRSCM(COL_FULL_LOC, "loc.hunting_deadfall_full_barbed")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_barbed")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_barbed_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_barbed")
             }
 
             // Prickly and sabre-toothed drop no meat - two reward lines, not three.
@@ -282,9 +302,9 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_spike")
                 column(COL_CAUGHT_MIN, 1, 1)
                 column(COL_CAUGHT_MAX, 1, 1)
-                columnRSCM(COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_spike")
-                columnRSCM(COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_spike_m")
-                columnRSCM(COL_FULL_LOC, "loc.hunting_deadfall_full_spike")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_spike")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_spike_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_spike")
             }
 
             row("dbrow.hunter_sabretoothed_kebbit") {
@@ -299,9 +319,9 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_sabreteeth")
                 column(COL_CAUGHT_MIN, 1, 1)
                 column(COL_CAUGHT_MAX, 1, 1)
-                columnRSCM(COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_sabre")
-                columnRSCM(COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_sabre_m")
-                columnRSCM(COL_FULL_LOC, "loc.hunting_deadfall_full_sabre")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_sabre")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_sabre_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_sabre")
             }
 
             // The pyre fox's cache symbols all read "fennec": the npc is `varlamore_fennecfox`
@@ -322,9 +342,9 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 1)
                 column(COL_CAUGHT_MAX, 1, 1, 1)
-                columnRSCM(COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_fennec")
-                columnRSCM(COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_fennec_m")
-                columnRSCM(COL_FULL_LOC, "loc.hunting_deadfall_full_fennec")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_fennec")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_fennec_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_fennec")
             }
         }
 }
