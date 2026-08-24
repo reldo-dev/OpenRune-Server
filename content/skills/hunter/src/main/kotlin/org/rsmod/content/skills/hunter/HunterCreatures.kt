@@ -10,6 +10,9 @@ import org.rsmod.api.table.hunter.HunterSnareCreaturesRow
  * only the adapter that reshapes a generated row into the runtime record. Rows are sorted by dbrow
  * id because a sprung trap persists its creature as an index into [all].
  *
+ * XP is stored x10 in the packed table; the mappers below pass `row.xp` through unscaled, and
+ * `HunterTrap` divides by ten once, at the point it awards.
+ *
  * Quarantined, not guessed - four candidates from the design spec are deliberately left out:
  * - Letvek (`npc.hunting_letvek`, level 76 box trap) - the npc exists in the cache but has zero
  *   spawns in `.data/raw-cache/map/npcs/`.
@@ -43,8 +46,13 @@ object HunterCreatures {
      * A bird snare catch awards three items in one go, so `caught_items` and its two quantity
      * columns are parallel lists: entry `i` of each describes the same reward line.
      */
-    private fun snare(row: HunterSnareCreaturesRow): HunterCreature =
-        HunterCreature(
+    private fun snare(row: HunterSnareCreaturesRow): HunterCreature {
+        val itemCount = row.caughtItems.size
+        require(row.caughtMin.size == itemCount && row.caughtMax.size == itemCount) {
+            "Row ${row.rowId} has mismatched caught reward sizes: items=$itemCount, " +
+                "min=${row.caughtMin.size}, max=${row.caughtMax.size}"
+        }
+        return HunterCreature(
             family = TrapFamily.SNARE,
             npc = row.npc.internalName,
             level = row.level,
@@ -56,6 +64,7 @@ object HunterCreatures {
             successLow = row.successLow,
             successHigh = row.successHigh,
         )
+    }
 
     private fun box(row: HunterBoxCreaturesRow): HunterCreature =
         HunterCreature(
