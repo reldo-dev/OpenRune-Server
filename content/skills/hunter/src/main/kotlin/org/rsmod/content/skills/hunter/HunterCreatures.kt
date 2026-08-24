@@ -1,10 +1,11 @@
 package org.rsmod.content.skills.hunter
 
 import org.rsmod.api.table.hunter.HunterBoxCreaturesRow
+import org.rsmod.api.table.hunter.HunterDeadfallCreaturesRow
 import org.rsmod.api.table.hunter.HunterSnareCreaturesRow
 
 /**
- * The bird snare and box trap creature table, read back from the packed dbtables.
+ * The bird snare, box trap and deadfall creature tables, read back from the packed dbtables.
  *
  * The values and their provenance live in `HunterTables.kt` in the `hunter-pack` module; this is
  * only the adapter that reshapes a generated row into the runtime record. Rows are sorted by dbrow
@@ -35,7 +36,15 @@ import org.rsmod.api.table.hunter.HunterSnareCreaturesRow
 object HunterCreatures {
     val all: List<HunterCreature> by lazy {
         HunterSnareCreaturesRow.all().sortedBy(HunterSnareCreaturesRow::rowId).map(::snare) +
-            HunterBoxCreaturesRow.all().sortedBy(HunterBoxCreaturesRow::rowId).map(::box)
+            HunterBoxCreaturesRow.all().sortedBy(HunterBoxCreaturesRow::rowId).map(::box) +
+            HunterDeadfallCreaturesRow.all()
+                .sortedBy(HunterDeadfallCreaturesRow::rowId)
+                .map(::deadfall)
+    }
+
+    /** The deadfall subset, which is the only family whose loc states are per-creature data. */
+    val deadfall: List<HunterCreature> by lazy {
+        all.filter { it.family == TrapFamily.DEADFALL }
     }
 
     private val byNpc: Map<String, HunterCreature> by lazy { all.associateBy { it.npc } }
@@ -78,4 +87,34 @@ object HunterCreatures {
             successHigh = row.successHigh,
             bait = row.bait.internalName,
         )
+
+    /**
+     * Like [snare], the deadfall's reward columns are parallel lists - but a ragged set of them:
+     * wild kebbit, barb-tailed kebbit and pyre fox award three lines, prickly and sabre-toothed
+     * award two, because neither drops meat. Nothing here may assume a fixed width; the guard is
+     * what turns a column edit that drops one entry into a named failure at boot instead of an
+     * `IndexOutOfBounds` on the tick that catches that one creature.
+     */
+    private fun deadfall(row: HunterDeadfallCreaturesRow): HunterCreature {
+        val itemCount = row.caughtItems.size
+        require(row.caughtMin.size == itemCount && row.caughtMax.size == itemCount) {
+            "Row ${row.rowId} has mismatched caught reward sizes: items=$itemCount, " +
+                "min=${row.caughtMin.size}, max=${row.caughtMax.size}"
+        }
+        return HunterCreature(
+            family = TrapFamily.DEADFALL,
+            npc = row.npc.internalName,
+            level = row.level,
+            xp = row.xp,
+            caught =
+                row.caughtItems.mapIndexed { i, obj ->
+                    HunterCatch(obj.internalName, row.caughtMin[i]..row.caughtMax[i])
+                },
+            successLow = row.successLow,
+            successHigh = row.successHigh,
+            trappingLoc = row.trappingLoc.internalName,
+            trappingLocM = row.trappingLocM.internalName,
+            fullLoc = row.fullLoc.internalName,
+        )
+    }
 }
