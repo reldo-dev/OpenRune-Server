@@ -10,6 +10,7 @@ hunter_falconry_creatures = 55548
 hunter_butterfly_creatures = 55549
 hunter_crab_creatures = 55550
 hunter_impling_creatures = 55551
+hunter_birdhouse_types = 55552
 
 # Append-only block, clear of the 555xx and 56[0-2]xx dbrow runs with headroom. Ids ascend in the
 # order the creatures appear in the combined list, which a sprung trap persists an index into, so
@@ -74,6 +75,16 @@ hunter_ninja_impling = 56388
 hunter_crystal_impling = 56389
 hunter_dragon_impling = 56390
 hunter_lucky_impling = 56391
+# Bird houses take the next free decade, per the append-only rule above.
+hunter_birdhouse_normal = 56400
+hunter_birdhouse_oak = 56401
+hunter_birdhouse_willow = 56402
+hunter_birdhouse_teak = 56403
+hunter_birdhouse_maple = 56404
+hunter_birdhouse_mahogany = 56405
+hunter_birdhouse_yew = 56406
+hunter_birdhouse_magic = 56407
+hunter_birdhouse_redwood = 56408
 
 [gamevals.controller]
 hunter_trap = 2

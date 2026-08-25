@@ -155,6 +155,30 @@ object HunterTables {
         const val COL_NPC_OVERWORLD = 9
     }
 
+    /**
+     * Bird houses, which are not a trap and not a creature.
+     *
+     * Nothing is caught and nothing is rolled against a creature's rate, so none of the shared 0-7
+     * block applies: there is no npc, no `caught_items`, and the two experience values are for
+     * *different skills* rather than for two spawn origins. A bespoke dense set is the honest shape,
+     * for the reason [Crab] gives.
+     *
+     * [COL_NEST_PERMILLE] is the only tuned number here and the only one that is not exactly
+     * published. See [birdhouseTypes] for what is sourced and what is not.
+     */
+    private object BirdHouse {
+        const val COL_OBJ = 0
+        const val COL_HUNTER_LEVEL = 1
+        const val COL_HUNTER_XP = 2
+        const val COL_CRAFTING_LEVEL = 3
+        const val COL_CRAFTING_XP = 4
+        const val COL_LOGS = 5
+        const val COL_BUILT_LOC = 6
+        const val COL_FULL_LOC = 7
+        const val COL_BIRD_LOC = 8
+        const val COL_NEST_PERMILLE = 9
+    }
+
     private object Crab {
         const val COL_LEVEL = 0
         const val COL_XP = 1
@@ -1310,6 +1334,173 @@ object HunterTables {
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
                 columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_11")
+            }
+        }
+
+    /**
+     * The nine bird house tiers.
+     *
+     * Bird house trapping is the first hunter technique that is neither a trap nor a creature: four
+     * fixed map spaces on Fossil Island, each a multiloc whose state is a **varp** rather than a
+     * varbit - `birdhouse_transmit_a` through `_d`, varps 1626-1629, one per space, holding
+     * `0..27`. Index 0 is the empty space and the rest are three states per tier, so
+     * `tier = (varp - 1) / 3`.
+     *
+     * That the state lives in a varp is what makes the technique possible here at all. Varps
+     * default to `VarpLifetime.Perm` and the account repository saves Perm varps, so a bird house
+     * left filling survives a logout **with nothing authored server-side** - no varbit, no varp, no
+     * controller. `LocInteractions.multiVarValue` already reads the varp branch first, so the
+     * client sees the right loc without help. Compare the crab trap, whose sites are varbit
+     * multilocs and which needed the same two-declaration dance every server-authored gameval does.
+     *
+     * ## What is published and what is not
+     *
+     * Levels and both experience values are published per tier and agree with the client's own
+     * skill guide (`skill_features`, `data=skill,23,<lvl>,11` for Hunter and `skill,11,<lvl>,9`
+     * for Crafting) - two independent sources, not one twice. Crafting experience is awarded when
+     * the house is built and Hunter experience only when it is dismantled; **no source gives a
+     * Hunter figure for building**, and that is an absence across four pages rather than a stated
+     * zero.
+     *
+     * [BirdHouse.COL_NEST_PERMILLE] is the one number that is not exactly published, and the
+     * roadmap's claim that this technique is "deterministic" is wrong. There are two rolls. The
+     * seed-nest roll is an ordinary skilling curve - `low=0, high=200, req=<the tier's Hunter
+     * level>` on all ten pages - and needs no column. The second is ten rolls on the nest table at
+     * a rate that varies by tier *and* level, and it is **not** a `(low, high)` curve: 10.0% at
+     * level 99 is not a multiple of 1/256. Mod Ash (5 June 2019) gives the level-99 endpoints per
+     * tier and says the rate halves below level 50; those endpoints are what this column stores, in
+     * per-mille. The shape between 50 and 99 is the wiki's own model, not a sourced formula, and is
+     * flagged as such where it is evaluated.
+     */
+    fun birdhouseTypes(): DBTable =
+        dbTable("dbtable.hunter_birdhouse_types", serverOnly = true) {
+            column("obj", BirdHouse.COL_OBJ, VarType.OBJ)
+            column("hunter_level", BirdHouse.COL_HUNTER_LEVEL, VarType.INT)
+            // Stored x10, as every hunter experience column is.
+            column("hunter_xp", BirdHouse.COL_HUNTER_XP, VarType.INT)
+            column("crafting_level", BirdHouse.COL_CRAFTING_LEVEL, VarType.INT)
+            column("crafting_xp", BirdHouse.COL_CRAFTING_XP, VarType.INT)
+            column("logs", BirdHouse.COL_LOGS, VarType.OBJ)
+            column("built_loc", BirdHouse.COL_BUILT_LOC, VarType.LOC)
+            column("full_loc", BirdHouse.COL_FULL_LOC, VarType.LOC)
+            column("bird_loc", BirdHouse.COL_BIRD_LOC, VarType.LOC)
+            column("nest_permille", BirdHouse.COL_NEST_PERMILLE, VarType.INT)
+
+            row("dbrow.hunter_birdhouse_normal") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_normal")
+                column(BirdHouse.COL_HUNTER_LEVEL, 5)
+                column(BirdHouse.COL_HUNTER_XP, 2800)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 5)
+                column(BirdHouse.COL_CRAFTING_XP, 150)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_normal_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_normal_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_normal_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 100)
+            }
+
+            row("dbrow.hunter_birdhouse_oak") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_oak")
+                column(BirdHouse.COL_HUNTER_LEVEL, 14)
+                column(BirdHouse.COL_HUNTER_XP, 4200)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 15)
+                column(BirdHouse.COL_CRAFTING_XP, 200)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.oak_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_oak_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_oak_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_oak_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 125)
+            }
+
+            row("dbrow.hunter_birdhouse_willow") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_willow")
+                column(BirdHouse.COL_HUNTER_LEVEL, 24)
+                column(BirdHouse.COL_HUNTER_XP, 5600)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 25)
+                column(BirdHouse.COL_CRAFTING_XP, 250)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.willow_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_willow_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_willow_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_willow_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 128)
+            }
+
+            row("dbrow.hunter_birdhouse_teak") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_teak")
+                column(BirdHouse.COL_HUNTER_LEVEL, 34)
+                column(BirdHouse.COL_HUNTER_XP, 7000)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 35)
+                column(BirdHouse.COL_CRAFTING_XP, 300)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.teak_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_teak_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_teak_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_teak_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 130)
+            }
+
+            row("dbrow.hunter_birdhouse_maple") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_maple")
+                column(BirdHouse.COL_HUNTER_LEVEL, 44)
+                column(BirdHouse.COL_HUNTER_XP, 8200)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 45)
+                column(BirdHouse.COL_CRAFTING_XP, 350)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.maple_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_maple_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_maple_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_maple_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 140)
+            }
+
+            row("dbrow.hunter_birdhouse_mahogany") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_mahogany")
+                column(BirdHouse.COL_HUNTER_LEVEL, 49)
+                column(BirdHouse.COL_HUNTER_XP, 9600)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 50)
+                column(BirdHouse.COL_CRAFTING_XP, 400)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.mahogany_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_mahogany_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_mahogany_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_mahogany_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 150)
+            }
+
+            row("dbrow.hunter_birdhouse_yew") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_yew")
+                column(BirdHouse.COL_HUNTER_LEVEL, 59)
+                column(BirdHouse.COL_HUNTER_XP, 10200)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 60)
+                column(BirdHouse.COL_CRAFTING_XP, 450)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.yew_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_yew_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_yew_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_yew_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 160)
+            }
+
+            row("dbrow.hunter_birdhouse_magic") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_magic")
+                column(BirdHouse.COL_HUNTER_LEVEL, 74)
+                column(BirdHouse.COL_HUNTER_XP, 11400)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 75)
+                column(BirdHouse.COL_CRAFTING_XP, 500)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.magic_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_magic_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_magic_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_magic_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 170)
+            }
+
+            row("dbrow.hunter_birdhouse_redwood") {
+                columnRSCM(BirdHouse.COL_OBJ, "obj.birdhouse_redwood")
+                column(BirdHouse.COL_HUNTER_LEVEL, 89)
+                column(BirdHouse.COL_HUNTER_XP, 12000)
+                column(BirdHouse.COL_CRAFTING_LEVEL, 90)
+                column(BirdHouse.COL_CRAFTING_XP, 550)
+                columnRSCM(BirdHouse.COL_LOGS, "obj.redwood_logs")
+                columnRSCM(BirdHouse.COL_BUILT_LOC, "loc.birdhouse_redwood_built")
+                columnRSCM(BirdHouse.COL_FULL_LOC, "loc.birdhouse_redwood_full")
+                columnRSCM(BirdHouse.COL_BIRD_LOC, "loc.birdhouse_redwood_bird")
+                column(BirdHouse.COL_NEST_PERMILLE, 175)
             }
         }
 }
