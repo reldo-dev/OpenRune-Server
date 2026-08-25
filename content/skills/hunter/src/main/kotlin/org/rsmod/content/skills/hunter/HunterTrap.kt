@@ -1128,6 +1128,5 @@ constructor(
                 TrapFamily.DEADFALL -> emptyList()
                 TrapFamily.NETTRAP -> NET_TRAP_COMPONENTS
             }
-
     }
 }
