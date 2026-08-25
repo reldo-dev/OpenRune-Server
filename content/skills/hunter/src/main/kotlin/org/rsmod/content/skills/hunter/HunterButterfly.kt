@@ -27,8 +27,6 @@ const val BUTTERFLY_JAR: String = "obj.butterfly_jar"
 /** The net-swing animation, `seq.human_butterflynet_swing` (5209). Real, and not invented here. */
 const val BUTTERFLY_NET_SWING: String = "seq.human_butterflynet_swing"
 
-private const val MAX_HUNTER_LEVEL: Int = 99
-
 /**
  * Butterfly netting: click the creature, roll once, done.
  *
@@ -161,7 +159,7 @@ constructor(
             return false
         }
         for (reward in creature.caught) {
-            invAdd(inv, reward.obj, rollQuantity(reward.quantity))
+            invAdd(inv, reward.obj, rollQuantity(gameRandom, reward.quantity))
         }
         return true
     }
@@ -187,10 +185,6 @@ constructor(
      */
     private fun ProtectedAccess.usesFasterCurve(): Boolean =
         worn.contains(MAGIC_BUTTERFLY_NET) || !isHoldingNet()
-
-    /** A fixed quantity costs no random draw; only a real range consumes one. */
-    private fun rollQuantity(quantity: IntRange): Int =
-        if (quantity.first == quantity.last) quantity.first else gameRandom.of(quantity)
 
     companion object {
         /**

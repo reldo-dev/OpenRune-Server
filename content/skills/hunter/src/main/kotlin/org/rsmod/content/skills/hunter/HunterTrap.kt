@@ -27,7 +27,6 @@ import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
 import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.entity.player.PlayerUid
-import org.rsmod.game.inv.Inventory
 import org.rsmod.game.loc.BoundLocInfo
 import org.rsmod.game.loc.LocAngle
 import org.rsmod.game.loc.LocInfo
@@ -277,27 +276,6 @@ private val NET_TRAP_COMPONENTS: List<String> = listOf(ROPE, SMALL_FISHING_NET)
 
 /** The most traps any player can have laid, reached at level 80. */
 const val MAX_LAID_TRAPS: Int = 5
-
-/**
- * How many free slots awarding [count] of [internal] to [inv] costs. A stackable item already
- * present just grows its existing stack and needs none whatever the count; a stackable item not yet
- * held at all needs exactly one; anything else needs one per item.
- *
- * Top-level rather than private to [HunterTrap] because falconry's retrieve needs the identical
- * rule, and a second copy would be a second place for "a stackable award the player already holds
- * costs no slot" to drift. Getting that wrong over-rejects a legitimate collect, which is exactly
- * the bug this function exists to prevent.
- */
-internal fun hunterInvSlotsNeeded(inv: Inventory, internal: String, count: Int): Int {
-    val stackable = ServerCacheManager.getItem(internal.asRSCM(RSCMType.OBJ))?.isStackable == true
-    return when {
-        !stackable -> count
-        inv.contains(internal) -> 0
-        else -> 1
-    }
-}
-
-private const val MAX_HUNTER_LEVEL: Int = 99
 
 /** [Controller.trapCreature] while the trap is still armed and has caught nothing. */
 private const val CREATURE_NONE: Int = -1
@@ -950,7 +928,15 @@ constructor(
         // Rolled once, up front: the space check below and the awards further down have to agree
         // on the same numbers, and a second roll would let a collect be accepted for five feathers
         // and then hand out ten.
-        val awards = creature?.caught.orEmpty().map { it.obj to rollQuantity(it.quantity) }
+        // `this@HunterTrap.random`, not `random`: this is a `ProtectedAccess` extension, and that
+        // receiver has a `random` of its own which would silently win over the injected field - the
+        // shadowing trap [HunterFalconry] and [HunterButterfly] avoid by naming theirs `gameRandom`.
+        // The bare name was safe while this roll lived inside a non-extension helper; it is not
+        // safe here.
+        val awards =
+            creature?.caught.orEmpty().map {
+                it.obj to rollQuantity(this@HunterTrap.random, it.quantity)
+            }
 
         // Whatever the trap was built from comes back alongside everything it caught. A deadfall
         // contributes nothing: its boulder stays where it is and the log it was armed with went
@@ -1021,10 +1007,6 @@ constructor(
         player.sweepTrapCoords()
         return true
     }
-
-    /** A fixed quantity costs no random draw; only a real range consumes one. */
-    private fun rollQuantity(quantity: IntRange): Int =
-        if (quantity.first == quantity.last) quantity.first else random.of(quantity)
 
     /**
      * Drops every stored coord that no longer has a live trap of this player's on it, writes the

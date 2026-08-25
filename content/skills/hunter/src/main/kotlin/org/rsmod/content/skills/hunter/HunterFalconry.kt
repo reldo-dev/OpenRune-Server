@@ -77,8 +77,6 @@ const val FALCON_CYCLES_PER_TILE: Int = 1
  */
 const val FALCON_MIN_FLIGHT_CYCLES: Int = 1
 
-private const val MAX_HUNTER_LEVEL: Int = 99
-
 private const val COINS: String = "obj.coins"
 
 /** Packed [PlayerUid] of whoever sent the falcon. */
@@ -269,7 +267,7 @@ constructor(
         // Rolled once, up front, so the space check below and the awards further down agree on the
         // same numbers. Every falconry reward is a flat one today, so no draw is actually consumed -
         // the shape is kept because the column supports a range and a future creature may use one.
-        val awards = creature.caught.map { it.obj to rollQuantity(it.quantity) }
+        val awards = creature.caught.map { it.obj to rollQuantity(gameRandom, it.quantity) }
 
         // The glove swap costs nothing net - one out, one in - so only the catch needs room.
         val slotsNeeded = awards.sumOf { (obj, count) -> hunterInvSlotsNeeded(inv, obj, count) }
@@ -368,10 +366,6 @@ constructor(
         }
         return stripped
     }
-
-    /** A fixed quantity costs no random draw; only a real range consumes one. */
-    private fun rollQuantity(quantity: IntRange): Int =
-        if (quantity.first == quantity.last) quantity.first else gameRandom.of(quantity)
 
     /**
      * How long the player is locked while the falcon flies, floored at
