@@ -1,0 +1,190 @@
+# impling	item	min	max	rarity_num	rarity_den	section
+# Published impling-jar loot tables for the first six implings, extracted 2026-08-25 from the
+# offline wiki snapshot 20260817 via the `osrs-cache` MCP `get_wiki_sections` + `get_wiki_section`.
+# Each impling was read from BOTH pages - the creature page and the jar item page - and reconciled.
+# They agree on every item, quantity and rarity for all six. The ONLY difference anywhere is row
+# ORDER: on `Baby impling` the `Nothing` row sits between Hammer and Ball of wool; on
+# `Baby impling jar` it sits after Anchovies. Same rate (1/10) on both. No value disagreement.
+#
+# Both pages carry the banner "The following drop rates are provided by Jagex, unless otherwise
+# specified." - these are authoritative published rates, not community drop-log estimates.
+#
+# Provenance oldids (creature page / jar item page):
+#   baby      Baby impling      15297388  /  Baby impling jar      15185112
+#   young     Young impling     15297391  /  Young impling jar     15185154
+#   gourmet   Gourmet impling   15297393  /  Gourmet impling jar   15184956
+#   earth     Earth impling     15297396  /  Earth impling jar     15185247
+#   essence   Essence impling   15297398  /  Essence impling jar   15184955
+#   eclectic  Eclectic impling  15297390  /  Eclectic impling jar  15184359
+#
+# METHOD NOTE: the derived retrieval text the MCP returns was cross-checked against the lossless
+# Parsoid HTML in `wiki.sqlite` (`pages.raw_content_zstd`, zstd streaming decompress) by counting
+# <tr> in every `item-drops` table. Counts match exactly and nothing was dropped:
+#   baby 19 main + 2 tertiary;  baby jar 1 jar-return + 19 main + 2 tertiary;
+#   young 19 + 2;  gourmet 1 pre-roll + 18 main + 1 tertiary;
+#   earth 19 + 1;  essence 19 + 1;  eclectic 19 + 1.
+# The sqlite `chunks` table was NOT used - it stores truncated rendered text.
+#
+# SECTION VALUES: `main`, `tertiary`, and one `preroll`.
+#   `preroll` is used for gourmet's Grubby key only. The wiki gives it its own "Pre-roll" section,
+#   above the standard-loot table, on both the creature and the jar page. It is mechanically NOT a
+#   tertiary (rolled in addition) and NOT part of the main table (including it would push the main
+#   sum past 1), so it is labelled verbatim rather than forced into either bucket.
+#
+# MAIN-TABLE RARITY SUMS - every one of the six sums to exactly 1:
+#   baby 9x(1/10) + 10x(1/100) = 1        young 9x(1/10) + 10x(1/100) = 1
+#   gourmet 1x(1/5) + 7x(1/10) + 10x(1/100) = 1
+#   earth 9x(1/10) + 10x(1/100) = 1       essence 9x(1/10) + 10x(1/100) = 1
+#   eclectic 9x(1/10) + 10x(1/100) = 1
+# Tertiary rows are independent rolls and are excluded from those sums by design.
+#
+# `Nothing` (baby, 1/10) IS A REAL TABLE ENTRY, kept deliberately. `Baby impling` Trivia (oldid
+# 15297388): "This is the only impling which has a chance to give nothing when successfully
+# caught." The "You manage to catch the impling and acquire some loot." message still shows.
+# Encoded min=0 max=0; the wiki prints its Quantity cell as N/A. Dropping it would break the sum.
+#
+# THE EMPTY JAR IS NOT A TABLE ENTRY and is deliberately absent from the rows below. The jar pages
+# have a separate "Loot > Impling jar" line: "An empty impling jar is returned when removing the
+# loot, with a 10% chance of it breaking." (i.e. Impling jar x1 at 9/10.) Sourced to Mod Ash, not
+# to Jagex's published table - `Baby impling jar` oldid 15185112 ref 1: Jagex, Mod Ash's Twitter
+# account, 4 November 2018, archived 23 July 2019: "[What are the chances of an impling jar
+# breaking when opening it?] 10% flat rate, I think." This is a mechanic on opening, applies to
+# every impling jar, and is independent of which loot row was rolled.
+#
+# NOTED / VARIABLE QUANTITIES - this schema has no `noted` column, so they are recorded here.
+# min/max below are the item counts as printed; the wiki flags these stacks as (noted):
+#   gourmet   Lobster 4, Shark 3, Rainbow fish 5, Garden pie 6, Swordfish 3, Cooked karambwan 2
+#   earth     Bucket of sand 4, Compost 6, Supercompost 2, Mithril ore 3, Coal 6, Emerald 2
+#   essence   Pure essence 20 (1/10 row) and Pure essence 35 (1/100 row)
+#   eclectic  Oak plank 4, Gold bar 5, Adamantite ore 10, Slayer's respite 2
+# THE ONLY VARIABLE STACK in these six tables is eclectic `Air rune`, printed "30-58" -> min 30,
+# max 58. Every other row is a fixed quantity (min == max).
+# Two implings list the same item twice at different rates and stack sizes, which is correct and
+# not a duplicate: earth `Mithril ore` (1 @ 1/10, 3 noted @ 1/100) and essence `Pure essence`
+# (20 noted @ 1/10, 35 noted @ 1/100).
+# `Strawberries(5)` and `Defence potion(3)` keep the wiki's verbatim names; the parenthesised
+# number is part of the item name, not a quantity.
+#
+# Old School RuneScape Wiki contributors, CC BY-NC-SA 3.0.
+baby	Chisel	1	1	1	10	main
+baby	Thread	1	1	1	10	main
+baby	Needle	1	1	1	10	main
+baby	Knife	1	1	1	10	main
+baby	Cheese	1	1	1	10	main
+baby	Hammer	1	1	1	10	main
+baby	Nothing	0	0	1	10	main
+baby	Ball of wool	1	1	1	10	main
+baby	Anchovies	1	1	1	10	main
+baby	Spice	1	1	1	100	main
+baby	Flax	1	1	1	100	main
+baby	Mud pie	1	1	1	100	main
+baby	Seaweed	1	1	1	100	main
+baby	Air talisman	1	1	1	100	main
+baby	Silver bar	1	1	1	100	main
+baby	Sapphire	1	1	1	100	main
+baby	Hard leather	1	1	1	100	main
+baby	Lobster	1	1	1	100	main
+baby	Soft clay	1	1	1	100	main
+baby	Clue scroll (beginner)	1	1	1	50	tertiary
+baby	Clue scroll (easy)	1	1	1	100	tertiary
+young	Steel nails	5	5	1	10	main
+young	Lockpick	1	1	1	10	main
+young	Pure essence	1	1	1	10	main
+young	Tuna	1	1	1	10	main
+young	Chocolate slice	1	1	1	10	main
+young	Steel axe	1	1	1	10	main
+young	Meat pizza	1	1	1	10	main
+young	Coal	1	1	1	10	main
+young	Bow string	1	1	1	10	main
+young	Snape grass	1	1	1	100	main
+young	Soft clay	1	1	1	100	main
+young	Studded chaps	1	1	1	100	main
+young	Steel full helm	1	1	1	100	main
+young	Oak plank	1	1	1	100	main
+young	Defence potion(3)	1	1	1	100	main
+young	Mithril bar	1	1	1	100	main
+young	Yew longbow	1	1	1	100	main
+young	Garden pie	1	1	1	100	main
+young	Jangerberries	1	1	1	100	main
+young	Clue scroll (beginner)	1	1	1	25	tertiary
+young	Clue scroll (easy)	1	1	1	50	tertiary
+gourmet	Grubby key	1	1	1	500	preroll
+gourmet	Tuna	1	1	1	5	main
+gourmet	Bass	1	1	1	10	main
+gourmet	Curry	1	1	1	10	main
+gourmet	Meat pie	1	1	1	10	main
+gourmet	Chocolate cake	1	1	1	10	main
+gourmet	Frog spawn	1	1	1	10	main
+gourmet	Spice	1	1	1	10	main
+gourmet	Curry leaf	1	1	1	10	main
+gourmet	Ugthanki kebab	1	1	1	100	main
+gourmet	Lobster	4	4	1	100	main
+gourmet	Shark	3	3	1	100	main
+gourmet	Fish pie	1	1	1	100	main
+gourmet	Chef's delight	1	1	1	100	main
+gourmet	Rainbow fish	5	5	1	100	main
+gourmet	Garden pie	6	6	1	100	main
+gourmet	Swordfish	3	3	1	100	main
+gourmet	Strawberries(5)	1	1	1	100	main
+gourmet	Cooked karambwan	2	2	1	100	main
+gourmet	Clue scroll (easy)	1	1	1	25	tertiary
+earth	Fire talisman	1	1	1	10	main
+earth	Earth talisman	1	1	1	10	main
+earth	Earth tiara	1	1	1	10	main
+earth	Earth rune	32	32	1	10	main
+earth	Mithril ore	1	1	1	10	main
+earth	Bucket of sand	4	4	1	10	main
+earth	Unicorn horn	1	1	1	10	main
+earth	Compost	6	6	1	10	main
+earth	Gold ore	1	1	1	10	main
+earth	Steel bar	1	1	1	100	main
+earth	Mithril pickaxe	1	1	1	100	main
+earth	Wildblood seed	2	2	1	100	main
+earth	Jangerberry seed	2	2	1	100	main
+earth	Supercompost	2	2	1	100	main
+earth	Mithril ore	3	3	1	100	main
+earth	Harralander seed	2	2	1	100	main
+earth	Coal	6	6	1	100	main
+earth	Emerald	2	2	1	100	main
+earth	Ruby	1	1	1	100	main
+earth	Clue scroll (medium)	1	1	1	100	tertiary
+essence	Pure essence	20	20	1	10	main
+essence	Water rune	30	30	1	10	main
+essence	Air rune	30	30	1	10	main
+essence	Fire rune	50	50	1	10	main
+essence	Mind rune	25	25	1	10	main
+essence	Body rune	28	28	1	10	main
+essence	Chaos rune	4	4	1	10	main
+essence	Cosmic rune	4	4	1	10	main
+essence	Mind talisman	1	1	1	10	main
+essence	Pure essence	35	35	1	100	main
+essence	Lava rune	4	4	1	100	main
+essence	Mud rune	4	4	1	100	main
+essence	Smoke rune	4	4	1	100	main
+essence	Steam rune	4	4	1	100	main
+essence	Death rune	13	13	1	100	main
+essence	Law rune	13	13	1	100	main
+essence	Blood rune	7	7	1	100	main
+essence	Soul rune	11	11	1	100	main
+essence	Nature rune	13	13	1	100	main
+essence	Clue scroll (medium)	1	1	1	50	tertiary
+eclectic	Mithril pickaxe	1	1	1	10	main
+eclectic	Curry leaf	1	1	1	10	main
+eclectic	Snape grass	1	1	1	10	main
+eclectic	Air rune	30	58	1	10	main
+eclectic	Oak plank	4	4	1	10	main
+eclectic	Empty candle lantern	1	1	1	10	main
+eclectic	Gold ore	1	1	1	10	main
+eclectic	Gold bar	5	5	1	10	main
+eclectic	Unicorn horn	1	1	1	10	main
+eclectic	Adamant kiteshield	1	1	1	100	main
+eclectic	Blue d'hide chaps	1	1	1	100	main
+eclectic	Red spiky vambraces	1	1	1	100	main
+eclectic	Rune dagger	1	1	1	100	main
+eclectic	Battlestaff	1	1	1	100	main
+eclectic	Adamantite ore	10	10	1	100	main
+eclectic	Slayer's respite	2	2	1	100	main
+eclectic	Wild pie	1	1	1	100	main
+eclectic	Watermelon seed	3	3	1	100	main
+eclectic	Diamond	1	1	1	100	main
+eclectic	Clue scroll (medium)	1	1	1	25	tertiary

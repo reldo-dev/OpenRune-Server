@@ -31,7 +31,7 @@ import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
 
 /**
- * What the eight hunter scripts actually put on the event bus.
+ * What the nine hunter scripts actually put on the event bus.
  *
  * **The gap this closes.** Every other test in this module reaches the ops by calling
  * `setDeadfall`, `collectTrap`, `catchKebbit` and friends directly. That proves the *bodies* are
@@ -199,6 +199,31 @@ class HunterWiringTest {
     }
 
     /**
+     * Impling catching registers exactly the same shape butterfly netting does, one op per npc.
+     *
+     * The absence half is what this is for. `iop3=Loot` on the filled jar is a separate feature with
+     * its own drop tables, so a handler appearing anywhere here would mean it had been half-wired.
+     */
+    @Test
+    fun `impling catching registers one catch per creature and nothing else`() {
+        val bus = Wiring().start(scripts.impling)
+
+        val creatures = ImplingCreatures.all
+        assertEquals(6, creatures.size, "the six Puro-Puro implings ship")
+        for (creature in creatures) {
+            assertTrue(bus.hasOpNpc1(creature.npc), "`Catch` on ${creature.npc}")
+        }
+
+        // Nothing is laid, nothing is rented and no controller is ever created.
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAiConTimer(FALCON_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAreaExit(FALCONRY_AREA), "nothing is rented")
+        for (group in ALL_TRAP_GROUPS) {
+            assertFalse(bus.hasOpContentLoc1(group), "implings touch no locs ($group)")
+        }
+    }
+
+    /**
      * Crab trapping registers one loc op, one soft queue and one login hook, and no controller tick.
      *
      * The soft queue is the piece most likely to be missing without anything noticing: a bait that
@@ -271,9 +296,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all eight scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all nine scripts share one bus at startup. */
     @Test
-    fun `all eight scripts start together on one bus without a duplicate key`() {
+    fun `all nine scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -308,12 +333,13 @@ class HunterWiringTest {
 
     @Test
     fun `no npc handler is registered on an op index the hunter npcs do not carry`() {
-        val bus = Wiring().start(scripts.falconry, scripts.butterfly)
+        val bus = Wiring().start(scripts.falconry, scripts.butterfly, scripts.impling)
 
         val catchTargets =
             FalconryCreatures.all.map { it.npc } +
                 FalconryCreatures.all.map { it.falconNpc } +
-                ButterflyCreatures.all.map { it.npc }
+                ButterflyCreatures.all.map { it.npc } +
+                ImplingCreatures.all.map { it.npc }
         for (npc in catchTargets) {
             val id = npc.asRSCM(RSCMType.NPC)
             assertFalse(bus.eventBus.contains(NpcEvents.Op2::class.java, id), "op2 on $npc")
@@ -412,6 +438,9 @@ class HunterWiringTest {
                 add(creature.falconNpc to InteractionOp.Op1)
             }
             for (creature in ButterflyCreatures.all) {
+                add(creature.npc to InteractionOp.Op1)
+            }
+            for (creature in ImplingCreatures.all) {
                 add(creature.npc to InteractionOp.Op1)
             }
         }
@@ -542,11 +571,12 @@ class HunterWiringTest {
         val falconry = FalconryEvents(falconWorld.falconry)
         val butterfly = ButterflyEvents(butterflyWorld.butterfly)
         val crabTrap = CrabTrapEvents(crabWorld.crabTrap)
+        val impling = ImplingEvents(butterflyWorld.impling)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
-        val all: List<PluginScript> = trapFamily + listOf(falconry, butterfly, crabTrap)
+        val all: List<PluginScript> = trapFamily + listOf(falconry, butterfly, crabTrap, impling)
     }
 
     /**

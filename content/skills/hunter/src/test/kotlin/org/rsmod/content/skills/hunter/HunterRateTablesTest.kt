@@ -41,7 +41,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(870, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(1380, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -244,7 +244,12 @@ class HunterRateTablesTest {
     private fun allShippedRates(): List<ShippedRate> =
         HunterCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) } +
             FalconryCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) } +
-            ButterflyCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) }
+            ButterflyCreatures.all.map {
+                ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
+            } +
+            ImplingCreatures.all.map {
+                ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
+            }
 
     private fun firstCertainLevel(rate: ShippedRate): Int =
         (1..99).first { charted(rate.low, rate.high, it) == 256 }
@@ -292,6 +297,7 @@ class HunterRateTablesTest {
                 "butterfly-chance.tsv",
                 "deadfall-chance.tsv",
                 "falconry-chance.tsv",
+                "impling-chance.tsv",
                 "magicbox-chance.tsv",
                 "nettrap-chance.tsv",
             )
@@ -320,6 +326,42 @@ class HunterRateTablesTest {
                 Charted("spotted_kebbit", "npc.huntingbeast_speedy"),
                 Charted("dark_kebbit", "npc.huntingbeast_silent"),
                 Charted("dashing_kebbit", "npc.huntingbeast_speedy2"),
+                Charted("baby_impling", "npc.ii_impling_type_1_maze"),
+                Charted(
+                    "baby_impling_magicnet",
+                    "npc.ii_impling_type_1_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("young_impling", "npc.ii_impling_type_2_maze"),
+                Charted(
+                    "young_impling_magicnet",
+                    "npc.ii_impling_type_2_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("gourmet_impling", "npc.ii_impling_type_3_maze"),
+                Charted(
+                    "gourmet_impling_magicnet",
+                    "npc.ii_impling_type_3_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("earth_impling", "npc.ii_impling_type_4_maze"),
+                Charted(
+                    "earth_impling_magicnet",
+                    "npc.ii_impling_type_4_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("essence_impling", "npc.ii_impling_type_5_maze"),
+                Charted(
+                    "essence_impling_magicnet",
+                    "npc.ii_impling_type_5_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("eclectic_impling", "npc.ii_impling_type_6_maze"),
+                Charted(
+                    "eclectic_impling_magicnet",
+                    "npc.ii_impling_type_6_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
                 Charted("black_warlock", "npc.butterfly_warlock"),
                 Charted("sunlight_moth", "npc.moth_sunlight"),
                 // The magic net's separate, faster curve, modelled as a flat bonus on both
@@ -366,6 +408,48 @@ class HunterRateTablesTest {
                 Published("Spotted kebbit", "Spotted kebbit", "npc.huntingbeast_speedy"),
                 Published("Dark kebbit", "Dark kebbit", "npc.huntingbeast_silent"),
                 Published("Dashing kebbit", "Dashing kebbit", "npc.huntingbeast_speedy2"),
+                Published("Baby impling", "Butterfly net", "npc.ii_impling_type_1_maze"),
+                Published(
+                    "Baby impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_1_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Young impling", "Butterfly net", "npc.ii_impling_type_2_maze"),
+                Published(
+                    "Young impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_2_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Gourmet impling", "Butterfly net", "npc.ii_impling_type_3_maze"),
+                Published(
+                    "Gourmet impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_3_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Earth impling", "Butterfly net", "npc.ii_impling_type_4_maze"),
+                Published(
+                    "Earth impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_4_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Essence impling", "Butterfly net", "npc.ii_impling_type_5_maze"),
+                Published(
+                    "Essence impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_5_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Eclectic impling", "Butterfly net", "npc.ii_impling_type_6_maze"),
+                Published(
+                    "Eclectic impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_6_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
                 Published("Black warlock", "Butterfly net", "npc.butterfly_warlock"),
                 Published(
                     "Black warlock",
@@ -382,8 +466,23 @@ class HunterRateTablesTest {
                 ),
             )
 
+        /**
+         * The six implings whose charts are checked in but which do not ship yet.
+         *
+         * They are blocked on a spawner, not on data: only the `_maze` npcs of types 1-6 have spawns
+         * in `.data`, and the overworld spawn data is a set of invisible precursor markers that a
+         * server-side roll is meant to replace. Their charts are kept so the spawner slice does not
+         * have to re-extract them, and named here so that leaving them unasserted stays a visible
+         * decision rather than a hole.
+         */
+        private val UNSHIPPED_IMPLINGS =
+            listOf("nature", "magpie", "ninja", "crystal", "dragon", "lucky")
+                .flatMap { listOf("${it}_impling", "${it}_impling_magicnet") }
+                .toSet()
+
         /** Charted but deliberately not shipped; see [theMoonlightMothIsNotOnTheOtherButterfliesCurve]. */
-        private val UNSHIPPED_SERIES = setOf("moonlight_moth", "moonlight_moth_magicnet")
+        private val UNSHIPPED_SERIES =
+            setOf("moonlight_moth", "moonlight_moth_magicnet") + UNSHIPPED_IMPLINGS
 
         /** The five rows whose pair `HunterTables` annotates as a guess rather than a fit. */
         private val GUESSED_NPCS =

@@ -24,14 +24,19 @@ import org.rsmod.map.zone.ZoneKey
 import org.rsmod.routefinder.collision.CollisionFlagMap
 
 /**
- * A world for butterfly netting, and the smallest of the three.
+ * A world for the two netting techniques, and the smallest of the four.
  *
- * Butterfly netting touches no locs, no controllers and no ground objs, so this is a player, an npc
- * registry and nothing else - even [HunterFalconryTestWorld]'s controller repository is dead weight
- * here. Nothing is mocked but [random].
+ * Butterfly netting and impling catching touch no locs, no controllers and no ground objs, so this
+ * is a player, an npc registry and nothing else - even [HunterFalconryTestWorld]'s controller
+ * repository is dead weight here. Nothing is mocked but [random].
  *
- * The one thing it has that neither other world does is a **worn** inventory, because "wielding a
- * net" is a worn-slot question and the barehanded branch is decided by its absence.
+ * The one thing it has that no other world does is a **worn** inventory, because "wielding a net" is
+ * a worn-slot question and the barehanded branch is decided by its absence.
+ *
+ * It carries both [butterfly] and [impling] rather than being copied into a fifth world file: the
+ * two techniques share the nets, the barehanded cost, the faster curve and the jar swap, so a second
+ * world would be this one with a different field name and a second place for the worn-inventory
+ * setup to drift.
  */
 class HunterButterflyTestWorld {
     val mapClock: MapClock = MapClock()
@@ -51,6 +56,9 @@ class HunterButterflyTestWorld {
 
     val butterfly: HunterButterfly =
         HunterButterfly(npcRepo = npcRepo, gameRandom = random, xpMods = XpModifiers(emptySet()))
+
+    val impling: HunterImpling =
+        HunterImpling(npcRepo = npcRepo, gameRandom = random, xpMods = XpModifiers(emptySet()))
 
     private var nextUuid: Long = 1L
 
@@ -125,6 +133,14 @@ class HunterButterflyTestWorld {
         player.currentMapClock = mapClock.cycle
         player.processedMapClock = mapClock.cycle
         return butterfly.op(access)
+    }
+
+    /** [run] for the impling half of the world; `catchImpling` does not suspend either. */
+    fun <T> runImpling(player: Player, op: HunterImpling.(ProtectedAccess) -> T): T {
+        val access = protectedAccess(player)
+        player.currentMapClock = mapClock.cycle
+        player.processedMapClock = mapClock.cycle
+        return impling.op(access)
     }
 
     companion object {

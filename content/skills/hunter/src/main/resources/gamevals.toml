@@ -9,6 +9,7 @@ hunter_magicbox_creatures = 55547
 hunter_falconry_creatures = 55548
 hunter_butterfly_creatures = 55549
 hunter_crab_creatures = 55550
+hunter_impling_creatures = 55551
 
 # Append-only block, clear of the 555xx and 56[0-2]xx dbrow runs with headroom. Ids ascend in the
 # order the creatures appear in the combined list, which a sprung trap persists an index into, so
@@ -57,6 +58,14 @@ hunter_embertailed_jerboa = 56362
 hunter_red_crab = 56370
 hunter_blue_crab = 56371
 hunter_rainbow_crab = 56372
+# Implings, read into `ImplingCreatures.all`, which nothing persists an index into either. Only the
+# six Puro-Puro creatures ship; the other six need a spawner first, and will append above these.
+hunter_baby_impling = 56380
+hunter_young_impling = 56381
+hunter_gourmet_impling = 56382
+hunter_earth_impling = 56383
+hunter_essence_impling = 56384
+hunter_eclectic_impling = 56385
 
 [gamevals.controller]
 hunter_trap = 2
