@@ -1,6 +1,7 @@
 package org.rsmod.content.skills.hunter
 
 import jakarta.inject.Inject
+import org.rsmod.api.script.onOpHeld3
 import org.rsmod.api.script.onOpNpc1
 import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
@@ -19,13 +20,17 @@ import org.rsmod.plugin.scripts.ScriptContext
  *
  * There is nothing else to register. No timer, because a catch resolves within the op; no area
  * entry or exit, because the npc ids already carry "in Puro-Puro" on their own; no `onAiConTimer`,
- * because no controller is ever created. `iop3=Loot` on the filled jar is a separate feature and is
- * deliberately not claimed here.
+ * because no controller is ever created. `iop3=Loot` on the filled jars is the other half of the
+ * reward and is registered here too - it is `iop3` on all six, and like `op1=Catch` it already
+ * exists on the objs.
  */
 class ImplingEvents @Inject constructor(private val impling: HunterImpling) : PluginScript() {
     override fun ScriptContext.startup() {
         for (creature in ImplingCreatures.all) {
             onOpNpc1(creature.npc) { with(impling) { catchImpling(it.npc) } }
+        }
+        for (jar in ImplingLoot.jars) {
+            onOpHeld3(jar) { with(impling) { openJar(jar) } }
         }
     }
 }

@@ -7,9 +7,12 @@ import dev.openrune.rscm.RSCMType
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.protect.ProtectedAccessContextFactory
 import org.rsmod.api.registry.npc.NpcRegistry
+import org.rsmod.api.registry.obj.ObjRegistry
 import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
+import org.rsmod.api.registry.zone.ZoneUpdateMap
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.events.EventBus
@@ -49,16 +52,27 @@ class HunterButterflyTestWorld {
     private val eventBus = EventBus()
     private val zoneActivity = ZonePlayerActivityBitSet()
 
+    private val zoneUpdates = ZoneUpdateMap()
+    private val objRegistry = ObjRegistry(zoneUpdates)
+
     private val npcRegistry = NpcRegistry(npcList, collision, eventBus)
     private val playerRegistry = PlayerRegistry(playerList, collision, zoneActivity, eventBus)
 
     val npcRepo: NpcRepository = NpcRepository(mapClock, npcRegistry, npcList)
 
+    /** Implings need one where butterflies do not: opening a jar can overflow to the floor. */
+    val objRepo: ObjRepository = ObjRepository(mapClock, objRegistry)
+
     val butterfly: HunterButterfly =
         HunterButterfly(npcRepo = npcRepo, gameRandom = random, xpMods = XpModifiers(emptySet()))
 
     val impling: HunterImpling =
-        HunterImpling(npcRepo = npcRepo, gameRandom = random, xpMods = XpModifiers(emptySet()))
+        HunterImpling(
+            npcRepo = npcRepo,
+            objRepo = objRepo,
+            gameRandom = random,
+            xpMods = XpModifiers(emptySet()),
+        )
 
     private var nextUuid: Long = 1L
 

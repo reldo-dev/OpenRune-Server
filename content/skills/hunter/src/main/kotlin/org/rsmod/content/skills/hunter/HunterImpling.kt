@@ -1,11 +1,17 @@
 package org.rsmod.content.skills.hunter
 
+import dtx.core.ArgMap
+import dtx.core.RollResult
+import dtx.core.flatten
 import jakarta.inject.Inject
+import org.rsmod.api.droptable.DropRollItem
+import org.rsmod.api.droptable.rollCount
 import org.rsmod.api.player.output.mes
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.stat.hunterLvl
 import org.rsmod.api.random.GameRandom
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.utils.skills.SkillingSuccessRate
 import org.rsmod.game.entity.Npc
@@ -17,6 +23,9 @@ import org.rsmod.game.entity.Npc
  * [HunterImpling.catchImpling].
  */
 const val IMPLING_JAR: String = "obj.ii_impling_jar"
+
+/** One in this many jar-opens destroys the empty jar instead of returning it. */
+private const val JAR_BREAK_CHANCE: Int = 10
 
 /**
  * Catching implings, which is butterfly netting with one extra rule.
@@ -56,6 +65,7 @@ class HunterImpling
 @Inject
 constructor(
     private val npcRepo: NpcRepository,
+    private val objRepo: ObjRepository,
     // Named `gameRandom`, not `random`, for the reason [HunterButterfly] spells out at its own
     // constructor: `ProtectedAccess` has a `random` property and an extension receiver's member
     // wins over the dispatch receiver's field, so a field called `random` here would be silently
@@ -133,6 +143,58 @@ constructor(
         val xp = (creature.xpPuro / 10.0) * xpMods.get(player, "stat.hunter")
         statAdvance("stat.hunter", xp)
         return true
+    }
+
+    /**
+     * `Loot` on a filled jar: take the jar, roll its table, and usually hand the empty one back.
+     *
+     * Separate from [catchImpling] because the jar is a tradeable item - the player who opens one
+     * need not be the player who caught it, need not be in Puro-Puro, and need not have any Hunter
+     * level at all. So there is no level gate here and there must not be one.
+     *
+     * The jar is consumed **before** the roll, so a table that somehow rolled nothing still costs
+     * the jar rather than looping. Rewards go through `invAddOrDrop`: a jar can pay out several
+     * items where only one slot was freed, and the wiki describes loot falling to the floor rather
+     * than the open being refused.
+     *
+     * @return false only if the obj is not one of the six jars this slice ships.
+     */
+    fun ProtectedAccess.openJar(jar: String): Boolean {
+        val table = ImplingLoot.forJar(jar) ?: return false
+        if (invDel(inv, jar, 1).failure) {
+            return false
+        }
+
+        when (val result = table.roll(player, ArgMap()).flatten()) {
+            is RollResult.Nothing -> Unit
+            is RollResult.Single -> giveDrop(result.result)
+            is RollResult.ListOf -> result.results.forEach { giveDrop(it) }
+        }
+
+        // "An empty impling jar is returned when removing the loot, with a 10% chance of it
+        // breaking." Sourced to Mod Ash rather than to Jagex's published table - `Baby impling jar`
+        // oldid=15185112 ref 1, "10% flat rate, I think" - which is why it is the one number in this
+        // feature carrying a hedge. It applies to every jar and is independent of what was rolled.
+        if (gameRandom.randomBoolean(JAR_BREAK_CHANCE)) {
+            mes("You break the jar as you open it.")
+        } else {
+            invAddOrDrop(objRepo, IMPLING_JAR, 1)
+        }
+        return true
+    }
+
+    /**
+     * One rolled reward.
+     *
+     * `isNothing` is a real outcome here, not an error: the baby impling's table carries a 1/10
+     * nothing slot, and the wiki notes the "you acquire some loot" message still shows.
+     */
+    private fun ProtectedAccess.giveDrop(drop: DropRollItem) {
+        if (drop.isNothing || !drop.condition(player)) {
+            return
+        }
+        val obj = drop.transformObj(player) ?: drop.obj
+        invAddOrDrop(objRepo, obj, drop.rollCount(random))
     }
 
     /**

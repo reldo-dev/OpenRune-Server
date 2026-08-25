@@ -1,4 +1,4 @@
-# impling	item	min	max	rarity_num	rarity_den	section
+# impling	item	min	max	rarity_num	rarity_den	section	obj
 # Published impling-jar loot tables for the first six implings, extracted 2026-08-25 from the
 # offline wiki snapshot 20260817 via the `osrs-cache` MCP `get_wiki_sections` + `get_wiki_section`.
 # Each impling was read from BOTH pages - the creature page and the jar item page - and reconciled.
@@ -66,125 +66,134 @@
 # number is part of the item name, not a quantity.
 #
 # Old School RuneScape Wiki contributors, CC BY-NC-SA 3.0.
-baby	Chisel	1	1	1	10	main
-baby	Thread	1	1	1	10	main
-baby	Needle	1	1	1	10	main
-baby	Knife	1	1	1	10	main
-baby	Cheese	1	1	1	10	main
-baby	Hammer	1	1	1	10	main
-baby	Nothing	0	0	1	10	main
-baby	Ball of wool	1	1	1	10	main
-baby	Anchovies	1	1	1	10	main
-baby	Spice	1	1	1	100	main
-baby	Flax	1	1	1	100	main
-baby	Mud pie	1	1	1	100	main
-baby	Seaweed	1	1	1	100	main
-baby	Air talisman	1	1	1	100	main
-baby	Silver bar	1	1	1	100	main
-baby	Sapphire	1	1	1	100	main
-baby	Hard leather	1	1	1	100	main
-baby	Lobster	1	1	1	100	main
-baby	Soft clay	1	1	1	100	main
-baby	Clue scroll (beginner)	1	1	1	50	tertiary
-baby	Clue scroll (easy)	1	1	1	100	tertiary
-young	Steel nails	5	5	1	10	main
-young	Lockpick	1	1	1	10	main
-young	Pure essence	1	1	1	10	main
-young	Tuna	1	1	1	10	main
-young	Chocolate slice	1	1	1	10	main
-young	Steel axe	1	1	1	10	main
-young	Meat pizza	1	1	1	10	main
-young	Coal	1	1	1	10	main
-young	Bow string	1	1	1	10	main
-young	Snape grass	1	1	1	100	main
-young	Soft clay	1	1	1	100	main
-young	Studded chaps	1	1	1	100	main
-young	Steel full helm	1	1	1	100	main
-young	Oak plank	1	1	1	100	main
-young	Defence potion(3)	1	1	1	100	main
-young	Mithril bar	1	1	1	100	main
-young	Yew longbow	1	1	1	100	main
-young	Garden pie	1	1	1	100	main
-young	Jangerberries	1	1	1	100	main
-young	Clue scroll (beginner)	1	1	1	25	tertiary
-young	Clue scroll (easy)	1	1	1	50	tertiary
-gourmet	Grubby key	1	1	1	500	preroll
-gourmet	Tuna	1	1	1	5	main
-gourmet	Bass	1	1	1	10	main
-gourmet	Curry	1	1	1	10	main
-gourmet	Meat pie	1	1	1	10	main
-gourmet	Chocolate cake	1	1	1	10	main
-gourmet	Frog spawn	1	1	1	10	main
-gourmet	Spice	1	1	1	10	main
-gourmet	Curry leaf	1	1	1	10	main
-gourmet	Ugthanki kebab	1	1	1	100	main
-gourmet	Lobster	4	4	1	100	main
-gourmet	Shark	3	3	1	100	main
-gourmet	Fish pie	1	1	1	100	main
-gourmet	Chef's delight	1	1	1	100	main
-gourmet	Rainbow fish	5	5	1	100	main
-gourmet	Garden pie	6	6	1	100	main
-gourmet	Swordfish	3	3	1	100	main
-gourmet	Strawberries(5)	1	1	1	100	main
-gourmet	Cooked karambwan	2	2	1	100	main
-gourmet	Clue scroll (easy)	1	1	1	25	tertiary
-earth	Fire talisman	1	1	1	10	main
-earth	Earth talisman	1	1	1	10	main
-earth	Earth tiara	1	1	1	10	main
-earth	Earth rune	32	32	1	10	main
-earth	Mithril ore	1	1	1	10	main
-earth	Bucket of sand	4	4	1	10	main
-earth	Unicorn horn	1	1	1	10	main
-earth	Compost	6	6	1	10	main
-earth	Gold ore	1	1	1	10	main
-earth	Steel bar	1	1	1	100	main
-earth	Mithril pickaxe	1	1	1	100	main
-earth	Wildblood seed	2	2	1	100	main
-earth	Jangerberry seed	2	2	1	100	main
-earth	Supercompost	2	2	1	100	main
-earth	Mithril ore	3	3	1	100	main
-earth	Harralander seed	2	2	1	100	main
-earth	Coal	6	6	1	100	main
-earth	Emerald	2	2	1	100	main
-earth	Ruby	1	1	1	100	main
-earth	Clue scroll (medium)	1	1	1	100	tertiary
-essence	Pure essence	20	20	1	10	main
-essence	Water rune	30	30	1	10	main
-essence	Air rune	30	30	1	10	main
-essence	Fire rune	50	50	1	10	main
-essence	Mind rune	25	25	1	10	main
-essence	Body rune	28	28	1	10	main
-essence	Chaos rune	4	4	1	10	main
-essence	Cosmic rune	4	4	1	10	main
-essence	Mind talisman	1	1	1	10	main
-essence	Pure essence	35	35	1	100	main
-essence	Lava rune	4	4	1	100	main
-essence	Mud rune	4	4	1	100	main
-essence	Smoke rune	4	4	1	100	main
-essence	Steam rune	4	4	1	100	main
-essence	Death rune	13	13	1	100	main
-essence	Law rune	13	13	1	100	main
-essence	Blood rune	7	7	1	100	main
-essence	Soul rune	11	11	1	100	main
-essence	Nature rune	13	13	1	100	main
-essence	Clue scroll (medium)	1	1	1	50	tertiary
-eclectic	Mithril pickaxe	1	1	1	10	main
-eclectic	Curry leaf	1	1	1	10	main
-eclectic	Snape grass	1	1	1	10	main
-eclectic	Air rune	30	58	1	10	main
-eclectic	Oak plank	4	4	1	10	main
-eclectic	Empty candle lantern	1	1	1	10	main
-eclectic	Gold ore	1	1	1	10	main
-eclectic	Gold bar	5	5	1	10	main
-eclectic	Unicorn horn	1	1	1	10	main
-eclectic	Adamant kiteshield	1	1	1	100	main
-eclectic	Blue d'hide chaps	1	1	1	100	main
-eclectic	Red spiky vambraces	1	1	1	100	main
-eclectic	Rune dagger	1	1	1	100	main
-eclectic	Battlestaff	1	1	1	100	main
-eclectic	Adamantite ore	10	10	1	100	main
-eclectic	Slayer's respite	2	2	1	100	main
-eclectic	Wild pie	1	1	1	100	main
-eclectic	Watermelon seed	3	3	1	100	main
-eclectic	Diamond	1	1	1	100	main
-eclectic	Clue scroll (medium)	1	1	1	25	tertiary
+# The `obj` column was added 2026-08-25 and is NOT from the wiki: it is the OpenRune symbol
+# each published item name resolves to, matched against the packed `config/obj` `name=` field.
+# 100 of the 101 distinct names matched on name alone; the miss is `Nothing`, which is a real
+# table entry with no item behind it and is left blank here. Two names needed a decision:
+#   Ugthanki kebab  -> obj.ugthanki_kebab, not the lower-id obj.ugthanki_kebab_bad.
+#   Clue scrolls    -> one specific step obj, which is what every other table in the repo
+#                      names; the tier is what matters, the step is arbitrary.
+# Noted rewards resolve through the base obj's own `certlink` field rather than a guessed
+# `cert_` prefix - three of the seventeen do not follow that naming.
+baby	Chisel	1	1	1	10	main	obj.chisel
+baby	Thread	1	1	1	10	main	obj.thread
+baby	Needle	1	1	1	10	main	obj.needle
+baby	Knife	1	1	1	10	main	obj.knife
+baby	Cheese	1	1	1	10	main	obj.cheese
+baby	Hammer	1	1	1	10	main	obj.hammer
+baby	Nothing	0	0	1	10	main	
+baby	Ball of wool	1	1	1	10	main	obj.ball_of_wool
+baby	Anchovies	1	1	1	10	main	obj.anchovies
+baby	Spice	1	1	1	100	main	obj.spicespot
+baby	Flax	1	1	1	100	main	obj.flax
+baby	Mud pie	1	1	1	100	main	obj.mud_pie
+baby	Seaweed	1	1	1	100	main	obj.seaweed
+baby	Air talisman	1	1	1	100	main	obj.air_talisman
+baby	Silver bar	1	1	1	100	main	obj.silver_bar
+baby	Sapphire	1	1	1	100	main	obj.sapphire
+baby	Hard leather	1	1	1	100	main	obj.hard_leather
+baby	Lobster	1	1	1	100	main	obj.lobster
+baby	Soft clay	1	1	1	100	main	obj.softclay
+baby	Clue scroll (beginner)	1	1	1	50	tertiary	obj.trail_clue_beginner
+baby	Clue scroll (easy)	1	1	1	100	tertiary	obj.trail_clue_easy_simple001
+young	Steel nails	5	5	1	10	main	obj.nails
+young	Lockpick	1	1	1	10	main	obj.lockpick
+young	Pure essence	1	1	1	10	main	obj.blankrune_high
+young	Tuna	1	1	1	10	main	obj.tuna
+young	Chocolate slice	1	1	1	10	main	obj.chocolate_slice
+young	Steel axe	1	1	1	10	main	obj.steel_axe
+young	Meat pizza	1	1	1	10	main	obj.meat_pizza
+young	Coal	1	1	1	10	main	obj.coal
+young	Bow string	1	1	1	10	main	obj.bow_string
+young	Snape grass	1	1	1	100	main	obj.snape_grass
+young	Soft clay	1	1	1	100	main	obj.softclay
+young	Studded chaps	1	1	1	100	main	obj.studded_chaps
+young	Steel full helm	1	1	1	100	main	obj.steel_full_helm
+young	Oak plank	1	1	1	100	main	obj.plank_oak
+young	Defence potion(3)	1	1	1	100	main	obj.3dose1defense
+young	Mithril bar	1	1	1	100	main	obj.mithril_bar
+young	Yew longbow	1	1	1	100	main	obj.yew_longbow
+young	Garden pie	1	1	1	100	main	obj.garden_pie
+young	Jangerberries	1	1	1	100	main	obj.jangerberries
+young	Clue scroll (beginner)	1	1	1	25	tertiary	obj.trail_clue_beginner
+young	Clue scroll (easy)	1	1	1	50	tertiary	obj.trail_clue_easy_simple001
+gourmet	Grubby key	1	1	1	500	preroll	obj.hosdun_grubby_key
+gourmet	Tuna	1	1	1	5	main	obj.tuna
+gourmet	Bass	1	1	1	10	main	obj.bass
+gourmet	Curry	1	1	1	10	main	obj.curry
+gourmet	Meat pie	1	1	1	10	main	obj.meat_pie
+gourmet	Chocolate cake	1	1	1	10	main	obj.chocolate_cake
+gourmet	Frog spawn	1	1	1	10	main	obj.giant_frogspawn
+gourmet	Spice	1	1	1	10	main	obj.spicespot
+gourmet	Curry leaf	1	1	1	10	main	obj.curry_leaf
+gourmet	Ugthanki kebab	1	1	1	100	main	obj.ugthanki_kebab
+gourmet	Lobster	4	4	1	100	main	obj.cert_lobster
+gourmet	Shark	3	3	1	100	main	obj.cert_shark
+gourmet	Fish pie	1	1	1	100	main	obj.fish_pie
+gourmet	Chef's delight	1	1	1	100	main	obj.chefs_delight
+gourmet	Rainbow fish	5	5	1	100	main	obj.cert_hunting_fish_special
+gourmet	Garden pie	6	6	1	100	main	obj.cert_garden_pie
+gourmet	Swordfish	3	3	1	100	main	obj.cert_swordfish
+gourmet	Strawberries(5)	1	1	1	100	main	obj.basket_strawberry_5
+gourmet	Cooked karambwan	2	2	1	100	main	obj.cert_tbwt_cooked_karambwan
+gourmet	Clue scroll (easy)	1	1	1	25	tertiary	obj.trail_clue_easy_simple001
+earth	Fire talisman	1	1	1	10	main	obj.fire_talisman
+earth	Earth talisman	1	1	1	10	main	obj.earth_talisman
+earth	Earth tiara	1	1	1	10	main	obj.tiara_earth
+earth	Earth rune	32	32	1	10	main	obj.earthrune
+earth	Mithril ore	1	1	1	10	main	obj.cert_mithril_ore
+earth	Bucket of sand	4	4	1	10	main	obj.cert_bucket_sand
+earth	Unicorn horn	1	1	1	10	main	obj.unicorn_horn
+earth	Compost	6	6	1	10	main	obj.cert_bucket_compost
+earth	Gold ore	1	1	1	10	main	obj.gold_ore
+earth	Steel bar	1	1	1	100	main	obj.steel_bar
+earth	Mithril pickaxe	1	1	1	100	main	obj.mithril_pickaxe
+earth	Wildblood seed	2	2	1	100	main	obj.wildblood_hop_seed
+earth	Jangerberry seed	2	2	1	100	main	obj.jangerberry_bush_seed
+earth	Supercompost	2	2	1	100	main	obj.cert_bucket_supercompost
+earth	Mithril ore	3	3	1	100	main	obj.cert_mithril_ore
+earth	Harralander seed	2	2	1	100	main	obj.harralander_seed
+earth	Coal	6	6	1	100	main	obj.cert_coal
+earth	Emerald	2	2	1	100	main	obj.cert_emerald
+earth	Ruby	1	1	1	100	main	obj.ruby
+earth	Clue scroll (medium)	1	1	1	100	tertiary	obj.trail_clue_medium_sextant001
+essence	Pure essence	20	20	1	10	main	obj.cert_blankrune_high
+essence	Water rune	30	30	1	10	main	obj.waterrune
+essence	Air rune	30	30	1	10	main	obj.airrune
+essence	Fire rune	50	50	1	10	main	obj.firerune
+essence	Mind rune	25	25	1	10	main	obj.mindrune
+essence	Body rune	28	28	1	10	main	obj.bodyrune
+essence	Chaos rune	4	4	1	10	main	obj.chaosrune
+essence	Cosmic rune	4	4	1	10	main	obj.cosmicrune
+essence	Mind talisman	1	1	1	10	main	obj.mind_talisman
+essence	Pure essence	35	35	1	100	main	obj.cert_blankrune_high
+essence	Lava rune	4	4	1	100	main	obj.lavarune
+essence	Mud rune	4	4	1	100	main	obj.mudrune
+essence	Smoke rune	4	4	1	100	main	obj.smokerune
+essence	Steam rune	4	4	1	100	main	obj.steamrune
+essence	Death rune	13	13	1	100	main	obj.deathrune
+essence	Law rune	13	13	1	100	main	obj.lawrune
+essence	Blood rune	7	7	1	100	main	obj.bloodrune
+essence	Soul rune	11	11	1	100	main	obj.soulrune
+essence	Nature rune	13	13	1	100	main	obj.naturerune
+essence	Clue scroll (medium)	1	1	1	50	tertiary	obj.trail_clue_medium_sextant001
+eclectic	Mithril pickaxe	1	1	1	10	main	obj.mithril_pickaxe
+eclectic	Curry leaf	1	1	1	10	main	obj.curry_leaf
+eclectic	Snape grass	1	1	1	10	main	obj.snape_grass
+eclectic	Air rune	30	58	1	10	main	obj.airrune
+eclectic	Oak plank	4	4	1	10	main	obj.cert_plank_oak
+eclectic	Empty candle lantern	1	1	1	10	main	obj.candle_lantern_empty
+eclectic	Gold ore	1	1	1	10	main	obj.gold_ore
+eclectic	Gold bar	5	5	1	10	main	obj.cert_gold_bar
+eclectic	Unicorn horn	1	1	1	10	main	obj.unicorn_horn
+eclectic	Adamant kiteshield	1	1	1	100	main	obj.adamant_kiteshield
+eclectic	Blue d'hide chaps	1	1	1	100	main	obj.blue_dragonhide_chaps
+eclectic	Red spiky vambraces	1	1	1	100	main	obj.hunting_red_spiked_vambraces
+eclectic	Rune dagger	1	1	1	100	main	obj.rune_dagger
+eclectic	Battlestaff	1	1	1	100	main	obj.battlestaff
+eclectic	Adamantite ore	10	10	1	100	main	obj.cert_adamantite_ore
+eclectic	Slayer's respite	2	2	1	100	main	obj.cert_slayers_respite
+eclectic	Wild pie	1	1	1	100	main	obj.wild_pie
+eclectic	Watermelon seed	3	3	1	100	main	obj.watermelon_seed
+eclectic	Diamond	1	1	1	100	main	obj.diamond
+eclectic	Clue scroll (medium)	1	1	1	25	tertiary	obj.trail_clue_medium_sextant001
