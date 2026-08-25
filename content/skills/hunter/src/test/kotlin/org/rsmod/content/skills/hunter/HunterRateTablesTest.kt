@@ -166,6 +166,78 @@ class HunterRateTablesTest {
         )
     }
 
+    /**
+     * Every shipped pair is the chart template's **own published parameter**, exactly.
+     *
+     * Strictly stronger than [everyChartedPointReproducesItsShippedPair], and it exists because
+     * reproducing a chart does not pin a pair. The barb-tailed kebbit charts only six levels and 25
+     * different pairs reproduce all six; the sabre-toothed charts five and 19 pairs reproduce them.
+     * A fit picks one arbitrarily. The wiki stores the real parameters in its Parsoid transclusion
+     * metadata, so they can be read rather than inferred - see `published-params.tsv`.
+     */
+    @Test
+    fun everyShippedPairIsThePublishedParameter() {
+        val params = readParams()
+        for (entry in PUBLISHED) {
+            val key = "${entry.page}|${entry.series}"
+            val published = checkNotNull(params[key]) { "No published parameters for $key" }
+            val rate = shippedRate(entry.npc)
+            assertEquals(
+                (published.low - entry.netBonus) to (published.high - entry.netBonus),
+                rate.low to rate.high,
+                "${entry.npc}: $key publishes (${published.low}, ${published.high})" +
+                    if (entry.netBonus != 0) " less the ${entry.netBonus} net bonus" else "",
+            )
+        }
+    }
+
+    /** The template also publishes each creature's level requirement; it must be the shipped one. */
+    @Test
+    fun everyShippedLevelIsThePublishedRequirement() {
+        val params = readParams()
+        for (entry in PUBLISHED) {
+            val published = params.getValue("${entry.page}|${entry.series}")
+            assertEquals(
+                published.req,
+                shippedRate(entry.npc).level,
+                "${entry.npc}: ${entry.page} publishes req=${published.req}",
+            )
+        }
+    }
+
+    /** No charted creature may rely on a fit when its parameters are published. */
+    @Test
+    fun everyChartedCreatureAlsoHasItsPublishedParameterAsserted() {
+        assertEquals(
+            emptySet<String>(),
+            CHARTED.map { it.npc }.toSet() - PUBLISHED.map { it.npc }.toSet(),
+            "Charted creatures whose published parameters are not asserted.",
+        )
+    }
+
+    private fun readParams(): Map<String, PublishedParams> =
+        checkNotNull(javaClass.getResourceAsStream("/wiki-charts/published-params.tsv")) {
+                "Missing /wiki-charts/published-params.tsv"
+            }
+            .bufferedReader()
+            .readLines()
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+            .associate { line ->
+                val f = line.split("\t")
+                require(f.size == 6) { "Malformed params row: $line" }
+                "${f[0]}|${f[2]}" to PublishedParams(f[3].toInt(), f[4].toInt(), f[5].toInt())
+            }
+
+    private data class PublishedParams(val low: Int, val high: Int, val req: Int)
+
+    /** A published chart series, and the shipped row whose pair it is the source for. */
+    private data class Published(
+        val page: String,
+        val series: String,
+        val npc: String,
+        val netBonus: Int = 0,
+    )
+
     private fun shippedRate(npc: String): ShippedRate =
         checkNotNull(allShippedRates().firstOrNull { it.npc == npc }) { "No shipped rate row for $npc" }
 
@@ -254,6 +326,60 @@ class HunterRateTablesTest {
                 // coefficients rather than a second column pair. See `HunterButterfly.NET_BONUS`.
                 Charted("black_warlock_magicnet", "npc.butterfly_warlock", HunterButterfly.NET_BONUS),
                 Charted("sunlight_moth_magicnet", "npc.moth_sunlight", HunterButterfly.NET_BONUS),
+            )
+
+        /**
+         * The published `{{Skilling success chart}}` parameters, keyed by page and series label.
+         *
+         * Series labels are the wiki's own. Note the inconsistency they carry: the black warlock and
+         * moonlight moth pages group barehanded with the *magic* net, while the sunlight moth page
+         * groups it with the *plain* net. Every impling page, and two of the three butterfly pages,
+         * say barehanded matches the magic net, which is what `HunterButterfly.usesFasterCurve`
+         * implements. The bait and smoke series on the deadfall pages are published too and are
+         * deliberately unmapped - neither is modelled.
+         */
+        private val PUBLISHED =
+            listOf(
+                Published("Crimson swift", "Crimson swift", "npc.hunting_bird_jungle"),
+                Published("Golden warbler", "Golden warbler", "npc.hunting_bird_desert"),
+                Published("Copper longtail", "Copper longtail", "npc.hunting_bird_woodland"),
+                Published("Cerulean twitch", "Cerulean twitch", "npc.hunting_bird_polar"),
+                Published("Tropical wagtail", "Tropical wagtail", "npc.multicoloured_bird"),
+                Published("Chinchompa (Hunter)", "Grey", "npc.hunting_chinchompa"),
+                Published("Chinchompa (Hunter)", "Red", "npc.hunting_chinchompa_big"),
+                Published("Chinchompa (Hunter)", "Black", "npc.hunting_chinchompa_black"),
+                Published("Wild kebbit", "Wild kebbit", "npc.huntingbeast_claws"),
+                Published("Barb-tailed kebbit", "Barb-tailed kebbit", "npc.huntingbeast_barbedtail"),
+                Published("Prickly kebbit", "Prickly kebbit", "npc.huntingbeast_spiky"),
+                Published(
+                    "Sabre-toothed kebbit",
+                    "Sabre-toothed kebbit",
+                    "npc.huntingbeast_sabreteeth",
+                ),
+                Published("Pyre fox", "Pyre fox", "npc.varlamore_fennecfox"),
+                Published("Net trap", "Swamp lizard", "npc.salamander_green"),
+                Published("Net trap", "Orange salamander", "npc.salamander_orange"),
+                Published("Net trap", "Red salamander", "npc.salamander_red"),
+                Published("Net trap", "Black salamander", "npc.salamander_black"),
+                Published("Net trap", "Tecu salamander", "npc.salamander_mountain"),
+                Published("Imp", "Imp", "npc.imp"),
+                Published("Spotted kebbit", "Spotted kebbit", "npc.huntingbeast_speedy"),
+                Published("Dark kebbit", "Dark kebbit", "npc.huntingbeast_silent"),
+                Published("Dashing kebbit", "Dashing kebbit", "npc.huntingbeast_speedy2"),
+                Published("Black warlock", "Butterfly net", "npc.butterfly_warlock"),
+                Published(
+                    "Black warlock",
+                    "Barehanded or Magic butterfly net",
+                    "npc.butterfly_warlock",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Sunlight Moth", "Barehanded or butterfly net", "npc.moth_sunlight"),
+                Published(
+                    "Sunlight Moth",
+                    "Magic butterfly net",
+                    "npc.moth_sunlight",
+                    HunterButterfly.NET_BONUS,
+                ),
             )
 
         /** Charted but deliberately not shipped; see [theMoonlightMothIsNotOnTheOtherButterfliesCurve]. */

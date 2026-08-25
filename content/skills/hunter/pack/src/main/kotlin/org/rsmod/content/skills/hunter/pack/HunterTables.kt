@@ -477,11 +477,12 @@ object HunterTables {
                 columnRSCM(COL_NPC, "npc.huntingbeast_barbedtail")
                 column(COL_LEVEL, 33)
                 column(COL_XP, 1680)
-                // Only six levels of this creature's curve are charted, so the fit is not pinned to
-                // a single pair; this one was derived by hand from the endpoints and then confirmed
-                // to be a member of the script's exact-fit set.
-                column(COL_SUCCESS_LOW, -226)
-                column(COL_SUCCESS_HIGH, 1048)
+                // The chart template's own published parameters (oldid=15196228), read from the
+                // Parsoid transclusion metadata rather than fitted. Only six levels are charted and
+                // 25 different pairs reproduce all six, so a fit cannot pin this one - the previous
+                // hand-derived (-226, 1048) was a member of that set but not the published pair.
+                column(COL_SUCCESS_LOW, -220)
+                column(COL_SUCCESS_HIGH, 1037)
                 columnRSCM(
                     COL_CAUGHT_ITEMS,
                     "obj.bones",
@@ -514,9 +515,11 @@ object HunterTables {
                 columnRSCM(COL_NPC, "npc.huntingbeast_sabreteeth")
                 column(COL_LEVEL, 51)
                 column(COL_XP, 2000)
-                // Five charted levels; same caveat as barb-tailed.
-                column(COL_SUCCESS_LOW, -422)
-                column(COL_SUCCESS_HIGH, 809)
+                // Published parameters (oldid=15196422); same story as barb-tailed - five charted
+                // levels, 19 pairs reproduce them, and the previous fitted (-422, 809) was one of
+                // the 19 rather than the published pair.
+                column(COL_SUCCESS_LOW, -434)
+                column(COL_SUCCESS_HIGH, 820)
                 // Kebbit teeth, `obj.huntingbeast_sabreteeth` (10109) - not the near-name
                 // `obj.huntingbeast_sabreteeth_dust` (10111), which is Kebbit teeth dust.
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_sabreteeth")
