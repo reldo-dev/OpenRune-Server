@@ -113,6 +113,36 @@ object HunterTables {
     }
 
     /**
+     * Crab trapping, the one table that shares **none** of [creatureColumns] and starts its own ids
+     * at 0.
+     *
+     * Two of the shared eight do not exist for this technique and the other six would have had to be
+     * reordered around them, so a bespoke dense set is the honest shape:
+     * - **No `success_low`/`success_high`.** "Unlike other methods, players cannot fail to catch a
+     *   crab" (wiki, *Crab trapping*), restated in its own Strategy section - "Because crabs traps
+     *   can never fail to catch a crab, the guild hunter outfit has no effect, nor does anti-odour
+     *   salt". There is no rate to store and no roll to make, so a `(0, 256)` pair would be a
+     *   fabricated coefficient for a formula this technique never evaluates.
+     * - **No `npc`.** The three crab npcs (`red_crab` 15089, `blue_crab` 15090,
+     *   `rainbow_crab_a/b/c` 15091-15093) carry **no ops at all** and are never touched: a crab trap
+     *   is a per-player varbit on a map-placed multiloc, so nothing is lured, found or despawned.
+     *   `.data` holds one red-crab spawn, two blue and **zero** rainbow, and the technique works
+     *   identically for all three - which is the proof the npc is not load-bearing. A column nothing
+     *   reads is the trap [netTrapCreatures] documents for `bait`.
+     *
+     * [COL_CAUGHT_ITEMS] and [COL_FULL_LOC] are **parallel lists**: entry `i` of each is the same
+     * colourway of the same crab. Red and blue have one; the rainbow crab has three.
+     */
+    private object Crab {
+        const val COL_LEVEL = 0
+        const val COL_XP = 1
+        const val COL_BAIT = 2
+        const val COL_CAUGHT_ITEMS = 3
+        const val COL_FULL_LOC = 4
+        const val COL_CATCH_DELAY = 5
+    }
+
+    /**
      * Columns 0-7, shared verbatim by every creature table. Per-technique columns are declared by
      * the caller on top of these: box trap adds `bait`, deadfall adds three loc columns, net trap
      * adds eight, and the magic box adds none.
@@ -948,6 +978,115 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_sunmoth")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+            }
+        }
+
+    /**
+     * The three crabs, and the only technique in the skill with **no catch rate at all**.
+     *
+     * Levels are twice sourced and agree. The cache's own `skill_features` rows carry them -
+     * `skill_feature_hunter_red_crab` (dbrow 11798) reads `data=skill,23,21,9`,
+     * `..._blue_crab` (11799) `data=skill,23,48,9` and `..._rainbow_crab` (11800)
+     * `data=skill,23,77,9`, where the trailing 9 is the crab-trapping feature group - and the wiki's
+     * *Crab trapping* Overview table (oldid=15264574) lists 21 / 48 / 77 for the same three. Its xp
+     * column gives 64 / 136 / 216, stored x10 here like every other hunter table.
+     *
+     * Every one of those three cache rows also carries a second requirement, `data=skill,22,10,-1` -
+     * Construction 10, with no feature group of its own - which is the same gate the wiki states in
+     * *Setting up*. It is a build-time gate rather than a per-creature one, so it lives on the
+     * content side as `HunterCrabTrap.CRAB_TRAP_CONSTRUCTION_LEVEL` rather than as a column repeated
+     * identically on all three rows.
+     *
+     * ## Bait is mandatory, and the cache says which
+     *
+     * "Red and blue crab traps must be baited with fish offcuts, and rainbow crab traps must be
+     * baited with fine fish offcuts, both of which are stackable." The cache agrees independently:
+     * the pandemonium and great-conch site locs resolve their baited state to `crab_trap_active`
+     * (58906, `model2=model_59784`) and the crown-jewel sites to `crab_trap_active_fine_offcuts`
+     * (58907, `model2=model_59785`), so the bait type is baked into the site and visible in the
+     * world. `obj.brut_fish_cuts` (11334) really is `name=Fish offcuts` - the plausible-looking
+     * `sailing_fish_offcuts` does not exist - and `obj.sailing_fine_fish_offcuts` (32307) is
+     * `name=Fine fish offcuts`.
+     *
+     * ## The delay a baited trap fills in
+     *
+     * "After a set period of time, crabs will move towards the baited traps: Red and blue crabs: 15
+     * ticks (9s); Rainbow crabs: 25 ticks (15s)." Sourced exactly, in cycles, which is why this is a
+     * column and not one of the module's flagged guesses.
+     *
+     * ## The rainbow crab's three colourways
+     *
+     * There are three rainbow npcs, three `crab_trap_full_rainbow_*` locs and three `rainbow_crab_*`
+     * objs, and they are **one creature seen three ways**, not three creatures. The three objs share
+     * a name ("Rainbow crab"), a description, a cost (300), a weight, and both processing params
+     * (`param_2421,raw_rainbow_crab_meat`, `param_2422,rainbow_crab_paste`); they differ only in
+     * their 13-pair recolour table. Each obj's recolour table is **byte-identical** to the loc and
+     * npc of the same letter - `rainbow_crab_b` (31680), `crab_trap_full_rainbow_b` (58911) and
+     * `rainbow_crab_b` (15092) all read `recol1s=8322 recol1d=2246 … recol13s=22720 recol13d=4578` -
+     * which is what pins the a/b/c triples to each other rather than to some other pairing. So the
+     * crab is one row whose reward and full-trap loc are parallel three-entry lists, and the
+     * colourway is picked once per catch.
+     *
+     * ## What is not modelled
+     *
+     * **The automatic re-bait.** "The player will automatically re-bait a trap after 3 ticks (1.8s),
+     * but this can be reduced to just one tick by immediately clicking the trap again." Emptying a
+     * full trap here returns it to the empty state and the player baits it again by hand. It is an
+     * ergonomic accelerator over the two ops this slice does implement, and its second half - the
+     * click-to-shorten - has no state to hang off yet; shipping only the first half would be a
+     * partial mechanic. The numbers are recorded here so it is a scoped-out gap and not an unknown.
+     *
+     * **The crab walking to the trap.** The wiki describes the delay as the crab moving towards the
+     * bait. Nothing walks here; the trap simply fills. See [Crab] for why the npc is not a column.
+     */
+    fun crabCreatures(): DBTable =
+        dbTable("dbtable.hunter_crab_creatures", serverOnly = true) {
+            column("level", Crab.COL_LEVEL, VarType.INT)
+            // Stored x10, like every other hunter table.
+            column("xp", Crab.COL_XP, VarType.INT)
+            column("bait", Crab.COL_BAIT, VarType.OBJ)
+            column("caught_items", Crab.COL_CAUGHT_ITEMS, VarType.OBJ)
+            column("full_loc", Crab.COL_FULL_LOC, VarType.LOC)
+            column("catch_delay", Crab.COL_CATCH_DELAY, VarType.INT)
+
+            row("dbrow.hunter_red_crab") {
+                column(Crab.COL_LEVEL, 21)
+                column(Crab.COL_XP, 640)
+                columnRSCM(Crab.COL_BAIT, "obj.brut_fish_cuts")
+                columnRSCM(Crab.COL_CAUGHT_ITEMS, "obj.red_crab")
+                columnRSCM(Crab.COL_FULL_LOC, "loc.crab_trap_full_red")
+                column(Crab.COL_CATCH_DELAY, 15)
+            }
+
+            row("dbrow.hunter_blue_crab") {
+                column(Crab.COL_LEVEL, 48)
+                column(Crab.COL_XP, 1360)
+                columnRSCM(Crab.COL_BAIT, "obj.brut_fish_cuts")
+                columnRSCM(Crab.COL_CAUGHT_ITEMS, "obj.blue_crab")
+                columnRSCM(Crab.COL_FULL_LOC, "loc.crab_trap_full_blue")
+                column(Crab.COL_CATCH_DELAY, 15)
+            }
+
+            // The row that makes both reward columns lists. Order is load-bearing: entry `i` of
+            // `caught_items` and of `full_loc` are the same colourway, and the pairing is the
+            // recolour-table identity described above, not the alphabet.
+            row("dbrow.hunter_rainbow_crab") {
+                column(Crab.COL_LEVEL, 77)
+                column(Crab.COL_XP, 2160)
+                columnRSCM(Crab.COL_BAIT, "obj.sailing_fine_fish_offcuts")
+                columnRSCM(
+                    Crab.COL_CAUGHT_ITEMS,
+                    "obj.rainbow_crab_a",
+                    "obj.rainbow_crab_b",
+                    "obj.rainbow_crab_c",
+                )
+                columnRSCM(
+                    Crab.COL_FULL_LOC,
+                    "loc.crab_trap_full_rainbow_a",
+                    "loc.crab_trap_full_rainbow_b",
+                    "loc.crab_trap_full_rainbow_c",
+                )
+                column(Crab.COL_CATCH_DELAY, 25)
             }
         }
 }

@@ -2107,3 +2107,53 @@ contentGroup = "content.hunter_magic_box"
 id = "loc.hunting_imptrap_full"
 inherit = "loc.hunting_imptrap_full"
 contentGroup = "content.hunter_magic_box"
+
+# Crab trapping. These nine are the `multiloc` children of the twenty map-placed
+# `crab_trap_<site>_<n>` locs, which carry no ops of their own: the client picks a child from the
+# site's own varbit, and `LocInteractions.opTrigger` resolves the same child before it looks for a
+# handler. The group therefore belongs on the children, and it has to be on all nine or the trap
+# becomes unclickable in exactly the state that is missing one.
+[[object]]
+id = "loc.crab_trap_unbuilt"
+inherit = "loc.crab_trap_unbuilt"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_built"
+inherit = "loc.crab_trap_built"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_active"
+inherit = "loc.crab_trap_active"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_active_fine_offcuts"
+inherit = "loc.crab_trap_active_fine_offcuts"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_red"
+inherit = "loc.crab_trap_full_red"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_blue"
+inherit = "loc.crab_trap_full_blue"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_rainbow_a"
+inherit = "loc.crab_trap_full_rainbow_a"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_rainbow_b"
+inherit = "loc.crab_trap_full_rainbow_b"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_rainbow_c"
+inherit = "loc.crab_trap_full_rainbow_c"
+contentGroup = "content.hunter_crab_trap"

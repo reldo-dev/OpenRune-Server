@@ -8,6 +8,7 @@ hunter_nettrap_creatures = 55546
 hunter_magicbox_creatures = 55547
 hunter_falconry_creatures = 55548
 hunter_butterfly_creatures = 55549
+hunter_crab_creatures = 55550
 
 # Append-only block, clear of the 555xx and 56[0-2]xx dbrow runs with headroom. Ids ascend in the
 # order the creatures appear in the combined list, which a sprung trap persists an index into, so
@@ -50,6 +51,12 @@ hunter_sunlight_moth = 56354
 hunter_tropical_wagtail = 56360
 hunter_ferret = 56361
 hunter_embertailed_jerboa = 56362
+# Crab trapping, which is not a trap family either - its rows are read into `CrabCreatures.all`, a
+# list nothing persists an index into, because a crab trap's whole state is the site's own cache
+# varbit rather than a controller.
+hunter_red_crab = 56370
+hunter_blue_crab = 56371
+hunter_rainbow_crab = 56372
 
 [gamevals.controller]
 hunter_trap = 2
@@ -81,6 +88,10 @@ hunter_deadfall = 56
 # of one trap, and every op either can carry is dispatched by the same handler.
 hunter_net_trap = 57
 hunter_magic_box = 58
+# One group for all nine crab-trap lifecycle locs. They are `multiloc` children of the twenty
+# map-placed site locs, and `LocInteractions.opTrigger` resolves the child before it looks for a
+# handler, so the group belongs on the children - the sites themselves carry no ops at all.
+hunter_crab_trap = 59
 
 # The falconry enclosure, whose exit strips the rented glove. 58 is the next free id above the packed
 # area run's low block, which ends at runecrafting's `rune_essence_mine = 57`; the high block starts
@@ -89,6 +100,15 @@ hunter_magic_box = 58
 # declaration rule.
 [gamevals.area]
 piscatoris_falconry = 58
+
+# A baited crab trap fills on a fixed timer rather than on a roll, and its owner is expected to walk
+# to the next trap while it does, so the wait is a soft queue on the player rather than a controller
+# on the tile: nothing about a crab trap lives in the world, and a controller anchored on a shared
+# hole would collide between two players whose traps are private varbit state. 60 is the next free
+# queue id - the packed table ends at `fullscreen_map = 26` and the module block runs 40-59 with 48
+# and 57 unused.
+[gamevals.queue]
+hunter_crab_catch = 60
 
 # The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
 # lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom

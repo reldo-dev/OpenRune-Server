@@ -13,5 +13,6 @@ class HunterPluginPack : PluginPack() {
             HunterTables.magicBoxCreatures(),
             HunterTables.falconryCreatures(),
             HunterTables.butterflyCreatures(),
+            HunterTables.crabCreatures(),
         )
 }

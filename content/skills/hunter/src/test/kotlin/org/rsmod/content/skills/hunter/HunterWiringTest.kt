@@ -13,12 +13,14 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.rsmod.api.controller.events.ControllerAIEvents
 import org.rsmod.api.player.events.EngineQueueEvents
+import org.rsmod.api.player.events.PlayerQueueEvents
 import org.rsmod.api.player.events.interact.HeldObjEvents
 import org.rsmod.api.player.events.interact.LocContentEvents
 import org.rsmod.api.player.events.interact.LocEvents
 import org.rsmod.api.player.events.interact.NpcEvents
 import org.rsmod.events.EventBus
 import org.rsmod.game.cheat.CheatCommandMap
+import org.rsmod.game.entity.player.SessionStateEvent
 import org.rsmod.game.interact.HeldOp
 import org.rsmod.game.interact.InteractionOp
 import org.rsmod.game.queue.EngineQueueCache
@@ -29,7 +31,7 @@ import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
 
 /**
- * What the seven hunter scripts actually put on the event bus.
+ * What the eight hunter scripts actually put on the event bus.
  *
  * **The gap this closes.** Every other test in this module reaches the ops by calling
  * `setDeadfall`, `collectTrap`, `catchKebbit` and friends directly. That proves the *bodies* are
@@ -196,6 +198,55 @@ class HunterWiringTest {
         }
     }
 
+    /**
+     * Crab trapping registers one loc op, one soft queue and one login hook, and no controller tick.
+     *
+     * The soft queue is the piece most likely to be missing without anything noticing: a bait that
+     * scheduled a catch nobody had subscribed to would leave every trap baited forever, and no other
+     * test in this module would see it, because they all call the queue body directly.
+     */
+    @Test
+    fun `crab trapping registers its one loc op, the catch queue and the login re-arm`() {
+        val bus = Wiring().start(scripts.crabTrap)
+
+        assertTrue(bus.hasOpContentLoc1(CRAB_GROUP), "op1 (`Build-trap`/`Bait`/`Empty`)")
+        assertTrue(bus.hasSoftQueue(CRAB_CATCH_QUEUE), "the catch on $CRAB_CATCH_QUEUE")
+        assertTrue(bus.hasPlayerLogin(), "the pending-catch re-arm")
+
+        // Three different transactions share one op1, so there is no op2 anywhere in the family.
+        assertFalse(bus.hasOpContentLoc2(CRAB_GROUP), "no crab trap loc draws an op2")
+        // Nothing of a crab trap exists in the world, so there is no controller to tick.
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAiConTimer(FALCON_CONTROLLER), "no controller is created")
+        for (group in ALL_TRAP_GROUPS) {
+            assertFalse(bus.hasOpContentLoc1(group), "crab trapping must not claim $group")
+        }
+    }
+
+    /**
+     * The **site** locs are not registered, and must not be.
+     *
+     * They are `multiloc` parents with no ops. `LocInteractions.opTrigger` tries the type-level
+     * `LocEvents.OpN` before it reaches the content handler, so a per-id registration on a site
+     * would shadow the child's handler for every state at once - the loudest possible version of the
+     * shadowing bug the deadfall's own guard covers.
+     */
+    @Test
+    fun `no crab trap site loc is registered by id`() {
+        val bus = Wiring().start(*scripts.all.toTypedArray())
+
+        for (site in CrabTrapSites.all) {
+            assertFalse(
+                bus.eventBus.contains(LocEvents.Op1::class.java, site.locId.toLong()),
+                "op1 shadow on ${site.loc}",
+            )
+        }
+        for (loc in CrabTrapSites.lifecycleLocs) {
+            val id = loc.asRSCM(RSCMType.LOC)
+            assertFalse(bus.eventBus.contains(LocEvents.Op1::class.java, id), "op1 shadow on $loc")
+        }
+    }
+
     /* The once-only invariant. */
 
     /**
@@ -220,9 +271,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all seven scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all eight scripts share one bus at startup. */
     @Test
-    fun `all seven scripts start together on one bus without a duplicate key`() {
+    fun `all eight scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -231,6 +282,8 @@ class HunterWiringTest {
             assertTrue(bus.hasOpContentLoc1(group), "op1 on $group")
             assertTrue(bus.hasOpContentLoc2(group), "op2 on $group")
         }
+        assertTrue(bus.hasOpContentLoc1(CRAB_GROUP), "op1 on $CRAB_GROUP")
+        assertTrue(bus.hasSoftQueue(CRAB_CATCH_QUEUE), "the crab catch queue")
     }
 
     /* Op-index and shadowing guards. */
@@ -470,7 +523,7 @@ class HunterWiringTest {
         HunterCreatures.all.filter { it.family == family }
 
     /**
-     * The seven scripts, built over the same worlds the rest of the suite uses.
+     * The eight scripts, built over the same worlds the rest of the suite uses.
      *
      * The collaborators are only there to satisfy the constructors - `startup()` never touches them,
      * because every handler body it registers is a lambda that is not run here.
@@ -479,6 +532,7 @@ class HunterWiringTest {
         private val trapWorld = HunterTrapTestWorld()
         private val falconWorld = HunterFalconryTestWorld()
         private val butterflyWorld = HunterButterflyTestWorld()
+        private val crabWorld = HunterCrabTrapTestWorld()
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
@@ -487,11 +541,12 @@ class HunterWiringTest {
         val magicBox = MagicBoxEvents(trapWorld.trap, trapWorld.conRepo)
         val falconry = FalconryEvents(falconWorld.falconry)
         val butterfly = ButterflyEvents(butterflyWorld.butterfly)
+        val crabTrap = CrabTrapEvents(crabWorld.crabTrap)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
-        val all: List<PluginScript> = trapFamily + listOf(falconry, butterfly)
+        val all: List<PluginScript> = trapFamily + listOf(falconry, butterfly, crabTrap)
     }
 
     /**
@@ -539,6 +594,19 @@ class HunterWiringTest {
         fun hasAreaExit(area: String): Boolean =
             eventBus.contains(EngineQueueEvents.Labelled::class.java, areaExitKey(area))
 
+        /**
+         * `onPlayerSoftQueueWithArgs` subscribes a [org.rsmod.events.KeyedEvent], so
+         * `EventBus.contains` - which only reads the suspend map - cannot answer this. It is the
+         * same shape as [hasAiConTimer], and the same trap.
+         */
+        fun hasSoftQueue(queue: String): Boolean =
+            eventBus.keyed[
+                PlayerQueueEvents.Soft::class.java, queue.asRSCM(RSCMType.QUEUE).toLong()] != null
+
+        /** `onPlayerLogin` subscribes an unbound event, which is a third map again. */
+        fun hasPlayerLogin(): Boolean =
+            eventBus.unbound[SessionStateEvent.Login::class.java].orEmpty().isNotEmpty()
+
         fun areaExitIsCached(area: String): Boolean =
             engineQueue.hasScript(EngineQueueType.AreaExit, area.asRSCM(RSCMType.AREA))
 
@@ -555,6 +623,7 @@ class HunterWiringTest {
         private const val DEADFALL_GROUP = "content.hunter_deadfall"
         private const val NET_TRAP_GROUP = "content.hunter_net_trap"
         private const val MAGIC_BOX_GROUP = "content.hunter_magic_box"
+        private const val CRAB_GROUP = "content.hunter_crab_trap"
 
         private val ALL_TRAP_GROUPS =
             listOf(SNARE_GROUP, BOX_GROUP, DEADFALL_GROUP, NET_TRAP_GROUP, MAGIC_BOX_GROUP)
