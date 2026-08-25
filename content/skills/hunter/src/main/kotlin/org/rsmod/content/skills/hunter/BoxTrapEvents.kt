@@ -75,20 +75,10 @@ constructor(private val traps: HunterTrap, private val conRepo: ControllerReposi
      * under this content group reaches op2 via `Reset`, which v1 does not implement. See the class
      * doc for why that guard has to live here rather than in the loc data.
      */
-    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) {
-        arriveDelay()
-        if (loc.id != SET_LOC) {
-            mes("Nothing interesting happens.")
-            return
+    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) =
+        investigateTrap(loc, noun = "box trap", armed = { it.id == SET_LOC }) {
+            conRepo.findExact(it.coords, TRAP_CONTROLLER)
         }
-
-        val controller = conRepo.findExact(loc.coords, TRAP_CONTROLLER)
-        when {
-            controller == null -> mes("This trap has collapsed.")
-            controller.trapOwner != player.uid.packed -> mes("This isn't your trap.")
-            else -> mes("The box trap is set. Nothing has sprung it yet.")
-        }
-    }
 
     private companion object {
         private const val BOX_TRAP_LEVEL_REQ = 27

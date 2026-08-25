@@ -67,20 +67,10 @@ constructor(private val traps: HunterTrap, private val conRepo: ControllerReposi
      * not recoverable offline - the text is server-sent, so it is in neither the cache nor the wiki
      * - so these strings are ours. What they report is the real controller state.
      */
-    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) {
-        arriveDelay()
-        if (loc.id != SET_LOC) {
-            mes("Nothing interesting happens.")
-            return
+    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) =
+        investigateTrap(loc, noun = "magic box", armed = { it.id == SET_LOC }) {
+            conRepo.findExact(it.coords, TRAP_CONTROLLER)
         }
-
-        val controller = conRepo.findExact(loc.coords, TRAP_CONTROLLER)
-        when {
-            controller == null -> mes("This trap has collapsed.")
-            controller.trapOwner != player.uid.packed -> mes("This isn't your trap.")
-            else -> mes("The magic box is set. Nothing has sprung it yet.")
-        }
-    }
 
     private companion object {
         private val SET_LOC = HunterTrapStates.MAGIC_BOX_EMPTY.asRSCM(RSCMType.LOC)

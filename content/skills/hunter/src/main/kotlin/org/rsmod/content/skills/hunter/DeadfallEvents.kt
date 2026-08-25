@@ -66,15 +66,10 @@ constructor(private val traps: HunterTrap, private val conRepo: ControllerReposi
      * offline - the text is server-sent, so it is in neither the cache nor the wiki - so these
      * strings are ours. What they report is the real controller state, not a canned line.
      */
-    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) {
-        arriveDelay()
-        val controller = conRepo.findExact(loc.coords, TRAP_CONTROLLER)
-        when {
-            controller == null -> mes("This trap has collapsed.")
-            controller.trapOwner != player.uid.packed -> mes("This isn't your trap.")
-            else -> mes("The deadfall is set. Nothing has sprung it yet.")
+    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) =
+        investigateTrap(loc, noun = "deadfall") {
+            conRepo.findExact(it.coords, TRAP_CONTROLLER)
         }
-    }
 
     private companion object {
         private val BOULDER_LOC = HunterTrapStates.DEADFALL_BOULDER.asRSCM(RSCMType.LOC)

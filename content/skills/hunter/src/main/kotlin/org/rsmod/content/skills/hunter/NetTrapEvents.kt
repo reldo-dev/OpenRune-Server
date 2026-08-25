@@ -68,18 +68,12 @@ class NetTrapEvents @Inject constructor(private val traps: HunterTrap) : PluginS
      * offline - the text is server-sent, so it is in neither the cache nor the wiki - so these
      * strings are ours. What they report is the real controller state, not a canned line.
      */
-    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) {
-        arriveDelay()
-        if (loc.id !in HunterTrapStates.netTrapArmedLocIds) {
-            mes("Nothing interesting happens.")
-            return
+    private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) =
+        investigateTrap(
+            loc,
+            noun = "net trap",
+            armed = { it.id in HunterTrapStates.netTrapArmedLocIds },
+        ) {
+            traps.netTrapController(it)
         }
-
-        val controller = traps.netTrapController(loc)
-        when {
-            controller == null -> mes("This trap has collapsed.")
-            controller.trapOwner != player.uid.packed -> mes("This isn't your trap.")
-            else -> mes("The net trap is set. Nothing has sprung it yet.")
-        }
-    }
 }
