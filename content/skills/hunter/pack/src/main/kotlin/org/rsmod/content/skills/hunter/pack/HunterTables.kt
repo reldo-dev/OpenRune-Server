@@ -882,14 +882,22 @@ object HunterTables {
      * share**, and both fit the same single integer pair, `(20, 296)`, with no other pair
      * reproducing every point. That is the load-bearing observation: the sunlight moth requires 65
      * and starts at 201/256, which is exactly what the black warlock's curve reads at 65 - not the
-     * 145/256 the warlock starts at. So a butterfly's catch chance is a function of **level alone**,
-     * not of species; the requirement only decides where you may join the curve. A per-species curve
-     * anchored at each requirement is ruled out by those two charts, not assumed away.
+     * 145/256 the warlock starts at. So for these two the requirement only decides where you join a
+     * shared curve; it does not anchor a curve of its own.
+     *
+     * **That is not the same as catch chance being a function of level alone, and an earlier
+     * revision of this comment claimed exactly that.** The moonlight moth is a third published
+     * member of the family (oldid=15208105) and does *not* sit on the shared curve: it fits
+     * `(0, 276)` plain and `(20, 286)` magic, each a unique exact fit, and reads 209/256 at its own
+     * requirement of 75 where the shared curve reads 229/256. It is not shipped - zero spawns - so
+     * nothing here depends on it, but it is the counterexample that bounds the claim. Two agreeing
+     * members license the guess below; they do not rule species-dependence out.
+     * `HunterRateTablesTest` asserts the disagreement so the stronger claim cannot creep back.
      *
      * The three unpublished rows therefore ship `(20, 296)` as well. That is still a guess - none of
-     * the three has been charted or measured - but it is an interpolation *between* two published
-     * members of the same family twenty levels apart that agree exactly, rather than an
-     * extrapolation off one. It is flagged as a guess on each row all the same.
+     * the three has been charted or measured - and it is an **extrapolation**, not an interpolation:
+     * all three sit below the lower of the two agreeing requirements (15, 25 and 35 against the
+     * warlock's 45), so no charted point brackets them. It is flagged as a guess on each row.
      *
      * void independently fits `chance = [20, 296]` for its own black warlock, which is the same pair
      * from an unrelated derivation and confirms the engine formula maps onto the wiki template. Its
@@ -907,9 +915,10 @@ object HunterTables {
      * on the content side as a constant rather than a second column pair, so that the three guessed
      * rows do not each need a second guess. See `HunterButterfly.NET_BONUS`.
      *
-     * The 153 extracted chart points, both series and all three creatures, live in the gitignored
-     * `.data/cache/wiki-hunter/butterfly-chance.tsv` with the oldids in its header; the oldids above
-     * are the source of truth, not the file. Extraction went through the `osrs-cache` MCP
+     * The extracted chart points - both series, all four creatures, the moonlight moth included -
+     * are checked in as a test resource at `content/skills/hunter/src/test/resources/wiki-charts/`
+     * with the oldids in each file's header, and `HunterRateTablesTest` asserts every shipped pair
+     * against them. Extraction went through the `osrs-cache` MCP
      * `get_wiki_section` - the sqlite `chunks` route truncates at ~1KB and silently returns a
      * near-empty curve.
      */

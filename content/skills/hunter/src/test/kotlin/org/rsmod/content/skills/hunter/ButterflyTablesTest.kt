@@ -52,9 +52,13 @@ class ButterflyTablesTest {
      * family are pointwise identical everywhere they overlap.
      *
      * The sunlight moth requires 65 and its chart starts at 201/256 - which is what the black
-     * warlock's curve reads at 65, not the 145/256 the warlock itself starts at. A per-species curve
-     * anchored at each requirement is therefore ruled out by the data, which is what licenses giving
-     * the three uncharted creatures the same pair.
+     * warlock's curve reads at 65, not the 145/256 the warlock itself starts at. Those two therefore
+     * share one curve rather than each anchoring their own, which is what licenses giving the three
+     * uncharted creatures the same pair.
+     *
+     * It does **not** establish that butterfly catch chance is a function of level alone - the
+     * moonlight moth is a third published member and disagrees. See
+     * `HunterRateTablesTest.theMoonlightMothIsNotOnTheOtherButterfliesCurve`.
      */
     @Test
     fun theTwoPublishedCurvesAreIdenticalWhereTheyOverlap() {
