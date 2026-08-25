@@ -1,5 +1,7 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.rscm.RSCM.asRSCM
+import dev.openrune.rscm.RSCMType
 import org.rsmod.api.table.hunter.HunterFalconryCreaturesRow
 
 /**
@@ -61,8 +63,29 @@ object FalconryCreatures {
         all.associateBy { it.falconNpc }
     }
 
+    /**
+     * The two tables again, keyed by resolved npc id for callers holding a live [Npc].
+     *
+     * `RSCM.getReverseMapping` scans the whole ~14.5k-entry npc table and memoises nothing, and
+     * `falconAt` runs it against every npc on a tile every tick while a falcon is out. Resolving
+     * each row's symbol once here makes that a hash lookup.
+     */
+    private val byNpcId: Map<Int, FalconryCreature> by lazy {
+        all.associateBy { it.npc.asRSCM(RSCMType.NPC) }
+    }
+
+    private val byFalconNpcId: Map<Int, FalconryCreature> by lazy {
+        all.associateBy { it.falconNpc.asRSCM(RSCMType.NPC) }
+    }
+
     /** The kebbit a `Catch` op landed on, or null if it is not a falconry creature. */
     fun byNpc(npc: String): FalconryCreature? = byNpc[npc]
+
+    /** [byNpc] for a live npc, without the reverse-mapping scan. */
+    fun byNpcId(npc: Int): FalconryCreature? = byNpcId[npc]
+
+    /** [byFalconNpc] for a live npc, without the reverse-mapping scan. */
+    fun byFalconNpcId(npc: Int): FalconryCreature? = byFalconNpcId[npc]
 
     /**
      * The kebbit a falcon is holding, recovered from the falcon's own npc.

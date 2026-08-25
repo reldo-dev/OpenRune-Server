@@ -1,7 +1,6 @@
 package org.rsmod.content.skills.hunter
 
 import dev.openrune.ServerCacheManager
-import dev.openrune.rscm.RSCM
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
 import jakarta.inject.Inject
@@ -173,8 +172,7 @@ constructor(
      *   left during the flight.
      */
     suspend fun ProtectedAccess.catchKebbit(target: Npc): Boolean {
-        val internal = RSCM.getReverseMapping(RSCMType.NPC, target.visType.id) ?: return false
-        val creature = FalconryCreatures.byNpc(internal) ?: return false
+        val creature = FalconryCreatures.byNpcId(target.visType.id) ?: return false
 
         // "If a player attempts to catch a spotted kebbit without a falcon, the kebbit will escape."
         // (wiki, *Spotted kebbit*.) The escape half is not modelled - despawning a kebbit because
@@ -260,8 +258,7 @@ constructor(
      *   player's or there is no room for what it holds.
      */
     fun ProtectedAccess.retrieveFalcon(falcon: Npc): Boolean {
-        val internal = RSCM.getReverseMapping(RSCMType.NPC, falcon.visType.id) ?: return false
-        val creature = FalconryCreatures.byFalconNpc(internal) ?: return false
+        val creature = FalconryCreatures.byFalconNpcId(falcon.visType.id) ?: return false
 
         val controller = conRepo.findExact(falcon.coords, FALCON_CONTROLLER) ?: return false
         if (controller.falconOwner != player.uid.packed) {
@@ -394,8 +391,7 @@ constructor(
     /** The falcon-with-prey standing on [coords], whichever of the three it is. */
     private fun falconAt(coords: CoordGrid): Npc? =
         npcRepo.findAll(coords).firstOrNull { npc ->
-            val internal = RSCM.getReverseMapping(RSCMType.NPC, npc.visType.id)
-            internal != null && FalconryCreatures.byFalconNpc(internal) != null
+            FalconryCreatures.byFalconNpcId(npc.visType.id) != null
         }
 
     /**

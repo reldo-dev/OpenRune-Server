@@ -1,7 +1,5 @@
 package org.rsmod.content.skills.hunter
 
-import dev.openrune.rscm.RSCM
-import dev.openrune.rscm.RSCMType
 import jakarta.inject.Inject
 import org.rsmod.api.player.output.mes
 import org.rsmod.api.player.protect.ProtectedAccess
@@ -87,8 +85,7 @@ constructor(
      *   and an npc that is not a butterfly at all.
      */
     fun ProtectedAccess.catchButterfly(target: Npc): Boolean {
-        val internal = RSCM.getReverseMapping(RSCMType.NPC, target.visType.id) ?: return false
-        val creature = ButterflyCreatures.byNpc(internal) ?: return false
+        val creature = ButterflyCreatures.byNpcId(target.visType.id) ?: return false
 
         val barehanded = !isHoldingNet()
         val required = creature.level + if (barehanded) BAREHANDED_LEVELS else 0

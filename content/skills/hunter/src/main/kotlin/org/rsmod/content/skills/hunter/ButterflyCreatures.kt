@@ -1,5 +1,7 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.rscm.RSCM.asRSCM
+import dev.openrune.rscm.RSCMType
 import org.rsmod.api.table.hunter.HunterButterflyCreaturesRow
 
 /**
@@ -48,8 +50,19 @@ object ButterflyCreatures {
 
     private val byNpc: Map<String, ButterflyCreature> by lazy { all.associateBy { it.npc } }
 
+    /**
+     * The same table keyed by resolved npc id, so a `Catch` op does not pay
+     * `RSCM.getReverseMapping`'s linear scan of the whole npc table to find out what it landed on.
+     */
+    private val byNpcId: Map<Int, ButterflyCreature> by lazy {
+        all.associateBy { it.npc.asRSCM(RSCMType.NPC) }
+    }
+
     /** The butterfly a `Catch` op landed on, or null if it is not one. */
     fun byNpc(npc: String): ButterflyCreature? = byNpc[npc]
+
+    /** [byNpc] for a live npc, without the reverse-mapping scan. */
+    fun byNpcId(npc: Int): ButterflyCreature? = byNpcId[npc]
 
     private fun creature(row: HunterButterflyCreaturesRow): ButterflyCreature =
         ButterflyCreature(

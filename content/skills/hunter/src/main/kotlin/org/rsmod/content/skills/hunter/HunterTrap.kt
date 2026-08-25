@@ -1186,8 +1186,7 @@ constructor(
                     npc.coords.chebyshevDistance(centre) <= triggerDistance(family)
             }
             .mapNotNull { npc ->
-                val internal = RSCM.getReverseMapping(RSCMType.NPC, npc.visType.id)
-                val creature = internal?.let(HunterCreatures::byNpc)
+                val creature = HunterCreatures.byNpcId(npc.visType.id)
                 creature?.takeIf { it.family == family }?.let { npc to it }
             }
             .firstOrNull()

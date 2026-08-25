@@ -1,7 +1,6 @@
 package org.rsmod.content.skills.hunter
 
 import dev.openrune.ServerCacheManager
-import dev.openrune.rscm.RSCM
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
 import jakarta.inject.Inject
@@ -305,14 +304,11 @@ constructor(
     /**
      * The nail obj [held] is, or null if it is not a nail or the stack is too small to build with.
      *
-     * Reverse-mapped from the held obj's id rather than compared by name, because an [InvObj] only
-     * carries an id - the same route `HunterTrap.deadfallLogObj` takes back to a symbol.
+     * Recovered from the held obj's id rather than compared by name, because an [InvObj] only
+     * carries an id.
      */
     private fun ProtectedAccess.nailObj(held: InvObj): String? {
-        if (held.id !in nailIds) {
-            return null
-        }
-        val obj = RSCM.getReverseMapping(RSCMType.OBJ, held.id) ?: return null
+        val obj = nailObjsById[held.id] ?: return null
         return obj.takeIf { inv.count(it) >= CRAB_TRAP_NAIL_COUNT }
     }
 
@@ -380,9 +376,15 @@ constructor(
                 "obj.nails_dragon",
             )
 
-        /** Resolved once, so a nail gameval that does not exist fails at class load, not at a build. */
-        private val nailIds: Set<Int> by lazy {
-            CRAB_TRAP_NAILS.mapTo(HashSet()) { it.asRSCM(RSCMType.OBJ) }
+        /**
+         * Resolved once, so a nail gameval that does not exist fails at class load, not at a build.
+         *
+         * Keyed id-to-symbol rather than held as a bare id set, because the caller needs the symbol
+         * back and `RSCM.getReverseMapping` would recover it by scanning the whole ~34k-entry obj
+         * table. Inverting the forward resolution we already did costs nothing.
+         */
+        private val nailObjsById: Map<Int, String> by lazy {
+            CRAB_TRAP_NAILS.associateBy { it.asRSCM(RSCMType.OBJ) }
         }
 
         /**

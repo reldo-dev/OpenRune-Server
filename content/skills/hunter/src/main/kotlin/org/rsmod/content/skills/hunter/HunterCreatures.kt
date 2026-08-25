@@ -82,6 +82,19 @@ object HunterCreatures {
     private val byNpc: Map<String, HunterCreature> by lazy { all.associateBy { it.npc } }
 
     /**
+     * The same table keyed by resolved npc id, for the callers that start from a live [Npc].
+     *
+     * `RSCM.getReverseMapping` is a linear scan of the whole npc table - ~14.5k entries at this
+     * revision, with no memoisation - so recovering a symbol per candidate npc is the most
+     * expensive thing the trap tick does. Resolving each row's symbol once at class load and
+     * comparing ids turns that scan into a hash lookup. Built the same way as [byNetTrapLoc], which
+     * already keys on a resolved id for the same reason.
+     */
+    private val byNpcId: Map<Int, HunterCreature> by lazy {
+        all.associateBy { it.npc.asRSCM(RSCMType.NPC) }
+    }
+
+    /**
      * Every net trap loc id, tree half and net half alike, to the creature it belongs to.
      *
      * This is how a net trap's creature is recovered *without* a catch: the family's failure and
@@ -110,6 +123,9 @@ object HunterCreatures {
     }
 
     fun byNpc(npc: String): HunterCreature? = byNpc[npc]
+
+    /** [byNpc] for a live npc, without the reverse-mapping scan. */
+    fun byNpcId(npc: Int): HunterCreature? = byNpcId[npc]
 
     fun byNetTrapLoc(locId: Int): HunterCreature? = byNetTrapLoc[locId]
 
