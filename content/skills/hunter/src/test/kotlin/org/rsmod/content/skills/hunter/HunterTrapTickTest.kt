@@ -15,6 +15,7 @@ import org.rsmod.content.skills.hunter.HunterTrapTestWorld.Companion.TRAP_CREATU
 import org.rsmod.content.skills.hunter.HunterTrapTestWorld.Companion.TRAP_CREATURE_NONE
 import org.rsmod.content.skills.hunter.HunterTrapTestWorld.Companion.TRAP_TILE
 import org.rsmod.game.entity.Controller
+import org.rsmod.game.entity.Npc
 import org.rsmod.game.loc.LocShape
 
 /**
@@ -291,6 +292,41 @@ class HunterTrapTickTest {
     }
 
     /**
+     * A creature that has already been caught must not be caught again.
+     *
+     * `NpcRepository.despawn` hides the npc and leaves it in the zone map at its death tile so the
+     * respawn can bring it back, and `NpcRegistry.findAll` is documented not to filter hidden npcs.
+     * Two traps in range of one creature therefore both see it on the same cycle unless the sweep
+     * filters visibility itself - two catches, two lots of loot and xp, out of one animal. With
+     * several traps around it the same creature is farmed indefinitely while invisible, because
+     * `NpcRepository.shouldTrigger` fires on an exact cycle match and each re-despawn pushes the
+     * respawn cycle further out.
+     */
+    @Test
+    fun `a despawned creature cannot be caught by a second trap`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(4, 4), hunterLvl = 99)
+        val first = world.layPortableTrap(TrapFamily.BOX, TRAP_TILE, owner)
+        val secondTile = TRAP_TILE.translate(0, 2)
+        val second = world.layPortableTrap(TrapFamily.BOX, secondTile, owner)
+        // One tile from both traps, so both are in range of it on the same cycle.
+        val prey = world.addNpc("npc.hunting_chinchompa", TRAP_TILE.translate(0, 1))
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        world.tick(first)
+        assertTrue(first.trapCreature >= 0, "The first trap should catch it.")
+        assertFalse(world.npcIsSpawned(prey))
+
+        world.tick(second)
+
+        assertEquals(
+            TRAP_CREATURE_NONE,
+            second.trapCreature,
+            "The chinchompa was already caught; the second trap must find nothing.",
+        )
+        assertEquals(1, world.random.doubleDraws, "Only the first trap should have rolled.")
+    }
+
+    /**
      * "If the player's Hunter level is too low, the trap will always fail." (wiki.)
      *
      * The regular chinchompa is the creature that needs this stated explicitly: its `successLow` is
@@ -346,25 +382,32 @@ class HunterTrapTickTest {
      * "Once a box trap has been set, it will make an attempt every 3 ticks." (wiki.) Rolling every
      * cycle instead would triple the effective catch rate at the same per-attempt chance, which is
      * invisible in play and shows up only as the skill training faster than it should.
+     *
+     * The trap is put back into its armed state between cycles, and so is the chinchompa: a sprung
+     * trap does not reach its roll, and a creature the roll despawned is no longer a candidate for
+     * the next one. Restoring both is what keeps the two off-cycle assertions non-vacuous - the
+     * trap has something to catch on every one of the four cycles, so a roll that happened is a
+     * cadence failure and not a missing target.
      */
     @Test
     fun `a box trap rolls only once every three cycles`() {
-        val controller = boxTrapWithChinchompaInRange(CHINCHOMPA_LEVEL)
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = CHINCHOMPA_LEVEL)
+        val controller = world.layPortableTrap(TrapFamily.BOX, TRAP_TILE, owner)
+        val prey = world.addNpc("npc.hunting_chinchompa", TRAP_TILE.translate(0, 1))
         world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
 
         // Cycle 0 is the trap's own creation cycle, so it rolls; 1 and 2 must not.
         world.tick(controller)
         assertEquals(1, world.random.doubleDraws)
 
-        // Reset the sprung state so the tick reaches its roll again on the following cycles.
         repeat(2) {
-            controller.trapCreature = TRAP_CREATURE_NONE
+            rearm(controller, prey)
             world.advance()
             world.tick(controller)
         }
         assertEquals(1, world.random.doubleDraws, "No roll on the two off-cycles.")
 
-        controller.trapCreature = TRAP_CREATURE_NONE
+        rearm(controller, prey)
         world.advance()
         world.tick(controller)
         assertEquals(2, world.random.doubleDraws, "Rolls again on the third cycle.")
@@ -514,6 +557,14 @@ class HunterTrapTickTest {
      * certain. Tests that need a miss pass [CHINCHOMPA_LEVEL] instead - see
      * [ScriptedRandom.HIGHEST_DRAW].
      */
+    /** Puts a sprung trap and the creature it sprang on back the way they were. */
+    private fun rearm(controller: Controller, prey: Npc) {
+        controller.trapCreature = TRAP_CREATURE_NONE
+        if (!prey.isVisible) {
+            world.revealNpc(prey)
+        }
+    }
+
     private fun boxTrapWithChinchompaInRange(hunterLvl: Int = 99): Controller {
         val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = hunterLvl)
         val controller = world.layPortableTrap(TrapFamily.BOX, TRAP_TILE, owner)

@@ -349,6 +349,17 @@ class HunterTrapTestWorld {
     fun npcIsSpawned(npc: Npc): Boolean =
         npc.isVisible && npcRepo.findAll(ZoneKey.from(npc.coords)).any { it === npc }
 
+    /**
+     * Un-hides a despawned creature on the spot, the way its respawn cycle eventually would.
+     *
+     * `NpcRepository.processReveal` is the real route back and it is `internal` to `api:repo`, so a
+     * test that needs a creature to still be there after a trap sprang has to reach the registry
+     * directly. Only [HunterTrapTickTest.a box trap rolls only once every three cycles] needs it.
+     */
+    fun revealNpc(npc: Npc) {
+        npcRegistry.reveal(npc)
+    }
+
     /* Locs */
 
     /**

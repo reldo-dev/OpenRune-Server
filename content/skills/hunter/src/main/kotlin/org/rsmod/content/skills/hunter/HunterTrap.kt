@@ -844,6 +844,17 @@ constructor(
      *
      * [centre] is the trap's business end rather than its controller's tile: the two differ only
      * for the net trap, whose net sits a tile from the tree the controller is anchored to.
+     *
+     * The visibility filter is load-bearing. `NpcRepository.despawn` only hides a caught creature -
+     * it stays in the zone map, on its death tile, until its respawn cycle comes round - and
+     * `NpcRegistry.findAll`'s own KDoc says it does not filter hidden npcs out. Without this, two
+     * traps in range of one creature both catch it on the same cycle, and several traps farm it
+     * indefinitely while it is invisible: each re-despawn rewrites `lifecycleRespawnCycle`, and
+     * `shouldTrigger` is an exact cycle match, so the respawn it missed is never retried.
+     *
+     * [Npc.isVisible] and deliberately not `Npc.isValidTarget()`, for the reason
+     * [HunterFalconry.catchKebbit] gives: that helper also requires `hitpoints > 0`, which no
+     * hunter creature declares in the cache, so it would refuse every catch.
      */
     private fun nearbyCreature(
         family: TrapFamily,
@@ -852,7 +863,8 @@ constructor(
         npcRepo
             .findAll(ZoneKey.from(centre), zoneRadius = 1)
             .filter { npc ->
-                npc.coords.level == centre.level &&
+                npc.isVisible &&
+                    npc.coords.level == centre.level &&
                     npc.coords.chebyshevDistance(centre) <= family.triggerDistance
             }
             .mapNotNull { npc ->
