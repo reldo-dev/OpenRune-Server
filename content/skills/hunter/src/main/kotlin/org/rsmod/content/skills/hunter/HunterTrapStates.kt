@@ -130,10 +130,28 @@ object HunterTrapStates {
      * the map's, not ours, so it is only ever reached through `locRepo.change`. The set is what
      * finds a tree on a tile without knowing which of the three states it is wearing.
      */
-    val netTrapTreeLocIds: Set<Int> by lazy {
+    /**
+     * Resolves the given states of every net trap creature into one id set.
+     *
+     * Seven of these sets existed and each spelled out the same three steps - pick the states off
+     * each creature, drop the nulls, resolve each through RSCM. The states are nullable because a
+     * [HunterCreature] is one record shared by five families and only the net trap fills these in,
+     * so "absent" is normal here rather than an error.
+     */
+    private fun netTrapLocIds(vararg states: (HunterCreature) -> String?): Set<Int> =
         HunterCreatures.netTrap
-            .flatMap { listOfNotNull(it.upLoc, it.settingLoc, it.setLoc) }
+            .flatMap { creature -> states.mapNotNull { state -> state(creature) } }
             .mapTo(HashSet()) { it.asRSCM(RSCMType.LOC) }
+
+    /**
+     * The other half of that nullability: where a *caller* needs one specific state and its absence
+     * would be a data fault rather than a normal empty, it must fail by name.
+     */
+    private fun HunterCreature.requireLoc(state: String, value: String?): String =
+        requireNotNull(value) { "Net trap creature is missing its $state loc: $npc" }
+
+    val netTrapTreeLocIds: Set<Int> by lazy {
+        netTrapLocIds(HunterCreature::upLoc, HunterCreature::settingLoc, HunterCreature::setLoc)
     }
 
     /**
@@ -144,20 +162,20 @@ object HunterTrapStates {
      * [netTrapTreeLocIds].
      */
     val netTrapNetLocIds: Set<Int> by lazy {
-        HunterCreatures.netTrap
-            .flatMap {
-                listOfNotNull(it.netSetLoc, it.trappingLoc, it.fullLoc, it.failingLoc, it.failedLoc)
-            }
-            .mapTo(HashSet()) { it.asRSCM(RSCMType.LOC) }
+        netTrapLocIds(
+            HunterCreature::netSetLoc,
+            HunterCreature::trappingLoc,
+            HunterCreature::fullLoc,
+            HunterCreature::failingLoc,
+            HunterCreature::failedLoc,
+        )
     }
 
     /** All 40 sapling states, both halves. Read only by [HunterTrap]'s never-delete guard. */
     val netTrapLocIds: Set<Int> by lazy { netTrapTreeLocIds + netTrapNetLocIds }
 
     /** The unset trees, which carry `Set-trap`. */
-    val netTrapUpLocIds: Set<Int> by lazy {
-        HunterCreatures.netTrap.mapNotNullTo(HashSet()) { it.upLoc?.asRSCM(RSCMType.LOC) }
-    }
+    val netTrapUpLocIds: Set<Int> by lazy { netTrapLocIds(HunterCreature::upLoc) }
 
     /**
      * The two states a tree may be in when a set-trap finishes: still showing the setting frame, or
@@ -165,9 +183,7 @@ object HunterTrapStates {
      * equivalent.
      */
     val netTrapSettableLocIds: Set<Int> by lazy {
-        HunterCreatures.netTrap
-            .flatMap { listOfNotNull(it.upLoc, it.settingLoc) }
-            .mapTo(HashSet()) { it.asRSCM(RSCMType.LOC) }
+        netTrapLocIds(HunterCreature::upLoc, HunterCreature::settingLoc)
     }
 
     /**
@@ -176,42 +192,29 @@ object HunterTrapStates {
      * same two ops precisely so it can be.
      */
     val netTrapArmedLocIds: Set<Int> by lazy {
-        HunterCreatures.netTrap
-            .flatMap { listOfNotNull(it.setLoc, it.netSetLoc) }
-            .mapTo(HashSet()) { it.asRSCM(RSCMType.LOC) }
+        netTrapLocIds(HunterCreature::setLoc, HunterCreature::netSetLoc)
     }
 
     /** The nets holding a catch, which carry `Check`. */
-    val netTrapFullLocIds: Set<Int> by lazy {
-        HunterCreatures.netTrap.mapNotNullTo(HashSet()) { it.fullLoc?.asRSCM(RSCMType.LOC) }
-    }
+    val netTrapFullLocIds: Set<Int> by lazy { netTrapLocIds(HunterCreature::fullLoc) }
 
     /** The sprung-and-empty nets, which carry `Dismantle`. */
-    val netTrapFailedLocIds: Set<Int> by lazy {
-        HunterCreatures.netTrap.mapNotNullTo(HashSet()) { it.failedLoc?.asRSCM(RSCMType.LOC) }
-    }
+    val netTrapFailedLocIds: Set<Int> by lazy { netTrapLocIds(HunterCreature::failedLoc) }
 
     /** The unset tree a net trap starts and ends at. */
-    fun upLoc(creature: HunterCreature): String =
-        requireNotNull(creature.upLoc) { "Net trap creature is missing its up loc: ${creature.npc}" }
+    fun upLoc(creature: HunterCreature): String = creature.requireLoc("up", creature.upLoc)
 
     /** Shown while the player is stringing the net; carries no ops, hence no content group. */
     fun settingLoc(creature: HunterCreature): String =
-        requireNotNull(creature.settingLoc) {
-            "Net trap creature is missing its setting loc: ${creature.npc}"
-        }
+        creature.requireLoc("setting", creature.settingLoc)
 
     /** The bent-over tree of an armed net trap. */
     fun armedTreeLoc(creature: HunterCreature): String =
-        requireNotNull(creature.setLoc) {
-            "Net trap creature is missing its set loc: ${creature.npc}"
-        }
+        creature.requireLoc("set", creature.setLoc)
 
     /** The net of an armed net trap, on the tile beside the tree. */
     fun netSetLoc(creature: HunterCreature): String =
-        requireNotNull(creature.netSetLoc) {
-            "Net trap creature is missing its net_set loc: ${creature.npc}"
-        }
+        creature.requireLoc("net_set", creature.netSetLoc)
 
     /**
      * The suffix the bird snare's and box trap's loc states are named by, read off the packed row.
