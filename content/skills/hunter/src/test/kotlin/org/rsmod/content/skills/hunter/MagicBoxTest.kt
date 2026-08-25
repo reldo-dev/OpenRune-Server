@@ -243,6 +243,56 @@ class MagicBoxTest {
         )
     }
 
+    /**
+     * The same rule as the test above, pinned literally rather than by block.
+     *
+     * That test proves the *blocks* have not been reordered, which is what catches a table being
+     * concatenated instead of merged. It does not catch a row moving within its block, or a row
+     * being inserted between two others - and either of those shifts every index behind it just as
+     * badly, because `varcon.hunter_trap_creature` holds a bare `HunterCreatures.all.indexOf`.
+     *
+     * So this asserts the whole sequence. It is meant to be edited **only by appending**: a diff
+     * that changes any existing line of this list is a diff that re-files someone's caught
+     * chinchompa as something else, and the failure it produces is the intended review gate rather
+     * than a stale expectation to update.
+     */
+    @Test
+    fun `the full creature order is save data and is pinned literally`() {
+        assertEquals(
+            listOf(
+                // Snare, dbrow 56300-03.
+                "npc.hunting_bird_jungle",
+                "npc.hunting_bird_desert",
+                "npc.hunting_bird_woodland",
+                "npc.hunting_bird_polar",
+                // Box, dbrow 56304-06.
+                "npc.hunting_chinchompa",
+                "npc.hunting_chinchompa_big",
+                "npc.hunting_chinchompa_black",
+                // Deadfall, dbrow 56310-14.
+                "npc.huntingbeast_claws",
+                "npc.huntingbeast_barbedtail",
+                "npc.huntingbeast_spiky",
+                "npc.huntingbeast_sabreteeth",
+                "npc.varlamore_fennecfox",
+                // Net trap, slice 2.
+                "npc.salamander_green",
+                "npc.salamander_orange",
+                "npc.salamander_red",
+                "npc.salamander_black",
+                "npc.salamander_mountain",
+                // Magic box, slice 2.
+                "npc.imp",
+                // Slice 4's three closers, appended by id despite joining older tables.
+                "npc.multicoloured_bird",
+                "npc.hunting_ferret",
+                "npc.varlamore_hunterjerboa01",
+            ),
+            HunterCreatures.all.map { it.npc },
+            "HunterCreatures.all is indexed by save data; rows may be appended, never moved.",
+        )
+    }
+
     /* Helpers. */
 
     private fun hunter(level: Int, carrying: List<String>): Player {
