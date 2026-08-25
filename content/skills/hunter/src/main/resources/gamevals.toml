@@ -1,11 +1,12 @@
 [gamevals.dbtable]
-# 55543-55547 sit above the whole 555xx dbtable run in use today - mining's 55520 and firemaking's
+# 55543-55548 sit above the whole 555xx dbtable run in use today - mining's 55520 and firemaking's
 # 55535-55537 - with 55538-55542 left clear for the fletching tables.
 hunter_snare_creatures = 55543
 hunter_box_creatures = 55544
 hunter_deadfall_creatures = 55545
 hunter_nettrap_creatures = 55546
 hunter_magicbox_creatures = 55547
+hunter_falconry_creatures = 55548
 
 # Append-only block, clear of the 555xx and 56[0-2]xx dbrow runs with headroom. Ids ascend in the
 # order the creatures appear in the combined list, which a sprung trap persists an index into, so
@@ -29,9 +30,17 @@ hunter_red_salamander = 56322
 hunter_black_salamander = 56323
 hunter_tecu_salamander = 56324
 hunter_imp = 56330
+# Falconry is not a trap and its rows are never indexed into `HunterCreatures.all`, but they take the
+# next free decade anyway so the hunter dbrow block stays one ascending run.
+hunter_spotted_kebbit = 56340
+hunter_dark_kebbit = 56341
+hunter_dashing_kebbit = 56342
 
 [gamevals.controller]
 hunter_trap = 2
+# Falconry gets its own controller type rather than reusing `hunter_trap`: `onAiConTimer` dispatches
+# on the type, and a falcon arriving at the trap tick would be read as a trap with a corrupt family.
+hunter_falcon = 3
 
 [gamevals.varcon]
 hunter_trap_owner = 4
@@ -40,6 +49,12 @@ hunter_trap_creature = 6
 # Deadfall consumes a log to arm, and dismantling gives it back, so the controller has to remember
 # which one went in.
 hunter_trap_deadfall_log = 7
+# The falcon's two, kept separate from the trap's rather than shared. They live on a different
+# controller type and mean a different thing - `hunter_falcon_creature` indexes
+# `FalconryCreatures.all`, not `HunterCreatures.all` - and sharing a name across two controller types
+# would make a varcon rename in one feature silently retarget the other.
+hunter_falcon_owner = 8
+hunter_falcon_creature = 9
 
 [gamevals.content]
 hunter_bird_snare = 54
@@ -51,6 +66,14 @@ hunter_deadfall = 56
 # of one trap, and every op either can carry is dispatched by the same handler.
 hunter_net_trap = 57
 hunter_magic_box = 58
+
+# The falconry enclosure, whose exit strips the rented glove. 58 is the next free id above the packed
+# area run's low block, which ends at runecrafting's `rune_essence_mine = 57`; the high block starts
+# at 32757. The polygon lives in `.data/raw-cache/map/area/piscatoris_falconry.toml` - an area name
+# resolves to an id without it and then matches no tile, which is the silent half of the two-
+# declaration rule.
+[gamevals.area]
+piscatoris_falconry = 58
 
 # The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
 # lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom

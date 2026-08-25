@@ -278,6 +278,25 @@ private val NET_TRAP_COMPONENTS: List<String> = listOf(ROPE, SMALL_FISHING_NET)
 /** The most traps any player can have laid, reached at level 80. */
 const val MAX_LAID_TRAPS: Int = 5
 
+/**
+ * How many free slots awarding [count] of [internal] to [inv] costs. A stackable item already
+ * present just grows its existing stack and needs none whatever the count; a stackable item not yet
+ * held at all needs exactly one; anything else needs one per item.
+ *
+ * Top-level rather than private to [HunterTrap] because falconry's retrieve needs the identical
+ * rule, and a second copy would be a second place for "a stackable award the player already holds
+ * costs no slot" to drift. Getting that wrong over-rejects a legitimate collect, which is exactly
+ * the bug this function exists to prevent.
+ */
+internal fun hunterInvSlotsNeeded(inv: Inventory, internal: String, count: Int): Int {
+    val stackable = ServerCacheManager.getItem(internal.asRSCM(RSCMType.OBJ))?.isStackable == true
+    return when {
+        !stackable -> count
+        inv.contains(internal) -> 0
+        else -> 1
+    }
+}
+
 private const val MAX_HUNTER_LEVEL: Int = 99
 
 /** [Controller.trapCreature] while the trap is still armed and has caught nothing. */
@@ -548,7 +567,7 @@ constructor(
 
         val log = controller?.deadfallLogObj()
         if (log != null) {
-            if (inv.freeSpace() < invSlotsNeeded(inv, log, 1)) {
+            if (inv.freeSpace() < hunterInvSlotsNeeded(inv, log, 1)) {
                 mes("Your inventory is too full to hold any more.")
                 soundSynth("synth.pillory_wrong")
                 return false
@@ -695,7 +714,7 @@ constructor(
         }
 
         if (controller != null) {
-            val slotsNeeded = NET_TRAP_COMPONENTS.sumOf { invSlotsNeeded(inv, it, 1) }
+            val slotsNeeded = NET_TRAP_COMPONENTS.sumOf { hunterInvSlotsNeeded(inv, it, 1) }
             if (inv.freeSpace() < slotsNeeded) {
                 mes("Your inventory is too full to hold any more.")
                 soundSynth("synth.pillory_wrong")
@@ -943,8 +962,8 @@ constructor(
         // player already holds that chinchompa type, or a feather catch when they already hold that
         // feather colour).
         val slotsNeeded =
-            awards.sumOf { (obj, count) -> invSlotsNeeded(inv, obj, count) } +
-                returned.sumOf { invSlotsNeeded(inv, it, 1) }
+            awards.sumOf { (obj, count) -> hunterInvSlotsNeeded(inv, obj, count) } +
+                returned.sumOf { hunterInvSlotsNeeded(inv, it, 1) }
         if (inv.freeSpace() < slotsNeeded) {
             mes("Your inventory is too full to hold any more.")
             soundSynth("synth.pillory_wrong")
@@ -991,7 +1010,7 @@ constructor(
         }
 
         val trapObj = trapObj(family) ?: return false
-        if (inv.freeSpace() < invSlotsNeeded(inv, trapObj, 1)) {
+        if (inv.freeSpace() < hunterInvSlotsNeeded(inv, trapObj, 1)) {
             mes("Your inventory is too full to hold any more.")
             soundSynth("synth.pillory_wrong")
             return false
@@ -1172,21 +1191,6 @@ constructor(
                 creature?.takeIf { it.family == family }?.let { npc to it }
             }
             .firstOrNull()
-
-    /**
-     * How many free slots awarding [count] of [internal] to [inv] costs. A stackable item already
-     * present just grows its existing stack and needs none whatever the count; a stackable item not
-     * yet held at all needs exactly one; anything else needs one per item.
-     */
-    private fun invSlotsNeeded(inv: Inventory, internal: String, count: Int): Int {
-        val stackable =
-            ServerCacheManager.getItem(internal.asRSCM(RSCMType.OBJ))?.isStackable == true
-        return when {
-            !stackable -> count
-            inv.contains(internal) -> 0
-            else -> 1
-        }
-    }
 
     private fun canTakeTrap(coords: CoordGrid): Boolean =
         conRepo.findExact(coords, TRAP_CONTROLLER) == null &&

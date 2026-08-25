@@ -6,7 +6,7 @@ import dev.openrune.definition.dbtables.dbTable
 import dev.openrune.definition.util.VarType
 
 /**
- * The bird snare, box trap, deadfall, net trap and magic box creature tables.
+ * The bird snare, box trap, deadfall, net trap, magic box and falconry creature tables.
  *
  * Every `npc` and caught `obj` here is a cache symbol confirmed to exist via `config/npc` /
  * `config/obj` lookups - never a wiki name transcribed directly, since the two frequently differ
@@ -20,6 +20,11 @@ import dev.openrune.definition.util.VarType
  * dbrow id and the ids below are assigned in that order. Existing saves hold indices into the first
  * three tables, so a new technique's rows must sort after every row already shipped - never between
  * them.
+ *
+ * [falconryCreatures] is the exception to that sentence, and deliberately so: falconry is not a trap
+ * and its rows are read into `FalconryCreatures.all`, a separate list a *falcon* controller indexes,
+ * never `HunterCreatures.all`. Its dbrow ids still sort after every trap row so the hunter block
+ * stays one ascending run, but nothing about trap-index stability depends on that.
  */
 object HunterTables {
     // Column ids must form a dense 0..n-1 *set* per table - declaration order does not matter, only
@@ -76,6 +81,14 @@ object HunterTables {
     // The magic box needs no nested block: it is a one-creature technique, so its four loc states
     // are shared by construction and live on the content side as constants, the same split the
     // deadfall's unset boulder and armed trap get.
+
+    /**
+     * Falconry only, and the one family with no loc column at all: nothing is laid, nothing is
+     * transformed. What a falconry row needs instead is the npc the successful catch *becomes*.
+     */
+    private object Falconry {
+        const val COL_FALCON_NPC = 8
+    }
 
     /**
      * Columns 0-7, shared verbatim by every creature table. Per-technique columns are declared by
@@ -565,6 +578,109 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.magic_imp_box_full")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+            }
+        }
+
+    /**
+     * The three falconry kebbits.
+     *
+     * **Falconry is not a trap**, and this table is the first that is not one: there is no loc to
+     * lay, transform or clear, and no `TrapFamily` entry backs it. The one column it adds instead of
+     * loc states is [Falconry.COL_FALCON_NPC] - the "falcon holding prey" npc a successful catch
+     * spawns on the kebbit's tile, which the player then clicks to retrieve.
+     *
+     * That column exists because **our cache is richer than the usual reference implementation's**.
+     * OSRS ships three distinct falcon-with-prey npcs, one per kebbit
+     * (`hunting_falcon_onspeedy` 1342, `hunting_falcon_onsilent` 1344, `hunting_falcon_onspeedy2`
+     * 1343, all `name=Gyr Falcon`, all `op1=Retrieve`), where implementations working from a thinner
+     * dump use a single generic falcon and stash the prey type in a side-channel attribute. Encoding
+     * it in the npc means the retrieve path recovers the whole reward from the thing it clicked, and
+     * there is no second source of truth to desync. Note the id order is *not* the level order:
+     * 1343 is the dashing kebbit's and 1344 the dark kebbit's.
+     *
+     * Levels and xp are from each creature's own "Hunter info" box, which agrees with the `Falconry`
+     * page's Creatures table (oldid=14840978).
+     *
+     * **All three `(low, high)` pairs are pinned to a single integer solution** - the strongest fit
+     * any hunter table has had. Each creature's page carries a `{{Skilling success chart}}` whose
+     * every y value is an exact 256th, and each *also* states its endpoints in prose, so there are
+     * two independent cross-checks rather than one:
+     * - Spotted (oldid=15225548), 38 charted points L43-80: `(26, 310)`. Prose: "The catch rate is
+     *   10% at lvl 1 and 121% at lvl 99", sourced to Mod Ash. The fit gives 27/256 = 10.5% at L1 and
+     *   311/256 = 121.5% at L99.
+     * - Dark (oldid=15288973), 43 points L57-99: `(0, 253)`. Prose: "0% at lvl 1 and 99% at lvl 99".
+     *   The fit gives 1/256 = 0.4% and 254/256 = 99.2%; 254 is also the charted L99 value exactly.
+     * - Dashing (oldid=15225549), 31 points L69-99: `(0, 205)`. Prose: "0% at lvl 1 and 80% at lvl
+     *   99". The fit gives 1/256 and 206/256 = 80.5%; 206 is the charted L99 value exactly.
+     *
+     * **Spotted kebbit's `high` exceeds 256 on purpose and must not be clamped.** 121% at 99 is what
+     * the source says, and it is the same unclamped shape the wild kebbit already ships: past L80 the
+     * charted curve stops because the roll can no longer fail. `SkillingSuccessRate` is unclamped and
+     * reproduces that for free; clamping `high` to 256 would move the certainty point from L80 to L99.
+     *
+     * A note on the extraction, because the obvious route is wrong: the offline wiki sqlite's
+     * `chunks` are truncated at ~1KB, so pulling these charts from sqlite silently yields 2 of the
+     * spotted kebbit's 38 points and fits a curve to them without complaint. All 112 points here came
+     * through the `osrs-cache` MCP `get_wiki_section`, which returns the section whole.
+     *
+     * Rewards are the infobox "Always" drops only, exactly as the trap tables do it. Kebbity tuft is
+     * omitted from all three: it is 1/10 *and* conditional on an active Hunter's Rumour, which is not
+     * implemented. The dashing kebbit is the only one with three reward lines - it always drops
+     * `huntingbeast_speedy2_meat` (29107, "Raw dashing kebbit") on top of bones and its fur, where
+     * the other two drop bones and fur alone.
+     *
+     * No `bait` column and no proximity term. Falconry takes no bait at all, and on proximity the
+     * wiki is explicit that there is nothing to model: "Although the success rate is supposedly not
+     * affected by proximity, running up to the target before catching it may improve success rate" -
+     * which it then explains as a timing artefact of the falcon's travel speed, not a rate change.
+     */
+    fun falconryCreatures(): DBTable =
+        dbTable("dbtable.hunter_falconry_creatures", serverOnly = true) {
+            creatureColumns()
+            column("falcon_npc", Falconry.COL_FALCON_NPC, VarType.NPC)
+
+            row("dbrow.hunter_spotted_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_speedy")
+                column(COL_LEVEL, 43)
+                column(COL_XP, 1040)
+                column(COL_SUCCESS_LOW, 26)
+                // Above 256, and correct. See the class doc.
+                column(COL_SUCCESS_HIGH, 310)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_speedy_fur")
+                column(COL_CAUGHT_MIN, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1)
+                columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onspeedy")
+            }
+
+            row("dbrow.hunter_dark_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_silent")
+                column(COL_LEVEL, 57)
+                column(COL_XP, 1320)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 253)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_silent_fur")
+                column(COL_CAUGHT_MIN, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1)
+                // 1344, not 1343 - the falcon npc ids do not ascend with creature level.
+                columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onsilent")
+            }
+
+            // The only three-reward falconry row: dashing kebbits always drop meat as well.
+            row("dbrow.hunter_dashing_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_speedy2")
+                column(COL_LEVEL, 69)
+                column(COL_XP, 1560)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 205)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.huntingbeast_speedy2_fur",
+                    "obj.huntingbeast_speedy2_meat",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1, 1)
+                columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onspeedy2")
             }
         }
 }
