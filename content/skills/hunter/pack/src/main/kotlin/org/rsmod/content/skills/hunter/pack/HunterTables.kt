@@ -6,7 +6,7 @@ import dev.openrune.definition.dbtables.dbTable
 import dev.openrune.definition.util.VarType
 
 /**
- * The bird snare, box trap, deadfall, net trap, magic box and falconry creature tables.
+ * The bird snare, box trap, deadfall, net trap, magic box, falconry and butterfly creature tables.
  *
  * Every `npc` and caught `obj` here is a cache symbol confirmed to exist via `config/npc` /
  * `config/obj` lookups - never a wiki name transcribed directly, since the two frequently differ
@@ -21,10 +21,18 @@ import dev.openrune.definition.util.VarType
  * three tables, so a new technique's rows must sort after every row already shipped - never between
  * them.
  *
- * [falconryCreatures] is the exception to that sentence, and deliberately so: falconry is not a trap
- * and its rows are read into `FalconryCreatures.all`, a separate list a *falcon* controller indexes,
- * never `HunterCreatures.all`. Its dbrow ids still sort after every trap row so the hunter block
- * stays one ascending run, but nothing about trap-index stability depends on that.
+ * [falconryCreatures] and [butterflyCreatures] are the exceptions to that sentence, and deliberately
+ * so: neither technique is a trap, and their rows are read into `FalconryCreatures.all` and
+ * `ButterflyCreatures.all` - separate lists indexed by separate things, never `HunterCreatures.all`.
+ * Their dbrow ids still sort after every trap row so the hunter block stays one ascending run, but
+ * nothing about trap-index stability depends on that.
+ *
+ * That stability rule is the reason the three rows added last - the tropical wagtail here in
+ * [snareCreatures], the ferret and the embertailed jerboa in [boxCreatures] - carry ids in the
+ * 56360s rather than ids next to their table-mates. They are the first rows to join a table that
+ * already shipped, and `HunterCreatures.all` reads the five trap tables into **one list sorted by
+ * dbrow id**, so an id chosen to sit next to the other birds would sort ahead of the chinchompas and
+ * shift every index already written into a save.
  */
 object HunterTables {
     // Column ids must form a dense 0..n-1 *set* per table - declaration order does not matter, only
@@ -47,13 +55,27 @@ object HunterTables {
     const val COL_CAUGHT_MIN = 6
     const val COL_CAUGHT_MAX = 7
 
-    // Table-specific columns are nested so e.g. `COL_BAIT` cannot be typed inside deadfallCreatures()
-    // by mistake - both start at 8, and a slip would compile, pack, and silently write the wrong
-    // table's column 8.
+    // Table-specific columns are nested so e.g. `COL_FULL_LOC` cannot be typed inside
+    // snareCreatures() by mistake - they all start at 8, and a slip would compile, pack, and
+    // silently write the wrong table's column 8.
 
-    /** Box trap only. */
-    private object Box {
-        const val COL_BAIT = 8
+    /**
+     * The two portable families whose loc states are built from a name suffix rather than stored
+     * whole: `loc.hunting_ojibway_trap_full_<key>` and `loc.hunting_boxtrap_full_<key>`.
+     *
+     * The key used to be derived in code by stripping a prefix off the npc's own symbol -
+     * `npc.hunting_bird_polar` -> `polar`, `npc.hunting_chinchompa_big` -> `chinchompa_big`. That
+     * held for the seven rows shipped first and breaks for all three added here: the tropical
+     * wagtail's npc is `npc.multicoloured_bird` against a `_coloured` loc set, the ferret's obj and
+     * npc share a symbol but its npc has no `hunting_bird_` prefix to strip, and the embertailed
+     * jerboa is `npc.varlamore_hunterjerboa01` against a `_jerboa` loc set. Kotlin's
+     * `substringAfter`/`substringAfterLast` return the *whole string* when the delimiter is absent,
+     * so each of those would have resolved to a loc name like
+     * `loc.hunting_ojibway_trap_full_npc.multicoloured_bird` and thrown at the first catch rather
+     * than at boot. Storing the key makes it data, and the derivation cannot silently mismatch.
+     */
+    private object LocKeyed {
+        const val COL_LOC_KEY = 8
     }
 
     /** Deadfall only. */
@@ -123,6 +145,7 @@ object HunterTables {
     fun snareCreatures(): DBTable =
         dbTable("dbtable.hunter_snare_creatures", serverOnly = true) {
             creatureColumns()
+            column("loc_key", LocKeyed.COL_LOC_KEY, VarType.STRING)
 
             row("dbrow.hunter_jungle_bird") {
                 columnRSCM(COL_NPC, "npc.hunting_bird_jungle")
@@ -138,6 +161,7 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 5)
                 column(COL_CAUGHT_MAX, 1, 1, 10)
+                column(LocKeyed.COL_LOC_KEY, "jungle")
             }
 
             row("dbrow.hunter_desert_bird") {
@@ -154,6 +178,7 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 5)
                 column(COL_CAUGHT_MAX, 1, 1, 10)
+                column(LocKeyed.COL_LOC_KEY, "desert")
             }
 
             row("dbrow.hunter_woodland_bird") {
@@ -170,6 +195,7 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 5)
                 column(COL_CAUGHT_MAX, 1, 1, 10)
+                column(LocKeyed.COL_LOC_KEY, "woodland")
             }
 
             row("dbrow.hunter_polar_bird") {
@@ -188,19 +214,73 @@ object HunterTables {
                 )
                 column(COL_CAUGHT_MIN, 1, 1, 5)
                 column(COL_CAUGHT_MAX, 1, 1, 10)
+                column(LocKeyed.COL_LOC_KEY, "polar")
+            }
+
+            /*
+             * The fifth bird, which the first build wrongly recorded as not existing.
+             *
+             * That exclusion searched the `hunting_bird_*` symbol prefix, found exactly four, and
+             * concluded there was no npc behind the unused `hunting_ojibway_trap_full_coloured`
+             * trap state. The wagtail sits outside the prefix: it is `npc.multicoloured_bird`
+             * (5548), `name=Tropical wagtail`, and its `model1=model_26839` is the very model that
+             * comment cited as belonging to the orphaned trap state - the evidence read as proving
+             * absence is what identifies the creature. It is otherwise byte-for-byte the shape of
+             * the other four (same `category_651`, same `model2=model_26844`, same six params), and
+             * it has 30 spawns in `.data`, comparable to polar's 23.
+             *
+             * Level 19 / 95.2 xp from its own Hunter info box (oldid=15259195). Its chart is
+             * published there too, 43 points over L19-61, and the chart alone does *not* pin the
+             * pair: both `(74, 371)` and `(75, 370)` reproduce all 43 points exactly.
+             *
+             * **The page's prose separates them, and this is the first row in the hunter branch
+             * where the cross-check has actually decided something rather than merely agreed.** It
+             * states "The catch rate is 29% at lvl 1 and 144% at lvl 99", and the engine evaluates
+             * `low + 1` at L1 and `high + 1` at L99: `(75, 370)` gives 76/256 = 29.6% and 371/256 =
+             * 144.9%, which truncate to the stated 29 and 144, while `(74, 371)` gives 372/256 =
+             * 145.3% and truncates to 145. So `(75, 370)` is pinned after all.
+             *
+             * It is also the pair that continues the snare family's own sequence: the four birds run
+             * (100, 420), (92, 400), (85, 390), (82, 380) as the requirement climbs 1 -> 5 -> 9 ->
+             * 11, both coefficients descending, and (75, 370) is the next step in both.
+             *
+             * Tailfeathers is omitted from the rewards for the reason Kebbity tuft is omitted from
+             * the deadfall's: 1/20 *and* conditional on an active Hunter's Rumour.
+             */
+            row("dbrow.hunter_tropical_wagtail") {
+                columnRSCM(COL_NPC, "npc.multicoloured_bird")
+                column(COL_LEVEL, 19)
+                column(COL_XP, 952)
+                column(COL_SUCCESS_LOW, 75)
+                column(COL_SUCCESS_HIGH, 370)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.spit_raw_bird_meat",
+                    "obj.hunting_stripy_bird_feather",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 5)
+                column(COL_CAUGHT_MAX, 1, 1, 10)
+                // Not "multicoloured_bird": the trap states are the `_coloured` set, 9347/9348.
+                column(LocKeyed.COL_LOC_KEY, "coloured")
             }
         }
 
     /**
-     * All three box trap creatures state their success formula directly on the wiki, so unlike the
-     * birds these pairs are read off rather than fit.
+     * All three chinchompas state their success formula directly on the wiki, so unlike the birds
+     * those pairs are read off rather than fit. The ferret and the embertailed jerboa state nothing
+     * at all - see their rows.
      *
-     * `bait` is recorded but unread in v1.
+     * **The `bait` column is gone.** It was recorded but never read, and the two rows added here
+     * have no bait to record: neither the `Ferret (Hunter)` nor the `Embertailed jerboa` page names
+     * one, so keeping the column would have meant inventing a filler obj for something nothing
+     * reads. That is the objection the deadfall and net trap tables already state as their reason
+     * for having no bait column, applied to the one table that did.
      */
     fun boxCreatures(): DBTable =
         dbTable("dbtable.hunter_box_creatures", serverOnly = true) {
             creatureColumns()
-            column("bait", Box.COL_BAIT, VarType.OBJ)
+            column("loc_key", LocKeyed.COL_LOC_KEY, VarType.STRING)
 
             row("dbrow.hunter_chinchompa") {
                 columnRSCM(COL_NPC, "npc.hunting_chinchompa")
@@ -211,7 +291,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.chinchompa_captured")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
-                columnRSCM(Box.COL_BAIT, "obj.bowl_spicytomato")
+                column(LocKeyed.COL_LOC_KEY, "chinchompa")
             }
 
             row("dbrow.hunter_carnivorous_chinchompa") {
@@ -225,7 +305,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.chinchompa_big_captured")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
-                columnRSCM(Box.COL_BAIT, "obj.bowl_spicymeat")
+                column(LocKeyed.COL_LOC_KEY, "chinchompa_big")
             }
 
             row("dbrow.hunter_black_chinchompa") {
@@ -237,7 +317,65 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.chinchompa_black")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
-                columnRSCM(Box.COL_BAIT, "obj.bowl_spicymeat")
+                column(LocKeyed.COL_LOC_KEY, "chinchompa_black")
+            }
+
+            /*
+             * The two genuinely rate-blocked creatures in the whole hunter branch so far, and the
+             * only two rows here whose `(low, high)` is a guess rather than a fit.
+             *
+             * A content search of the offline wiki snapshot for the `skillingSuccess` chart marker
+             * returns nothing on `Ferret`, `Ferret (Hunter)` or `Embertailed jerboa`, and nothing on
+             * the `Box trap` technique page either - so the §2a "check the technique page too" rule
+             * has been applied and still finds no curve. Neither page states endpoints in prose.
+             *
+             * Both pairs are therefore **derived from the regular chinchompa's shape**, which is the
+             * only published box-trap curve that is not one of the two identical high-level ones.
+             * Its `(6, 268)` gives 146/256 at its own requirement of 53 and reaches certainty at
+             * L94, i.e. 41 levels above the requirement. Each row below solves the engine formula
+             * for the pair that puts 146/256 at *its* requirement and 256/256 forty-one levels
+             * later, which reproduces the chinchompa's curve translated down the level axis rather
+             * than inventing a new shape. Both are exact: the pair reproduces those two anchors to
+             * the integer.
+             *
+             * Recorded for the record, because a later measurement should be checked against it:
+             * void ships no ferret or jerboa pair at all, so unlike the butterflies there was no
+             * prior guess to re-derive from.
+             */
+            row("dbrow.hunter_ferret") {
+                columnRSCM(COL_NPC, "npc.hunting_ferret")
+                column(COL_LEVEL, 27)
+                column(COL_XP, 1152)
+                // guessed: chinchompa curve translated to a level-27 requirement, see the block
+                // comment above. Not measured, not published.
+                column(COL_SUCCESS_LOW, 75)
+                column(COL_SUCCESS_HIGH, 338)
+                // `obj.hunting_ferret` (10092) is the item Ferret; `npc.hunting_ferret` (1505) is
+                // the creature. The cache reuses the symbol across the two namespaces, exactly as
+                // it does for `huntingbeast_claws`.
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.hunting_ferret")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                column(LocKeyed.COL_LOC_KEY, "ferret")
+            }
+
+            row("dbrow.hunter_embertailed_jerboa") {
+                // Not `npc.varlamore_jerboa` (12982), which is ambient scenery named plain "Jerboa"
+                // with no category; this one is `name=Embertailed jerboa` and carries the same
+                // `category_374` as every other box-trap creature.
+                columnRSCM(COL_NPC, "npc.varlamore_hunterjerboa01")
+                column(COL_LEVEL, 39)
+                column(COL_XP, 1370)
+                // guessed: chinchompa curve translated to a level-39 requirement, see the block
+                // comment above. Not measured, not published.
+                column(COL_SUCCESS_LOW, 43)
+                column(COL_SUCCESS_HIGH, 306)
+                // Large jerboa tail is 1/50 *and* rumour-conditional, so omitted for the reason
+                // Kebbity tuft is.
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.hunting_jerboa_tail")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                column(LocKeyed.COL_LOC_KEY, "jerboa")
             }
         }
 
@@ -681,6 +819,135 @@ object HunterTables {
                 column(COL_CAUGHT_MIN, 1, 1, 1)
                 column(COL_CAUGHT_MAX, 1, 1, 1)
                 columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onspeedy2")
+            }
+        }
+
+    /**
+     * The four butterflies and the sunlight moth.
+     *
+     * Structurally the simplest table here, and the second that is not a trap: butterfly netting
+     * lays nothing, transforms nothing and caps nothing, so like [magicBoxCreatures] this is the
+     * shared 0-7 block and no more. The empty jar a catch consumes and the two nets are one item
+     * each for the whole family, so they live as constants on the content side. No `TrapFamily`
+     * entry backs it, and its rows are read into `ButterflyCreatures.all`, never
+     * `HunterCreatures.all`.
+     *
+     * Levels and xp are from the `Butterfly (Hunter)` page's Butterflies table (oldid=15242004):
+     * 15/25/35/45/65 and 24/34/44/54/74 xp. `caught_items` is the *filled* jar, which is the reward
+     * only when the player is carrying an empty one - see `HunterButterfly` for the other branch.
+     *
+     * **The moonlight moth is deliberately absent.** Its npc (`npc.moth_moonlight`, 12771) and its
+     * jar (`obj.butterfly_jar_moonmoth`, 28893) both exist and its chart is published, but it has
+     * **zero spawns** in `.data/raw-cache/map/npcs/`, so a row for it would be unreachable content.
+     * Same reason letvek and the stymphike are absent from [boxCreatures].
+     *
+     * ## The rates, which are the interesting part
+     *
+     * Only two of these five carry a published chart: black warlock (oldid=15288148) and sunlight
+     * moth (oldid=15197088). Ruby harvest, sapphire glacialis and snowy knight carry none, on any
+     * page, and the `Butterfly (Hunter)` technique page carries none either - the §2a "check the
+     * technique page too" rule applied and still empty.
+     *
+     * The two that *are* published turn out to be **pointwise identical over the 21 levels they
+     * share**, and both fit the same single integer pair, `(20, 296)`, with no other pair
+     * reproducing every point. That is the load-bearing observation: the sunlight moth requires 65
+     * and starts at 201/256, which is exactly what the black warlock's curve reads at 65 - not the
+     * 145/256 the warlock starts at. So a butterfly's catch chance is a function of **level alone**,
+     * not of species; the requirement only decides where you may join the curve. A per-species curve
+     * anchored at each requirement is ruled out by those two charts, not assumed away.
+     *
+     * The three unpublished rows therefore ship `(20, 296)` as well. That is still a guess - none of
+     * the three has been charted or measured - but it is an interpolation *between* two published
+     * members of the same family twenty levels apart that agree exactly, rather than an
+     * extrapolation off one. It is flagged as a guess on each row all the same.
+     *
+     * void independently fits `chance = [20, 296]` for its own black warlock, which is the same pair
+     * from an unrelated derivation and confirms the engine formula maps onto the wiki template. Its
+     * three guesses differ - `[60, 415]`, `[45, 390]`, `[30, 320]`, each annotated "Guessed from
+     * warlock curve against implings" - and are **not** adopted: they predate the sunlight moth,
+     * which is Varlamore content, so that curve was not available to check them against. They are
+     * the same three creatures this file guesses, which is corroboration that the guessing is
+     * happening in the right place.
+     *
+     * ## What is not modelled: the magic net's faster curve
+     *
+     * Both published charts carry a *second* series for the magic butterfly net, and it fits
+     * `(40, 316)` on both - exactly `(low + 20, high + 20)`. void applies the same `+20` from an
+     * unrelated derivation. That relationship is therefore well-sourced and cheap, and it is applied
+     * on the content side as a constant rather than a second column pair, so that the three guessed
+     * rows do not each need a second guess. See `HunterButterfly.NET_BONUS`.
+     *
+     * The 153 extracted chart points, both series and all three creatures, live in the gitignored
+     * `.data/cache/wiki-hunter/butterfly-chance.tsv` with the oldids in its header; the oldids above
+     * are the source of truth, not the file. Extraction went through the `osrs-cache` MCP
+     * `get_wiki_section` - the sqlite `chunks` route truncates at ~1KB and silently returns a
+     * near-empty curve.
+     */
+    fun butterflyCreatures(): DBTable =
+        dbTable("dbtable.hunter_butterfly_creatures", serverOnly = true) {
+            creatureColumns()
+
+            row("dbrow.hunter_ruby_harvest") {
+                columnRSCM(COL_NPC, "npc.butterfly_ruby")
+                column(COL_LEVEL, 15)
+                column(COL_XP, 240)
+                // guessed: not charted anywhere. The pair the two published members of this family
+                // share; see the class doc.
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_ruby")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            row("dbrow.hunter_sapphire_glacialis") {
+                columnRSCM(COL_NPC, "npc.butterfly_glacialis")
+                column(COL_LEVEL, 25)
+                column(COL_XP, 340)
+                // guessed: not charted anywhere. See the class doc.
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_glacialis")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            row("dbrow.hunter_snowy_knight") {
+                columnRSCM(COL_NPC, "npc.butterfly_snowy")
+                column(COL_LEVEL, 35)
+                column(COL_XP, 440)
+                // guessed: not charted anywhere. See the class doc.
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_snowy")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            // Published, 41 charted points over L45-85, fit pinned to this single pair.
+            row("dbrow.hunter_black_warlock") {
+                columnRSCM(COL_NPC, "npc.butterfly_warlock")
+                column(COL_LEVEL, 45)
+                column(COL_XP, 540)
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_warlock")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            // Published, 21 charted points over L65-85, same pair. The cache name really is
+            // `name=Sunlight Moth` with a capital M, and so is the wiki page title - which is why a
+            // case-sensitive search for "Sunlight moth" reports no chart and is wrong.
+            row("dbrow.hunter_sunlight_moth") {
+                columnRSCM(COL_NPC, "npc.moth_sunlight")
+                column(COL_LEVEL, 65)
+                column(COL_XP, 740)
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_sunmoth")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
             }
         }
 }

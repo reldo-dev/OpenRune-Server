@@ -157,7 +157,7 @@ class FalconryTest {
             (falconryNpcs intersect trapNpcs).isEmpty(),
             "Falconry creatures must not appear in HunterCreatures.all",
         )
-        assertEquals(18, HunterCreatures.all.size, "trap creature count must not change")
+        assertEquals(21, HunterCreatures.all.size, "trap creature count must not change")
         // The five shipped trap families and no sixth.
         assertEquals(5, TrapFamily.entries.size, "falconry must not add a TrapFamily entry")
     }

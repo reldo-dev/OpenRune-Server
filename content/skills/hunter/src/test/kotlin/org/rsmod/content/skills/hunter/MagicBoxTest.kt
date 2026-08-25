@@ -234,8 +234,11 @@ class MagicBoxTest {
             families.take(firstNew).distinct(),
             "The order of the three shipped blocks is save data and must not change.",
         )
+        // Slice 4's three closers sit after the magic box despite being snare and box creatures:
+        // they joined tables that had already shipped, and `HunterCreatures.all` sorts every table
+        // into one list by dbrow id precisely so that "give it a higher id" is what appending means.
         assertEquals(
-            listOf(TrapFamily.NETTRAP, TrapFamily.MAGICBOX),
+            listOf(TrapFamily.NETTRAP, TrapFamily.MAGICBOX, TrapFamily.SNARE, TrapFamily.BOX),
             families.drop(firstNew).distinct(),
         )
     }

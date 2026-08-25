@@ -118,10 +118,16 @@ data class HunterCatch(val obj: String, val quantity: IntRange = 1..1)
  * always awards bones, raw bird meat, and a species feather in one go - and each entry carries its
  * own quantity, because the feather's is not one.
  *
- * [bait] is recorded but unread in v1.
+ * [locKey] is the suffix the bird snare's and box trap's loc states are named by -
+ * `loc.hunting_ojibway_trap_full_<locKey>`, `loc.hunting_boxtrap_full_<locKey>` - and is null for
+ * the three families whose states are stored whole instead. It is packed data rather than something
+ * derived from [npc] because three of the ten creatures that need it cannot be derived: the tropical
+ * wagtail is `npc.multicoloured_bird` on the `_coloured` states, the ferret has no `hunting_bird_`
+ * prefix to strip, and the embertailed jerboa is `npc.varlamore_hunterjerboa01` on the `_jerboa`
+ * states.
  *
- * The loc columns are all null for the three portable families, which build their state names from
- * a suffix on the npc's own name instead:
+ * The loc columns are all null for the three portable families, which name their states with
+ * [locKey] instead:
  * - [trappingLoc] and [fullLoc] are shared by the two fixed-loc families. The net trap's packed
  *   `catching_loc` fills [trappingLoc] - the cache's word for the state differs, the meaning does
  *   not: it is the frame shown between the catch landing and the trap settling.
@@ -139,7 +145,7 @@ data class HunterCreature(
     val caught: List<HunterCatch>,
     val successLow: Int,
     val successHigh: Int,
-    val bait: String? = null,
+    val locKey: String? = null,
     val trappingLoc: String? = null,
     val trappingLocM: String? = null,
     val fullLoc: String? = null,

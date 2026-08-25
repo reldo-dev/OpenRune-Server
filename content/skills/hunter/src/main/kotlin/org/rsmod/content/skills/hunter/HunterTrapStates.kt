@@ -213,16 +213,23 @@ object HunterTrapStates {
             "Net trap creature is missing its net_set loc: ${creature.npc}"
         }
 
-    // "npc.hunting_bird_jungle" -> "jungle". Split per family rather than one `key(creature)` with
-    // a family `when`: the deadfall builds no loc name from its npc's - its states are columns in
-    // the packed table - so there is no third suffix rule to write, only an unreachable branch to
-    // invent.
-    private fun snareKey(creature: HunterCreature): String =
-        creature.npc.substringAfterLast("hunting_bird_")
-
-    // "npc.hunting_chinchompa_big" -> "chinchompa_big"
-    private fun boxKey(creature: HunterCreature): String =
-        creature.npc.substringAfter("npc.hunting_")
+    /**
+     * The suffix the bird snare's and box trap's loc states are named by, read off the packed row.
+     *
+     * This used to be derived from the npc's own symbol - `substringAfterLast("hunting_bird_")` for
+     * the snare, `substringAfter("npc.hunting_")` for the box. Both worked for the seven creatures
+     * that shipped first and both break for the three that joined later, because Kotlin's
+     * `substringAfter`/`substringAfterLast` return the **whole string** when the delimiter is
+     * absent: the tropical wagtail (`npc.multicoloured_bird` on the `_coloured` states), the ferret
+     * (no `hunting_bird_` prefix) and the embertailed jerboa (`npc.varlamore_hunterjerboa01` on the
+     * `_jerboa` states) would each have produced a loc name like
+     * `loc.hunting_ojibway_trap_full_npc.multicoloured_bird` and thrown at the first catch of that
+     * one creature, rather than at boot. Packing the key removes the guess.
+     */
+    private fun locKey(creature: HunterCreature): String =
+        requireNotNull(creature.locKey) {
+            "Creature is missing its loc key: ${creature.npc}"
+        }
 
     /**
      * The state a *portable* trap is laid in, or null for the two families that have none.
@@ -251,8 +258,8 @@ object HunterTrapStates {
      */
     fun trappingLoc(creature: HunterCreature, dx: Int, dz: Int): String =
         when (creature.family) {
-            TrapFamily.SNARE -> "loc.hunting_ojibway_trap_trapping_${snareKey(creature)}"
-            TrapFamily.BOX -> "loc.hunting_boxtrap_trapping_${boxKey(creature)}_${compass(dx, dz)}"
+            TrapFamily.SNARE -> "loc.hunting_ojibway_trap_trapping_${locKey(creature)}"
+            TrapFamily.BOX -> "loc.hunting_boxtrap_trapping_${locKey(creature)}_${compass(dx, dz)}"
             TrapFamily.MAGICBOX -> MAGIC_BOX_TRAPPING
             TrapFamily.DEADFALL -> deadfallApproachLoc(creature, dx, dz)
             TrapFamily.NETTRAP ->
@@ -263,8 +270,8 @@ object HunterTrapStates {
 
     fun fullLoc(creature: HunterCreature): String =
         when (creature.family) {
-            TrapFamily.SNARE -> "loc.hunting_ojibway_trap_full_${snareKey(creature)}"
-            TrapFamily.BOX -> "loc.hunting_boxtrap_full_${boxKey(creature)}"
+            TrapFamily.SNARE -> "loc.hunting_ojibway_trap_full_${locKey(creature)}"
+            TrapFamily.BOX -> "loc.hunting_boxtrap_full_${locKey(creature)}"
             TrapFamily.MAGICBOX -> MAGIC_BOX_FULL
             TrapFamily.DEADFALL ->
                 requireNotNull(creature.fullLoc) {

@@ -19,44 +19,47 @@ import org.rsmod.api.table.hunter.HunterSnareCreaturesRow
  * XP is stored x10 in the packed table; the mappers below pass `row.xp` through unscaled, and
  * `HunterTrap` divides by ten once, at the point it awards.
  *
- * Quarantined, not guessed - four candidates from the design spec are deliberately left out:
- * - Letvek (`npc.hunting_letvek`, level 76 box trap) - the npc exists in the cache but has zero
- *   spawns in `.data/raw-cache/map/npcs/`.
- * - Tropical wagtail (level 19 bird snare, "coloured" trap state) - the cache defines a 5th bird
- *   snare biome state (`hunting_ojibway_trap_full_coloured`, model2=model_26839) and a matching
- *   `skill_feature_hunter_coloured_bird` entry, but there is no 5th bird npc: the cache holds
- *   exactly four (`hunting_bird_{jungle,polar,desert,woodland}`, ids 5549-5552), and none of their
- *   `model1` values is `model_26839`.
- * - Embertailed jerboa (level 39 box trap) - the npc is resolved (`npc.varlamore_hunterjerboa01`,
- *   which carries `name=Embertailed jerboa` and the same `category_374` as every other box-trap
- *   creature; the other jerboa spawn, `npc.varlamore_jerboa`, is undecorated decorative fauna with
- *   no category and the generic name "Jerboa"). What is missing is the `(low, high)` source: the
- *   Embertailed jerboa's wiki page has no Hunting technique / Hunting chance section at all, only
- *   Location and a level/xp/drop table.
- * - Ferret (level 27 box trap) - npc and obj both resolve and are spawned, but its wiki page has no
- *   catch-chance formula or chart either. The only documented Ferret percentage is a different
- *   mechanic (the chance of *keeping* a ferret after it flushes a white rabbit, used in the
- *   out-of-scope net-trap rabbit chain), not the box-trap catch chance.
+ * Quarantined - one candidate from the design spec is still deliberately left out. Letvek
+ * (`npc.hunting_letvek`, level 76 box trap) exists in the cache but has zero spawns in
+ * `.data/raw-cache/map/npcs/`, so a row for it would be unreachable content.
+ *
+ * The tropical wagtail used to be listed here too, and that exclusion was **wrong**. It claimed the
+ * cache held "exactly four" bird-snare npcs and therefore nothing to put behind the orphaned
+ * `hunting_ojibway_trap_full_coloured` state. That search was by `hunting_bird_` symbol prefix and
+ * the wagtail sits outside it: `npc.multicoloured_bird` (5548), `name=Tropical wagtail`, whose
+ * `model1=model_26839` is precisely the model the old comment cited as belonging to the orphaned
+ * state. The evidence read as proving absence was in fact the identification. A prefix search
+ * returning nothing is not absence - search by `name=`.
+ *
+ * The ferret and the embertailed jerboa were quarantined for a different and still-true reason:
+ * neither has a published catch-chance curve anywhere. They ship anyway, on annotated guesses
+ * derived from the regular chinchompa's shape, under the rates policy that took effect after they
+ * were first excluded. `HunterTables.boxCreatures` records the derivation.
  */
 object HunterCreatures {
     /**
-     * **Append only.** A sprung trap persists its creature as an index into this list, so a
-     * technique's block has to be concatenated after every block already shipped. Inserting the two
-     * slice-2 blocks anywhere earlier would shift every index already written into a player's save
-     * and turn their caught chinchompa into a salamander on the next login.
+     * **Append only.** A sprung trap persists its creature as an index into this list, so a new row
+     * has to land after every row already shipped or it turns someone's caught chinchompa into a
+     * salamander on their next login.
+     *
+     * Sorted by dbrow id across **all five tables at once**, not per table and concatenated. Those
+     * two orderings agreed for as long as each technique arrived as a whole block numbered above the
+     * last - snare 56300-03, box 56304-06, deadfall 56310-14, and so on - so this is a no-op for
+     * every row shipped so far. They stop agreeing the moment a row joins a table that has already
+     * shipped, which is what the tropical wagtail, the ferret and the embertailed jerboa do: under a
+     * per-table concatenation the wagtail would land at index 4 whatever id it was given, because
+     * it sorts within the snare block, and the three chinchompas behind it would each shift one
+     * place. Sorting globally makes "give it an id above everything" mean what it says, and is what
+     * lets the append-only rule be enforced by choosing an id rather than by choosing a table.
      */
     val all: List<HunterCreature> by lazy {
-        HunterSnareCreaturesRow.all().sortedBy(HunterSnareCreaturesRow::rowId).map(::snare) +
-            HunterBoxCreaturesRow.all().sortedBy(HunterBoxCreaturesRow::rowId).map(::box) +
-            HunterDeadfallCreaturesRow.all()
-                .sortedBy(HunterDeadfallCreaturesRow::rowId)
-                .map(::deadfall) +
-            HunterNettrapCreaturesRow.all()
-                .sortedBy(HunterNettrapCreaturesRow::rowId)
-                .map(::netTrap) +
-            HunterMagicboxCreaturesRow.all()
-                .sortedBy(HunterMagicboxCreaturesRow::rowId)
-                .map(::magicBox)
+        val rows =
+            HunterSnareCreaturesRow.all().map { it.rowId to snare(it) } +
+                HunterBoxCreaturesRow.all().map { it.rowId to box(it) } +
+                HunterDeadfallCreaturesRow.all().map { it.rowId to deadfall(it) } +
+                HunterNettrapCreaturesRow.all().map { it.rowId to netTrap(it) } +
+                HunterMagicboxCreaturesRow.all().map { it.rowId to magicBox(it) }
+        rows.sortedBy { it.first }.map { it.second }
     }
 
     /** The deadfall subset, one of the two families whose loc states are per-creature data. */
@@ -131,6 +134,7 @@ object HunterCreatures {
                 },
             successLow = row.successLow,
             successHigh = row.successHigh,
+            locKey = row.locKey,
         )
     }
 
@@ -144,7 +148,7 @@ object HunterCreatures {
                 listOf(HunterCatch(row.caughtItems.internalName, row.caughtMin..row.caughtMax)),
             successLow = row.successLow,
             successHigh = row.successHigh,
-            bait = row.bait.internalName,
+            locKey = row.locKey,
         )
 
     /**
@@ -214,8 +218,8 @@ object HunterCreatures {
      * The magic box, whose table is the shared 0-7 block and nothing else: one creature means every
      * loc state is shared by construction, so all four live as constants in [HunterTrapStates].
      *
-     * No `bait` either, unlike [box] - the magic box takes beads rather than a spicy stew, and bait
-     * is out of scope for both.
+     * No `loc_key` either, unlike [box]: with one creature in the family there is no suffix to vary,
+     * so all four states are constants in [HunterTrapStates].
      */
     private fun magicBox(row: HunterMagicboxCreaturesRow): HunterCreature =
         HunterCreature(
