@@ -142,14 +142,17 @@ object HunterTables {
      * meaning, the overworld value, and this column carries the Puro-Puro one, so neither column is
      * a special case that only this table understands.
      *
-     * Both are populated even though this slice ships only the Puro-Puro creatures and reads only
-     * [COL_XP_PURO]. That is deliberate and is not the unread-column trap [netTrapCreatures]
-     * documents for `bait`: the overworld value is published data with a known consumer - the
-     * overworld implings need a spawner before they can ship - and omitting it would leave the
-     * shared `xp` column meaning "the Puro-Puro value" in this table alone.
+     * [COL_NPC_OVERWORLD] is why one row covers both: every impling has **two** npc ids, a
+     * Puro-Puro `_maze` one in the shared [COL_NPC] and an overworld one here. They are the same
+     * creature with the same level, rate and reward, differing only in which experience value a
+     * catch awards - and the wiki is explicit that the experience follows the **spawn's** origin,
+     * not the player's location, so the id that was caught is exactly the right thing to key on.
+     * Splitting them into two rows would have duplicated every other column and invited them to
+     * drift apart.
      */
     private object Impling {
         const val COL_XP_PURO = 8
+        const val COL_NPC_OVERWORLD = 9
     }
 
     private object Crab {
@@ -1151,6 +1154,7 @@ object HunterTables {
         dbTable("dbtable.hunter_impling_creatures", serverOnly = true) {
             creatureColumns()
             column("xp_puro", Impling.COL_XP_PURO, VarType.INT)
+            column("npc_overworld", Impling.COL_NPC_OVERWORLD, VarType.NPC)
 
             row("dbrow.hunter_baby_impling") {
                 columnRSCM(COL_NPC, "npc.ii_impling_type_1_maze")
@@ -1162,6 +1166,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_1")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_1")
             }
 
             row("dbrow.hunter_young_impling") {
@@ -1174,6 +1179,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_2")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_2")
             }
 
             row("dbrow.hunter_gourmet_impling") {
@@ -1186,6 +1192,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_3")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_3")
             }
 
             row("dbrow.hunter_earth_impling") {
@@ -1198,6 +1205,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_4")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_4")
             }
 
             row("dbrow.hunter_essence_impling") {
@@ -1210,6 +1218,7 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_5")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_5")
             }
 
             row("dbrow.hunter_eclectic_impling") {
@@ -1222,6 +1231,85 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_6")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_6")
+            }
+
+            row("dbrow.hunter_nature_impling") {
+                columnRSCM(COL_NPC, "npc.ii_impling_type_7_maze")
+                column(COL_LEVEL, 58)
+                column(COL_XP, 360)
+                column(Impling.COL_XP_PURO, 340)
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 200)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_7")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_7")
+            }
+
+            row("dbrow.hunter_magpie_impling") {
+                columnRSCM(COL_NPC, "npc.ii_impling_type_8_maze")
+                column(COL_LEVEL, 65)
+                column(COL_XP, 2160)
+                column(Impling.COL_XP_PURO, 440)
+                column(COL_SUCCESS_LOW, 15)
+                column(COL_SUCCESS_HIGH, 177)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_8")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_8")
+            }
+
+            row("dbrow.hunter_ninja_impling") {
+                columnRSCM(COL_NPC, "npc.ii_impling_type_9_maze")
+                column(COL_LEVEL, 74)
+                column(COL_XP, 2400)
+                column(Impling.COL_XP_PURO, 500)
+                column(COL_SUCCESS_LOW, 10)
+                column(COL_SUCCESS_HIGH, 151)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_9")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_9")
+            }
+
+            row("dbrow.hunter_crystal_impling") {
+                columnRSCM(COL_NPC, "npc.ii_impling_type_12_johnny")
+                column(COL_LEVEL, 80)
+                column(COL_XP, 2800)
+                column(Impling.COL_XP_PURO, 2800)
+                column(COL_SUCCESS_LOW, 8)
+                column(COL_SUCCESS_HIGH, 141)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_12")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_12_johnny")
+            }
+
+            row("dbrow.hunter_dragon_impling") {
+                columnRSCM(COL_NPC, "npc.ii_impling_type_10_maze")
+                column(COL_LEVEL, 83)
+                column(COL_XP, 3000)
+                column(Impling.COL_XP_PURO, 650)
+                column(COL_SUCCESS_LOW, 5)
+                column(COL_SUCCESS_HIGH, 125)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_10")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_10")
+            }
+
+            row("dbrow.hunter_lucky_impling") {
+                columnRSCM(COL_NPC, "npc.ii_impling_type_11_maze")
+                column(COL_LEVEL, 89)
+                column(COL_XP, 3800)
+                column(Impling.COL_XP_PURO, 800)
+                column(COL_SUCCESS_LOW, 3)
+                column(COL_SUCCESS_HIGH, 100)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.ii_captured_impling_11")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(Impling.COL_NPC_OVERWORLD, "npc.ii_impling_type_11")
             }
         }
 }

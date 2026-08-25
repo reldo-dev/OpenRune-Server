@@ -209,9 +209,12 @@ class HunterWiringTest {
         val bus = Wiring().start(scripts.impling)
 
         val creatures = ImplingCreatures.all
-        assertEquals(6, creatures.size, "the six Puro-Puro implings ship")
+        assertEquals(12, creatures.size, "all twelve implings ship")
         for (creature in creatures) {
+            // Both forms, because both are npcs a player can click. Registering only the Puro-Puro
+            // one would leave every overworld impling uncatchable, and no other test would notice.
             assertTrue(bus.hasOpNpc1(creature.npc), "`Catch` on ${creature.npc}")
+            assertTrue(bus.hasOpNpc1(creature.npcOverworld), "`Catch` on ${creature.npcOverworld}")
         }
 
         // Nothing is laid, nothing is rented and no controller is ever created.
@@ -571,7 +574,7 @@ class HunterWiringTest {
         val falconry = FalconryEvents(falconWorld.falconry)
         val butterfly = ButterflyEvents(butterflyWorld.butterfly)
         val crabTrap = CrabTrapEvents(crabWorld.crabTrap)
-        val impling = ImplingEvents(butterflyWorld.impling)
+        val impling = ImplingEvents(butterflyWorld.impling, butterflyWorld.implingSpawner)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)

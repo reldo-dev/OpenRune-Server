@@ -39,8 +39,8 @@ class ImplingTest {
      * them the wrong way round would still award a plausible-looking number.
      */
     @Test
-    fun theSixShippedRowsCarryTheWikisLevelsAndBothExperienceValues() {
-        assertEquals(WIKI.size, ImplingCreatures.all.size, "six Puro-Puro implings ship")
+    fun everyShippedRowCarriesTheWikisLevelsAndBothExperienceValues() {
+        assertEquals(WIKI.size, ImplingCreatures.all.size, "all twelve implings ship")
         assertEquals(WIKI.map { it.npc }, ImplingCreatures.all.map { it.npc }, "in tier order")
 
         for (entry in WIKI) {
@@ -49,6 +49,9 @@ class ImplingTest {
             // Both stored x10, as every hunter experience column is.
             assertEquals(entry.puroXp * 10, creature.xpPuro, "${entry.npc} Puro-Puro xp")
             assertEquals(entry.overworldXp * 10, creature.xp, "${entry.npc} overworld xp")
+            // The crystal impling is the one row whose two experience values are equal, because it
+            // is Prifddinas-only and its infobox publishes a single figure - it can never be a
+            // Puro-Puro spawn, so the two columns have nothing to disagree about.
             assertEquals(listOf(entry.jar), creature.caught.map { it.obj }, "${entry.npc} jar")
             assertEquals(1..1, creature.caught.single().quantity, "${entry.npc} jar quantity")
         }
@@ -110,10 +113,28 @@ class ImplingTest {
      * added, that stops being true and the jar rule becomes wrong for it - so this fails first.
      */
     @Test
-    fun everyShippedImplingIsAPuroPuroMazeNpc() {
+    fun everyImplingCarriesBothOfItsNpcIds() {
         for (creature in ImplingCreatures.all) {
-            assertTrue(creature.npc.endsWith("_maze"), "${creature.npc} is not a Puro-Puro npc")
+            if (creature.npc.endsWith("_maze")) {
+                // The Puro-Puro id is the overworld one plus the suffix, which is what makes them
+                // recognisably one creature rather than two rows that happen to agree.
+                assertEquals(
+                    creature.npc,
+                    creature.npcOverworld + "_maze",
+                    "${creature.npc} is not the maze form of ${creature.npcOverworld}",
+                )
+            } else {
+                // The crystal impling is the exception and the only one: it is Prifddinas-only and
+                // has no Puro-Puro form at all, so both columns hold the same overworld id.
+                assertEquals("npc.ii_impling_type_12_johnny", creature.npc)
+                assertEquals(creature.npc, creature.npcOverworld)
+            }
         }
+        assertEquals(
+            1,
+            ImplingCreatures.all.count { !it.npc.endsWith("_maze") },
+            "Exactly one impling should lack a Puro-Puro form.",
+        )
     }
 
     /** Implings must never appear in the trap engine's world, or in butterfly netting's. */
@@ -411,12 +432,16 @@ class ImplingTest {
      * rather than half-working.
      */
     @Test
-    fun anUnshippedImplingIsNotCaught() {
+    fun theWanderingImplingIsNotCatchable() {
         val world = HunterButterflyTestWorld()
         val player = world.addPlayer(hunterLvl = 99)
         world.wield(player, BUTTERFLY_NET)
         world.giveItem(player, IMPLING_JAR)
-        val nature = world.addNpc("npc.ii_impling_type_7_maze")
+        // `ii_lost_impling` (5737) is the "Wandering impling" in the Zanaris wheat field. It is
+        // an impling by name and model and carries `Talk-to`/`Check-gates`, not `Catch` - the wiki
+        // says outright that he cannot be caught. The nearest thing to a false positive this table
+        // can produce.
+        val nature = world.addNpc("npc.ii_lost_impling")
         world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
 
         val caught = world.runImpling(player) { with(it) { catchImpling(nature) } }
@@ -543,6 +568,54 @@ class ImplingTest {
                     "obj.ii_captured_impling_5",
                 ),
                 WikiImpling(ECLECTIC, "Eclectic impling", 50, 30, 32, "obj.ii_captured_impling_6"),
+                WikiImpling(
+                    "npc.ii_impling_type_7_maze",
+                    "Nature impling",
+                    58,
+                    34,
+                    36,
+                    "obj.ii_captured_impling_7",
+                ),
+                WikiImpling(
+                    "npc.ii_impling_type_8_maze",
+                    "Magpie impling",
+                    65,
+                    44,
+                    216,
+                    "obj.ii_captured_impling_8",
+                ),
+                WikiImpling(
+                    "npc.ii_impling_type_9_maze",
+                    "Ninja impling",
+                    74,
+                    50,
+                    240,
+                    "obj.ii_captured_impling_9",
+                ),
+                WikiImpling(
+                    "npc.ii_impling_type_12_johnny",
+                    "Crystal impling",
+                    80,
+                    280,
+                    280,
+                    "obj.ii_captured_impling_12",
+                ),
+                WikiImpling(
+                    "npc.ii_impling_type_10_maze",
+                    "Dragon impling",
+                    83,
+                    65,
+                    300,
+                    "obj.ii_captured_impling_10",
+                ),
+                WikiImpling(
+                    "npc.ii_impling_type_11_maze",
+                    "Lucky impling",
+                    89,
+                    80,
+                    380,
+                    "obj.ii_captured_impling_11",
+                ),
             )
 
         @JvmStatic

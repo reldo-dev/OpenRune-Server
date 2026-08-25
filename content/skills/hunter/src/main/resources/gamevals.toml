@@ -66,6 +66,14 @@ hunter_gourmet_impling = 56382
 hunter_earth_impling = 56383
 hunter_essence_impling = 56384
 hunter_eclectic_impling = 56385
+# The six that need the spawner before they are reachable. Ordered by level so the list reads that
+# way; crystal sits between ninja and dragon because it is level 80, even though it is type 12.
+hunter_nature_impling = 56386
+hunter_magpie_impling = 56387
+hunter_ninja_impling = 56388
+hunter_crystal_impling = 56389
+hunter_dragon_impling = 56390
+hunter_lucky_impling = 56391
 
 [gamevals.controller]
 hunter_trap = 2

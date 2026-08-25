@@ -46,7 +46,7 @@ class HunterButterflyTestWorld {
     val random: ScriptedRandom = ScriptedRandom()
 
     private val playerList: PlayerList = PlayerList()
-    private val npcList: NpcList = NpcList()
+    val npcList: NpcList = NpcList()
 
     private val collision = CollisionFlagMap()
     private val eventBus = EventBus()
@@ -66,10 +66,14 @@ class HunterButterflyTestWorld {
     val butterfly: HunterButterfly =
         HunterButterfly(npcRepo = npcRepo, gameRandom = random, xpMods = XpModifiers(emptySet()))
 
+    /** Exposed so the wiring test can build [ImplingEvents] without a second world. */
+    val implingSpawner: ImplingSpawner = ImplingSpawner(npcList, npcRepo, random)
+
     val impling: HunterImpling =
         HunterImpling(
             npcRepo = npcRepo,
             objRepo = objRepo,
+            spawner = implingSpawner,
             gameRandom = random,
             xpMods = XpModifiers(emptySet()),
         )

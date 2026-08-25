@@ -17,13 +17,15 @@ import org.rsmod.api.table.hunter.HunterImplingCreaturesRow
  * parameters. The magic-net and barehanded curve is those two coefficients plus
  * `HunterButterfly.NET_BONUS`, not a second column pair.
  *
- * [xp] and [xpPuro] are both the *same* creature's experience, stored x10 as every hunter experience
- * column is, and which one applies depends on where the impling spawned - the wiki publishes both
- * per creature and the gap widens with tier (the magpie is 44 against 216). [xpPuro] is what a catch
- * awards today, because every row in this table is a `_maze` npc; [xp] is the overworld value, and
- * it is carried rather than dropped so that the shared `xp` column does not silently mean something
- * different in this table than in the other eight. Its consumer is the overworld impling spawner,
- * which does not exist yet.
+ * Every impling has **two** npc ids for one creature: [npc] is the Puro-Puro `_maze` one and
+ * [npcOverworld] the overworld one. They share a level, a rate and a reward, and differ only in the
+ * experience a catch awards - [xpPuro] against [xp], both stored x10 as every hunter experience
+ * column is. The gap widens sharply with tier: the magpie is 44 against 216.
+ *
+ * **Which one applies is decided by the id that was caught, not by where the player is standing.**
+ * *Eclectic impling*: "30 Hunter experience (if a Puro-Puro spawn) or 32 Hunter experience (if an
+ * overworld spawn) (note - overworld spawn versions can spawn in Puro-Puro)". So an area check would
+ * be the wrong question; [experienceFor] asks the right one.
  *
  * [caught] is the filled jar, exactly as it is for a butterfly: one non-stackable jar swapped for
  * the empty one. It is a list of [HunterCatch] rather than a bare obj so the reward shape matches
@@ -31,13 +33,23 @@ import org.rsmod.api.table.hunter.HunterImplingCreaturesRow
  */
 data class ImplingCreature(
     val npc: String,
+    val npcOverworld: String,
     val level: Int,
     val xp: Int,
     val xpPuro: Int,
     val caught: List<HunterCatch>,
     val successLow: Int,
     val successHigh: Int,
-)
+) {
+    /**
+     * The experience a catch on [caughtNpc] awards, in tenths.
+     *
+     * Anything that is not the overworld id is treated as the Puro-Puro spawn, so a caller that
+     * somehow passes an unrelated id gets the lower value rather than the higher one.
+     */
+    fun experienceFor(caughtNpc: Int): Int =
+        if (caughtNpc == npcOverworld.asRSCM(RSCMType.NPC)) xp else xpPuro
+}
 
 /**
  * The impling creature table, read back from the packed dbtable.
@@ -64,7 +76,12 @@ object ImplingCreatures {
      * `RSCM.getReverseMapping`'s linear scan of the whole npc table to find out what it landed on.
      */
     private val byNpcId: Map<Int, ImplingCreature> by lazy {
-        all.associateBy { it.npc.asRSCM(RSCMType.NPC) }
+        buildMap {
+            for (creature in all) {
+                put(creature.npc.asRSCM(RSCMType.NPC), creature)
+                put(creature.npcOverworld.asRSCM(RSCMType.NPC), creature)
+            }
+        }
     }
 
     /** The impling a `Catch` op landed on, or null if it is not one. */
@@ -76,6 +93,7 @@ object ImplingCreatures {
     private fun creature(row: HunterImplingCreaturesRow): ImplingCreature =
         ImplingCreature(
             npc = row.npc.internalName,
+            npcOverworld = row.npcOverworld.internalName,
             level = row.level,
             xp = row.xp,
             xpPuro = row.xpPuro,

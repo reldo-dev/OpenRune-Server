@@ -3743,3 +3743,137 @@ id = "npc.hunting_falcon_onsilent"
 inherit = "npc.hunting_falcon_onsilent"
 moveRestrict = "NoMove"
 wanderRange = 0
+
+# Implings roam; nothing in the cache says how far, so it is set here.
+#
+# "Implings will stay within a radius of a hundred tiles from their spawn point."
+# (`Impling`, oldid=15303398, Spawn mechanics.) Without a wanderRange the engine's
+# NpcWanderModeProcessor takes its spawn-retreat branch and they stand still, which is
+# what they did before this block existed.
+#
+# The Puro-Puro `_maze` forms get 12 rather than 100, and that number is NOT sourced: no
+# page states a Puro-Puro radius. 100 is provably wrong there - Puro-Puro is a single map
+# square, so a hundred-tile box would let them wander out of the region entirely - and void
+# uses 10 for its own Puro implings. Treat 12 as an upper bound to confirm in-game, not as a
+# measured figure.
+#
+# Not set: a movement restriction. void models implings as sky-collision so they cross water
+# and scenery, and that matches how they behave in-game, but no wiki page states it and
+# BlockedNormal would let them path onto water we have no reason to put them on. Left Normal
+# deliberately; revisit with an in-game observation rather than a guess.
+
+[[npc]]
+id = "npc.ii_impling_type_1"
+inherit = "npc.ii_impling_type_1"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_1_maze"
+inherit = "npc.ii_impling_type_1_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_2"
+inherit = "npc.ii_impling_type_2"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_2_maze"
+inherit = "npc.ii_impling_type_2_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_3"
+inherit = "npc.ii_impling_type_3"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_3_maze"
+inherit = "npc.ii_impling_type_3_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_4"
+inherit = "npc.ii_impling_type_4"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_4_maze"
+inherit = "npc.ii_impling_type_4_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_5"
+inherit = "npc.ii_impling_type_5"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_5_maze"
+inherit = "npc.ii_impling_type_5_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_6"
+inherit = "npc.ii_impling_type_6"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_6_maze"
+inherit = "npc.ii_impling_type_6_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_7"
+inherit = "npc.ii_impling_type_7"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_7_maze"
+inherit = "npc.ii_impling_type_7_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_8"
+inherit = "npc.ii_impling_type_8"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_8_maze"
+inherit = "npc.ii_impling_type_8_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_9"
+inherit = "npc.ii_impling_type_9"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_9_maze"
+inherit = "npc.ii_impling_type_9_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_10"
+inherit = "npc.ii_impling_type_10"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_10_maze"
+inherit = "npc.ii_impling_type_10_maze"
+wanderRange = 12
+
+[[npc]]
+id = "npc.ii_impling_type_11"
+inherit = "npc.ii_impling_type_11"
+wanderRange = 100
+
+[[npc]]
+id = "npc.ii_impling_type_11_maze"
+inherit = "npc.ii_impling_type_11_maze"
+wanderRange = 12
+
+# Prifddinas only, so it has no `_maze` form and only the overworld radius applies.
+[[npc]]
+id = "npc.ii_impling_type_12_johnny"
+inherit = "npc.ii_impling_type_12_johnny"
+wanderRange = 100

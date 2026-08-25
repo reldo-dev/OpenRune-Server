@@ -1,0 +1,240 @@
+# impling	item	min	max	rarity_num	rarity_den	section	obj
+# Published impling-jar loot tables for the SECOND six implings, extracted 2026-08-25 from the
+# offline wiki snapshot 20260817 via the `osrs-cache` MCP `get_wiki_sections` + `get_wiki_section`.
+# Companion to `impling-loot.tsv` (baby, young, gourmet, earth, essence, eclectic); same schema,
+# same conventions. Each impling was read from BOTH pages - the creature page and the jar item
+# page - and reconciled. They agree on every item, quantity and rarity for all six. The ONLY
+# difference anywhere is row ORDER, on magpie: the creature page lists the eight noted rows first
+# (Runite bar, Diamond, Diamond amulet, Amulet of power, Ring of life, Ring of forging, Ring of
+# recoil after Black dragonhide), the jar page interleaves them. Same 20 items, same rates, same
+# stack sizes on both. No value disagreement on any of the six.
+#
+# All twelve pages carry the banner "The following drop rates are provided by Jagex, unless
+# otherwise specified." - these are authoritative published rates, not community drop-log
+# estimates.
+#
+# Provenance oldids (creature page / jar item page):
+#   nature    Nature impling    15297392  /  Nature impling jar    15185248
+#   magpie    Magpie impling    15297395  /  Magpie impling jar    15185224
+#   ninja     Ninja impling     15297397  /  Ninja impling jar     15185694
+#   crystal   Crystal impling   15250580  /  Crystal impling jar   15189402
+#   dragon    Dragon impling    15297400  /  Dragon impling jar    15184103
+#   lucky     Lucky impling     15297402  /  Lucky impling jar     15187655
+#
+# METHOD NOTE: the derived retrieval text the MCP returns was cross-checked against the lossless
+# Parsoid HTML in `wiki.sqlite` (`pages.raw_content_zstd`, zstd streaming decompress) by counting
+# <tr> in every `item-drops` table. Counts match exactly and nothing was dropped:
+#   nature 19 main + 1 tertiary;   nature jar 1 jar-return + 19 main + 1 tertiary;
+#   magpie 20 + 1;  ninja 19 + 1;  crystal 18 + 2;  dragon 19 + 1;  lucky 5 main, no tertiary.
+# The rows below are generated FROM that raw HTML, not from the derived text. The sqlite `chunks`
+# table was NOT used - it stores truncated rendered text.
+#
+# SECTION VALUES: `main` and `tertiary` only. No `preroll` in this batch - gourmet's Grubby key is
+# the only pre-roll among the twelve implings.
+#
+# MAIN-TABLE RARITY SUMS - every one of the six sums to exactly 1:
+#   nature 9x(1/10) + 10x(1/100) = 1        magpie 1x(2/21) + 19x(1/21) = 1
+#   ninja 19x(1/19) = 1                     crystal 18x(1/18) = 1
+#   dragon 19x(1/19) = 1                    lucky 5x(1/5) = 1
+# Tertiary rows are independent rolls and are excluded from those sums by design.
+# Magpie's Black dragonhide is printed as `2/21`, not reduced - kept verbatim, and it is what
+# makes the 20-row table sum to 1 over 21 slots.
+#
+# LUCKY IS NOT AN ORDINARY ITEM TABLE and has been encoded verbatim rather than forced into one.
+# The wiki publishes five rows whose Item cells read "Roll from easy clue table", "... medium ...",
+# "... hard ...", "... elite ...", "... master ...", each 1/5, quantity 1. Prose on both pages
+# (oldid 15297402 / 15187655): "Looting a lucky impling gives players one roll on the drop table of
+# an easy, medium, hard, elite, or master clue scroll. There is an equal chance of rolling into
+# each tier's clue scroll table." Sourced to Mod Ash, 1 October 2016: "It rolls the easy, medium,
+# hard, elite or master clue lists with equal chance of each."
+#   - The five rows are kept as published, in the `main` section, at 1/5 each. They sum to 1.
+#   - Their `obj` cells are EMPTY. A row here names a TABLE, not an item, so there is no item
+#     behind it - the same rule the first batch applied to baby's `Nothing` row. The wiki
+#     illustrates each row with the tier's reward-casket icon; for reference those caskets are
+#     obj.trail_reward_casket_easy / _medium / _hard / _elite / _master, but a lucky impling does
+#     NOT grant a casket, so naming one in the obj column would be wrong.
+#   - CAVEAT ON THE MASTER ROW, published on both pages: "Although looting a lucky impling has a
+#     chance of rolling the master clue scroll table, it is not possible to receive a bloodhound
+#     pet when doing so. Similarly, it is not possible to receive a master clue scroll as a result
+#     of opening a lucky impling jar." Mod Ash, 7 April 2019: "[Would it be possible to get a
+#     master clue scroll from a lucky imp since they give a random clue reward?] I'm afraid that -
+#     and the dog - are not on their list as far as I know."
+#   - Lucky has NO tertiary table at all - the only one of the twelve implings without one.
+#
+# CRYSTAL is Prifddinas-only and structurally the odd one of the remaining five. Confirmed from
+# `Crystal impling` oldid 15250580: "Currently, crystal implings can only be caught from rare
+# spawns within Prifddinas. One may be found at a time on each world, respawning at :00 and :30,
+# and becoming visible 3 minutes afterward." Released 25 July 2019 (Song of the Elves), npc ids
+# 8741-8757, 80 Hunter (74 with a super hunter potion), 90 barehanded, 280 Hunter xp.
+# Two structural differences from its neighbours:
+#   - its tertiary table has TWO rows, not one: Clue scroll (elite) 1/50 AND Elven signet 1/128.
+#     Every other impling in both batches has a single-row tertiary. The signet is the unique.
+#   - 13 of its 18 main rows are variable stacks; the other tables are mostly fixed quantities.
+# Its page also has no "Rarity" section and its Loot prose omits the per-clue profit line the
+# other pages carry. Neither affects the table.
+#
+# DRAGON has two rows the reader should not mistake for errors:
+#   - `Dragonstone bolt tips` appears TWICE, both at 1/19: once as 10-30 and once as a flat 36.
+#     That is what the wiki publishes on both pages; it is a genuine two-slot entry, the same
+#     shape as earth `Mithril ore` and essence `Pure essence` in the first batch.
+#   - `Dragon javelin tips` (25-35, 1/19) carries footnote [d 1]: "Only dropped after completion
+#     of Monkey Madness II." Mod Ash, 20 May 2020: "It rolls for the remaining items on their
+#     table if you can't have that one." This schema has no conditional column, so the row is
+#     recorded at its published rate and the condition is noted here.
+#
+# NOTED / VARIABLE QUANTITIES - this schema has no `noted` column, so they are recorded here.
+# min/max below are the item counts as printed; the wiki flags these 26 rows as (noted):
+#   nature    Tarromin 4, Torstol 2
+#   magpie    Black dragonhide 6, Runite bar 2, Diamond 4, Diamond amulet 3, Amulet of power 3,
+#             Ring of life 4, Ring of forging 3, Ring of recoil 3
+#   ninja     Black dragonhide 10, Prayer potion(3) 4, Weapon poison(+) 4, Dagannoth hide 3
+#   crystal   Amulet of power 5-7, Dragonstone 2, Dragon dagger 2, Rune scimitar 3-6,
+#             Babydragon bones 75-125
+#   dragon    Amulet of glory 3, Dragonstone amulet 2, Dragon dagger(p++) 3, Dragonstone 3,
+#             Babydragon bones 100-300, Dragon bones 50-100, Summer pie 15
+# VARIABLE STACKS (min != max) are 22 rows, unlike the first batch's single one: 13 on crystal
+# (Amulet of power, Crystal shard, Ruby bolt tips, Onyx bolt tips, Rune arrowtips, Rune arrow,
+# Rune javelin tips, Rune dart tip, Rune dart, Dragon dart tip, Rune scimitar, Babydragon bones,
+# Ranarr seed) and 9 on dragon (Dragonstone bolt tips 10-30, Dragon arrow, Dragonstone bolts,
+# Dragon dart, Dragon dart tip, Dragon arrowtips, Dragon javelin tips, Babydragon bones,
+# Dragon bones). The wiki prints these with an en-dash; recorded here as min and max.
+# `Prayer potion(3)`, `Weapon poison(+)`, `Dragon dagger(p+)` and `Dragon dagger(p++)` keep the
+# wiki's verbatim names; the parenthesised suffix is part of the item name, not a quantity.
+#
+# THE EMPTY JAR IS NOT A TABLE ENTRY and is deliberately absent from the rows below, as in the
+# first batch. All six jar pages carry the identical "Loot > Impling jar" line - "An empty impling
+# jar is returned when removing the loot, with a 10% chance of it breaking." - and the identical
+# one-row table, Impling jar x1 at 9/10. Nothing on these six pages differs from the first batch
+# on this point.
+#
+# Old School RuneScape Wiki contributors, CC BY-NC-SA 3.0.
+# The `obj` column is NOT from the wiki: it is the OpenRune symbol each published item name
+# resolves to, matched against the packed `config/obj` `name=` field in cache.sqlite. All 82 real
+# item names matched on name alone; the 5 `Roll from ... clue table` pseudo-items are table
+# references with no item behind them and are left blank (see LUCKY above). Where a name matched
+# several objs, `cert_*`/`placeholder_*`/`*_dummy` siblings were dropped and the lowest remaining
+# id taken. 21 names were still ambiguous after that filter - almost all against Last Man Standing
+# replicas (`br_*`, `fake_*`) or unrelated same-name items (`magictraining_dragonstone`,
+# `poh_trophy_amuletofglory`, `varlamore_key_half_*`) - so EVERY pick was verified against the
+# item id published in the wiki page's own infobox rather than trusted to lowest-id alone.
+# 52 picks were checked that way and all 52 matched, including every variant-looking symbol:
+#   Crystal acorn -> obj.crystal_tree_seed (23661)    Crystal shard -> obj.prif_crystal_shard (23962)
+#   Opal machete -> obj.machette_opal (6313)          Dagannoth hide -> obj.dagganoth_hide (6155)
+#   Rune arrowtips -> obj.rune_arrowheads (44)        Diamond amulet -> obj.strung_diamond_amulet (1700)
+#   Loop half of key -> obj.keyhalf2 (987)            Tooth half of key -> obj.keyhalf1 (985)
+#   Prayer potion(3) -> obj.3doseprayerrestore (139)  Amulet of glory -> obj.amulet_of_glory (1704, uncharged)
+#   Onyx bolts -> obj.xbows_crossbow_bolts_runite_tipped_onyx (9342, unenchanted, not the (e))
+# Noted rewards resolve through the base obj's own `certlink` field rather than a guessed `cert_`
+# prefix. All 22 distinct noted names in this batch happened to follow `cert_` + base symbol, and
+# all 22 certlink targets exist as real objs - but they were read from `certlink`, not assumed,
+# because three of the first batch's seventeen did not follow that naming.
+# Clue scrolls resolve to one specific step obj, which is what every other table in the repo
+# names; the tier is what matters, the step is arbitrary. Hard -> obj.trail_clue_hard_map001
+# (lowest of 187 objs named "Clue scroll (hard)"); elite -> obj.trail_elite_emote_exp1 (lowest of
+# 138 named "Clue scroll (elite)").
+nature	Limpwurt seed	1	1	1	10	main	obj.limpwurt_seed
+nature	Jangerberry seed	1	1	1	10	main	obj.jangerberry_bush_seed
+nature	Belladonna seed	1	1	1	10	main	obj.belladonna_seed
+nature	Harralander seed	1	1	1	10	main	obj.harralander_seed
+nature	Cactus spine	1	1	1	10	main	obj.cactus_spine
+nature	Magic logs	1	1	1	10	main	obj.magic_logs
+nature	Tarromin	4	4	1	10	main	obj.cert_tarromin
+nature	Coconut	1	1	1	10	main	obj.coconut
+nature	Irit seed	1	1	1	10	main	obj.irit_seed
+nature	Curry tree seed	1	1	1	100	main	obj.curry_tree_seed
+nature	Orange tree seed	1	1	1	100	main	obj.orange_tree_seed
+nature	Snapdragon	1	1	1	100	main	obj.snapdragon
+nature	Kwuarm seed	1	1	1	100	main	obj.kwuarm_seed
+nature	Avantoe seed	5	5	1	100	main	obj.avantoe_seed
+nature	Willow seed	1	1	1	100	main	obj.willow_seed
+nature	Torstol seed	1	1	1	100	main	obj.torstol_seed
+nature	Ranarr seed	1	1	1	100	main	obj.ranarr_seed
+nature	Torstol	2	2	1	100	main	obj.cert_torstol
+nature	Dwarf weed seed	1	1	1	100	main	obj.dwarf_weed_seed
+nature	Clue scroll (hard)	1	1	1	100	tertiary	obj.trail_clue_hard_map001
+magpie	Black dragonhide	6	6	2	21	main	obj.cert_dragonhide_black
+magpie	Runite bar	2	2	1	21	main	obj.cert_runite_bar
+magpie	Diamond	4	4	1	21	main	obj.cert_diamond
+magpie	Diamond amulet	3	3	1	21	main	obj.cert_strung_diamond_amulet
+magpie	Amulet of power	3	3	1	21	main	obj.cert_amulet_of_power
+magpie	Ring of life	4	4	1	21	main	obj.cert_ring_of_life
+magpie	Ring of forging	3	3	1	21	main	obj.cert_ring_of_forging
+magpie	Ring of recoil	3	3	1	21	main	obj.cert_ring_of_recoil
+magpie	Nature tiara	1	1	1	21	main	obj.tiara_nature
+magpie	Splitbark gauntlets	1	1	1	21	main	obj.splitbark_gauntlets
+magpie	Mystic gloves	1	1	1	21	main	obj.mystic_gloves
+magpie	Mystic boots	1	1	1	21	main	obj.mystic_boots
+magpie	Rune sq shield	1	1	1	21	main	obj.rune_sq_shield
+magpie	Rune warhammer	1	1	1	21	main	obj.rune_warhammer
+magpie	Dragon dagger	1	1	1	21	main	obj.dragon_dagger
+magpie	Pineapple seed	1	1	1	21	main	obj.pineapple_tree_seed
+magpie	Snapdragon seed	1	1	1	21	main	obj.snapdragon_seed
+magpie	Loop half of key	1	1	1	21	main	obj.keyhalf2
+magpie	Tooth half of key	1	1	1	21	main	obj.keyhalf1
+magpie	Sinister key	1	1	1	21	main	obj.sinister_key
+magpie	Clue scroll (hard)	1	1	1	50	tertiary	obj.trail_clue_hard_map001
+ninja	Snakeskin boots	1	1	1	19	main	obj.snakeskin_boots
+ninja	Splitbark helm	1	1	1	19	main	obj.splitbark_helm
+ninja	Mystic boots	1	1	1	19	main	obj.mystic_boots
+ninja	Rune chainbody	1	1	1	19	main	obj.rune_chainbody
+ninja	Mystic gloves	1	1	1	19	main	obj.mystic_gloves
+ninja	Opal machete	1	1	1	19	main	obj.machette_opal
+ninja	Rune claws	1	1	1	19	main	obj.rune_claws
+ninja	Rune scimitar	1	1	1	19	main	obj.rune_scimitar
+ninja	Dragon dagger(p+)	1	1	1	19	main	obj.dragon_dagger_p+
+ninja	Rune arrow	70	70	1	19	main	obj.rune_arrow
+ninja	Rune dart	70	70	1	19	main	obj.rune_dart
+ninja	Rune knife	40	40	1	19	main	obj.rune_knife
+ninja	Rune thrownaxe	50	50	1	19	main	obj.rune_thrownaxe
+ninja	Onyx bolts	2	2	1	19	main	obj.xbows_crossbow_bolts_runite_tipped_onyx
+ninja	Onyx bolt tips	4	4	1	19	main	obj.xbows_bolt_tips_onyx
+ninja	Black dragonhide	10	10	1	19	main	obj.cert_dragonhide_black
+ninja	Prayer potion(3)	4	4	1	19	main	obj.cert_3doseprayerrestore
+ninja	Weapon poison(+)	4	4	1	19	main	obj.cert_weapon_poison+
+ninja	Dagannoth hide	3	3	1	19	main	obj.cert_dagganoth_hide
+ninja	Clue scroll (hard)	1	1	1	25	tertiary	obj.trail_clue_hard_map001
+crystal	Amulet of power	5	7	1	18	main	obj.cert_amulet_of_power
+crystal	Crystal acorn	1	1	1	18	main	obj.crystal_tree_seed
+crystal	Crystal shard	30	40	1	18	main	obj.prif_crystal_shard
+crystal	Dragonstone amulet	1	1	1	18	main	obj.strung_dragonstone_amulet
+crystal	Dragonstone	2	2	1	18	main	obj.cert_dragonstone
+crystal	Ruby bolt tips	50	125	1	18	main	obj.xbows_bolt_tips_ruby
+crystal	Onyx bolt tips	6	10	1	18	main	obj.xbows_bolt_tips_onyx
+crystal	Rune arrowtips	150	250	1	18	main	obj.rune_arrowheads
+crystal	Rune arrow	400	750	1	18	main	obj.rune_arrow
+crystal	Rune javelin tips	20	60	1	18	main	obj.rune_javelin_head
+crystal	Rune dart tip	25	75	1	18	main	obj.rune_dart_tip
+crystal	Rune dart	50	100	1	18	main	obj.rune_dart
+crystal	Dragon dart tip	10	15	1	18	main	obj.dragon_dart_tip
+crystal	Dragon dagger	2	2	1	18	main	obj.cert_dragon_dagger
+crystal	Rune scimitar	3	6	1	18	main	obj.cert_rune_scimitar
+crystal	Babydragon bones	75	125	1	18	main	obj.cert_babydragon_bones
+crystal	Ranarr seed	3	8	1	18	main	obj.ranarr_seed
+crystal	Yew seed	1	1	1	18	main	obj.yew_seed
+crystal	Clue scroll (elite)	1	1	1	50	tertiary	obj.trail_elite_emote_exp1
+crystal	Elven signet	1	1	1	128	tertiary	obj.elven_signet
+dragon	Dragonstone bolt tips	10	30	1	19	main	obj.xbows_bolt_tips_dragonstone
+dragon	Dragonstone bolt tips	36	36	1	19	main	obj.xbows_bolt_tips_dragonstone
+dragon	Mystic robe bottom	1	1	1	19	main	obj.mystic_robe_bottom
+dragon	Amulet of glory	3	3	1	19	main	obj.cert_amulet_of_glory
+dragon	Dragonstone amulet	2	2	1	19	main	obj.cert_strung_dragonstone_amulet
+dragon	Dragon arrow	100	250	1	19	main	obj.dragon_arrow
+dragon	Dragonstone bolts	10	40	1	19	main	obj.xbows_crossbow_bolts_runite_tipped_dragonstone
+dragon	Dragon longsword	1	1	1	19	main	obj.dragon_longsword
+dragon	Dragon dagger(p++)	3	3	1	19	main	obj.cert_dragon_dagger_p++
+dragon	Dragon dart	100	250	1	19	main	obj.dragon_dart
+dragon	Dragonstone	3	3	1	19	main	obj.cert_dragonstone
+dragon	Dragon dart tip	100	350	1	19	main	obj.dragon_dart_tip
+dragon	Dragon arrowtips	100	350	1	19	main	obj.dragon_arrowheads
+dragon	Dragon javelin tips	25	35	1	19	main	obj.dragon_javelin_head
+dragon	Babydragon bones	100	300	1	19	main	obj.cert_babydragon_bones
+dragon	Dragon bones	50	100	1	19	main	obj.cert_dragon_bones
+dragon	Magic seed	1	1	1	19	main	obj.magic_tree_seed
+dragon	Snapdragon seed	6	6	1	19	main	obj.snapdragon_seed
+dragon	Summer pie	15	15	1	19	main	obj.cert_summer_pie
+dragon	Clue scroll (elite)	1	1	1	50	tertiary	obj.trail_elite_emote_exp1
+lucky	Roll from easy clue table	1	1	1	5	main	
+lucky	Roll from medium clue table	1	1	1	5	main	
+lucky	Roll from hard clue table	1	1	1	5	main	
+lucky	Roll from elite clue table	1	1	1	5	main	
+lucky	Roll from master clue table	1	1	1	5	main	

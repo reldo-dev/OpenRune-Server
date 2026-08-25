@@ -66,6 +66,7 @@ class HunterImpling
 constructor(
     private val npcRepo: NpcRepository,
     private val objRepo: ObjRepository,
+    private val spawner: ImplingSpawner,
     // Named `gameRandom`, not `random`, for the reason [HunterButterfly] spells out at its own
     // constructor: `ProtectedAccess` has a `random` property and an extension receiver's member
     // wins over the dispatch receiver's field, so a field called `random` here would be silently
@@ -135,12 +136,18 @@ constructor(
             return false
         }
 
-        npcRepo.despawn(target, target.visType.respawnRate)
+        // A spawner-made impling is removed outright and its marker starts again; a map-placed one
+        // is despawned so the engine returns it to its own tile. Getting this the wrong way round
+        // does not fail visibly - it just pins a marker to one creature forever.
+        if (!spawner.release(target)) {
+            npcRepo.despawn(target, target.visType.respawnRate)
+        }
 
-        // The Puro-Puro value, not the overworld one, because every row in this table is a `_maze`
-        // spawn. Stored x10 so fractional values survive the table, and awarded on the catch, not on
-        // collection - there is nothing to collect.
-        val xp = (creature.xpPuro / 10.0) * xpMods.get(player, "stat.hunter")
+        // Which of the creature's two experience values applies is decided by the npc id that was
+        // caught, because the wiki ties it to the spawn's origin rather than the player's location -
+        // an overworld impling caught inside Puro-Puro still pays the overworld value. Stored x10 so
+        // fractional values survive the table, and awarded on the catch, not on collection.
+        val xp = (creature.experienceFor(target.visType.id) / 10.0) * xpMods.get(player, "stat.hunter")
         statAdvance("stat.hunter", xp)
         return true
     }

@@ -5,6 +5,7 @@ import dtx.rs.RSDropTable
 import dtx.rs.RSPreRollTable
 import dtx.rs.RSWeightedTable
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -33,33 +34,37 @@ class ImplingLootTest {
             val published =
                 readLoot()
                     .filter { it.impling == impling && it.section == "main" && it.obj.isNotEmpty() }
-                    .map { Triple(it.obj, it.min..it.max, it.weightOutOf100()) }
+                    .map { Triple(it.obj, it.min..it.max, it.rarity()) }
             val shipped = mainRows(jar)
             // Sorted as whole rows, not by obj: essence carries two noted `Pure essence` rows
             // (20 and 35) that share one obj, so an obj-only sort is not a total order and the
             // two lists can hold the same rows in different orders.
             assertEquals(
-                published.map(Triple<String, IntRange, Int>::toString).sorted(),
-                shipped.map(Triple<String, IntRange, Int>::toString).sorted(),
+                published.map { it.toString() }.sorted(),
+                shipped.map { it.toString() }.sorted(),
                 "$impling main table does not match the published rows",
             )
             checked += shipped.size
         }
-        // 113 published main rows less the baby impling's objless `Nothing`, which
-        // [onlyTheBabyImplingCanPayOutNothing] covers instead.
-        assertEquals(112, checked, "Main-table row count changed; confirm the extract is intact.")
+        // Published main rows across the eleven openable jars, less the baby impling's objless
+        // `Nothing`, which [onlyTheBabyImplingCanPayOutNothing] covers instead.
+        assertEquals(207, checked, "Main-table row count changed; confirm the extract is intact.")
     }
 
     /** Each table is written out of 100, so the weights must account for the whole roll. */
     @Test
     fun everyMainTableWeightSumsToTheWholeRoll() {
         for ((impling, jar) in JARS) {
-            // Every entry, the nothing slot included - it is a tenth of the baby table, so
-            // excluding it would make that table look like it summed to 90 and pass anyway.
+            // The expected total comes from the published rates - the lowest common denominator
+            // of that impling's rarities - not from the table, so this cannot be satisfied by a
+            // table that is merely self-consistent. Eleven tables over five denominators.
+            //
+            // Every entry counts, the nothing slot included: it is a tenth of the baby table, so
+            // excluding it would make that table look like it summed short and pass anyway.
             assertEquals(
-                100,
+                publishedTotal(impling),
                 weightedEntries(jar).sumOf { it.first },
-                "$impling weights do not sum to 100",
+                "$impling weights do not sum to its published denominator",
             )
         }
     }
@@ -99,9 +104,12 @@ class ImplingLootTest {
                 "$impling has ${shipped.size} tertiary rows, published has ${published.size}",
             )
             for (row in published) {
+                // Matched on the obj symbol the extract records, which is the same symbol the table
+                // is written with - including the specific clue step, where the tier is what
+                // matters but both sides name the identical one.
                 val match =
-                    shipped.singleOrNull { objSuffix(row.item) in it.second.obj }
-                        ?: error("$impling has no tertiary for ${row.item}")
+                    shipped.singleOrNull { it.second.obj == row.obj }
+                        ?: error("$impling has no tertiary for ${row.item} (${row.obj})")
                 assertEquals(
                     row.num * 100.0 / row.den,
                     match.first,
@@ -111,7 +119,7 @@ class ImplingLootTest {
             }
             checked += shipped.size
         }
-        assertEquals(8, checked, "Tertiary row count changed; confirm the extract is intact.")
+        assertEquals(14, checked, "Tertiary row count changed; confirm the extract is intact.")
     }
 
     /**
@@ -139,29 +147,63 @@ class ImplingLootTest {
     }
 
     /** Every jar this slice ships has a table, and every table belongs to a shipped jar. */
+    /**
+     * Every jar a catch can produce has a table, apart from the lucky impling's.
+     *
+     * A caught jar with no table is an item the player cannot open, so this is the invariant that
+     * keeps the two halves of the feature in step. The lucky impling is the one permitted exception
+     * and is named rather than filtered out: its published loot is a roll on a clue **reward** table
+     * and this server has none, so it is blocked on a subsystem rather than on data. Naming it means
+     * a twelfth jar added later without a table still fails here.
+     */
     @Test
-    fun everyShippedJarHasATable() {
+    fun everyShippedJarHasATableExceptTheLuckyImpling() {
         assertEquals(JARS.map { it.second }.toSet(), ImplingLoot.jars)
         val caught = ImplingCreatures.all.map { it.caught.single().obj }.toSet()
-        assertEquals(caught, ImplingLoot.jars, "A caught jar with no table would be unopenable.")
+        assertEquals(
+            caught - LUCKY_IMPLING_JAR,
+            ImplingLoot.jars,
+            "A caught jar with no table would be unopenable.",
+        )
+        assertTrue(LUCKY_IMPLING_JAR in caught, "The lucky impling should still be catchable.")
+        assertNull(ImplingLoot.forJar(LUCKY_IMPLING_JAR), "Lucky has no table until clue rewards do.")
     }
 
     private fun table(jar: String): RSDropTable<Player, DropRollItem> =
         checkNotNull(ImplingLoot.forJar(jar)) { "No loot table for $jar" }
 
+    /** The lowest common denominator of an impling's published main-table rates. */
+    private fun publishedTotal(impling: String): Int =
+        readLoot()
+            .filter { it.impling == impling && it.section == "main" }
+            .map { it.rarity().second }
+            .fold(1) { acc, den -> acc / gcd(acc, den) * den }
+
+    private fun mainTable(jar: String): RSWeightedTable<Player, DropRollItem> =
+        table(jar).tableEntries.filterIsInstance<RSWeightedTable<Player, DropRollItem>>().single()
+
     private fun weightedEntries(jar: String): List<Pair<Int, DropRollItem>> {
-        val main =
-            table(jar).tableEntries.filterIsInstance<RSWeightedTable<Player, DropRollItem>>().single()
+        val main = mainTable(jar)
         return main.tableEntries.map { entry ->
             val drop = (entry.rollable as Single<Player, DropRollItem>).result
             entry.weight.toInt() to drop
         }
     }
 
-    private fun mainRows(jar: String): List<Triple<String, IntRange, Int>> =
-        weightedEntries(jar).filterNot { it.second.isNothing }.map { (weight, drop) ->
-            Triple(drop.obj, drop.count, weight)
+    /**
+     * The main table as (obj, quantity, rarity) rather than raw weights.
+     *
+     * The eleven tables are written over five different denominators - the published rates are
+     * tenths and hundredths for some implings and twenty-firsts or nineteenths for others - so a
+     * weight is only meaningful against its own total. Reducing to a rarity makes every table
+     * comparable to the published figure directly.
+     */
+    private fun mainRows(jar: String): List<Triple<String, IntRange, Pair<Int, Int>>> {
+        val total = weightedEntries(jar).sumOf { it.first }
+        return weightedEntries(jar).filterNot { it.second.isNothing }.map { (weight, drop) ->
+            Triple(drop.obj, drop.count, reduce(weight, total))
         }
+    }
 
     /**
      * The pre-roll or tertiary slot as (chance-percent, drop) pairs.
@@ -191,18 +233,15 @@ class ImplingLootTest {
         val section: String,
         val obj: String,
     ) {
-        /** The published rarity as a weight out of 100, which is how the tables are written. */
-        fun weightOutOf100(): Int {
-            val scaled = num * 100
-            require(scaled % den == 0) { "$item's rarity $num/$den is not a whole weight out of 100" }
-            return scaled / den
-        }
+        /** The published rarity, reduced, so it can be compared against any table denominator. */
+        fun rarity(): Pair<Int, Int> = reduce(num, den)
     }
 
     private fun readLoot(): List<LootRow> =
-        checkNotNull(javaClass.getResourceAsStream("/wiki-charts/impling-loot.tsv")) {
-                "Missing /wiki-charts/impling-loot.tsv"
-            }
+        LOOT_FILES.flatMap { file -> readLoot(file) }
+
+    private fun readLoot(file: String): List<LootRow> =
+        checkNotNull(javaClass.getResourceAsStream("/wiki-charts/$file")) { "Missing $file" }
             .bufferedReader()
             .readLines()
             .filter { it.isNotBlank() && !it.startsWith("#") }
@@ -221,15 +260,6 @@ class ImplingLootTest {
                 )
             }
 
-    /** Clue rows name one specific step obj, so match on the tier rather than the exact step. */
-    private fun objSuffix(item: String): String =
-        when {
-            "beginner" in item.lowercase() -> "beginner"
-            "easy" in item.lowercase() -> "easy"
-            "medium" in item.lowercase() -> "medium"
-            else -> item
-        }
-
     companion object {
         @JvmStatic
         @BeforeAll
@@ -241,6 +271,16 @@ class ImplingLootTest {
         private const val PRE_ROLL_INDEX = 1
         private const val TERTIARY_INDEX = 4
 
+        private fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
+
+        /** Reduces a rate to lowest terms so two denominators can be compared. */
+        private fun reduce(num: Int, den: Int): Pair<Int, Int> {
+            val g = gcd(num, den).coerceAtLeast(1)
+            return (num / g) to (den / g)
+        }
+
+        private val LOOT_FILES = listOf("impling-loot.tsv", "impling-loot-2.tsv")
+
         private val JARS =
             listOf(
                 "baby" to "obj.ii_captured_impling_1",
@@ -249,6 +289,11 @@ class ImplingLootTest {
                 "earth" to "obj.ii_captured_impling_4",
                 "essence" to "obj.ii_captured_impling_5",
                 "eclectic" to "obj.ii_captured_impling_6",
+                "nature" to "obj.ii_captured_impling_7",
+                "magpie" to "obj.ii_captured_impling_8",
+                "ninja" to "obj.ii_captured_impling_9",
+                "crystal" to "obj.ii_captured_impling_12",
+                "dragon" to "obj.ii_captured_impling_10",
             )
     }
 }
