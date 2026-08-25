@@ -19,6 +19,8 @@ import org.rsmod.game.entity.Controller
 import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.entity.player.PlayerUid
+import org.rsmod.game.inv.Inventory
+import org.rsmod.game.inv.isType
 import org.rsmod.map.CoordGrid
 
 /** The controller type a falcon holding prey is anchored to. */
@@ -135,7 +137,7 @@ constructor(
     fun ProtectedAccess.rentFalcon(): Boolean {
         // Both states block, not just the loaded one: a player whose bird is out on a catch is
         // holding the empty glove, and renting a second would let them run two falcons at once.
-        if (inv.contains(FALCON_GLOVE_WITH_BIRD) || inv.contains(FALCON_GLOVE)) {
+        if (holdsGlove(FALCON_GLOVE_WITH_BIRD) || holdsGlove(FALCON_GLOVE)) {
             mes("You already have a falcon.")
             return false
         }
@@ -180,7 +182,7 @@ constructor(
         // "If a player attempts to catch a spotted kebbit without a falcon, the kebbit will escape."
         // (wiki, *Spotted kebbit*.) The escape half is not modelled - despawning a kebbit because
         // someone clicked it empty-handed would let a player clear the enclosure for free.
-        if (!inv.contains(FALCON_GLOVE_WITH_BIRD)) {
+        if (!holdsGlove(FALCON_GLOVE_WITH_BIRD)) {
             mes("You need a falcon to catch a kebbit.")
             return false
         }
@@ -381,11 +383,18 @@ constructor(
      */
     fun ProtectedAccess.stripFalconGloves(): Boolean {
         var stripped = false
-        for (glove in FALCON_GLOVES) {
-            val held = inv.count(glove)
-            if (held > 0 && invDel(inv, glove, held).success) {
-                stripped = true
+        var unequipped = false
+        for (source in listOf(inv, worn)) {
+            for (glove in FALCON_GLOVES) {
+                val held = source.count(glove)
+                if (held > 0 && invDel(source, glove, held).success) {
+                    stripped = true
+                    unequipped = unequipped || source === worn
+                }
             }
+        }
+        if (unequipped) {
+            rebuildAppearance()
         }
         if (stripped) {
             mes("You return the falconer's glove as you leave.")
@@ -435,14 +444,47 @@ constructor(
      * The delete has to succeed before the add runs: the two states are the same item to the player,
      * so an add-then-delete ordering that failed halfway would leave them holding two gloves or
      * none, and the "already have a falcon" check in [rentFalcon] reads both.
+     *
+     * Back into the slot it came out of, so a worn glove transforms on the hand instead of falling
+     * into the backpack. The two objs share a `wearpos`, so that slot is legal for either, and it is
+     * what live does: "when the falcon has hunted a kebbit, the empty glove drops to a weight of
+     * 0.907 kg" (wiki, *Falconer's glove*) - the same equipped item, weighing what the glove alone
+     * weighs.
      */
     private fun ProtectedAccess.swapGlove(from: String, to: String): Boolean {
-        if (invDel(inv, from, 1).failure) {
+        val held = gloveInv(from) ?: return false
+        val slot = held.indices.firstOrNull { held[it].isType(from) } ?: return false
+        if (invDel(held, from, 1, slot = slot).failure) {
             return false
         }
-        invAdd(inv, to, 1)
+        invAdd(held, to, 1, slot = slot)
+        if (held === worn) {
+            rebuildAppearance()
+        }
         return true
     }
+
+    /**
+     * Where a glove is being held - the worn slot counts, and this is the only thing that reads it.
+     *
+     * The glove is equipment, not just an inventory item. Both objs carry `iop2=Wear` with
+     * `wearpos=righthand`, so the client draws the option and `HeldInteractions.opHeld2` falls
+     * through to `HeldEquipOp` for want of a registered op2 script - a player who takes it is
+     * holding their bird in `worn`, and a check that read `inv` alone would tell them they had no
+     * falcon while one sat on their hand. That is what live does too: "While wearing the glove, a
+     * player has a gyr falcon on their hand which they can send to catch spotted kebbits, dark
+     * kebbits and dashing kebbits." (wiki, *Falconer's glove*.)
+     *
+     * `inv` first, so a player carrying one glove and wearing the other spends the carried one.
+     */
+    private fun ProtectedAccess.gloveInv(glove: String): Inventory? =
+        when {
+            inv.contains(glove) -> inv
+            worn.contains(glove) -> worn
+            else -> null
+        }
+
+    private fun ProtectedAccess.holdsGlove(glove: String): Boolean = gloveInv(glove) != null
 
     private companion object {
         /** Both glove states, in the order the area-exit strip walks them. */

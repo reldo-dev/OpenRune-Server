@@ -244,7 +244,65 @@ class FalconryTest {
         }
     }
 
+    /**
+     * The glove is *equipment*, and every check has to read the worn slot as well as the backpack.
+     *
+     * "While wearing the glove, a player has a gyr falcon on their hand which they can send to catch
+     * spotted kebbits, dark kebbits and dashing kebbits." (wiki, *Falconer's glove*.) Both objs are
+     * `iop2=Wear` with `wearpos=righthand`, so the client draws the option and `HeldInteractions`
+     * equips them - nothing in this module registers an op2 to stop it. Reading only `inv` therefore
+     * let a player who took the option the client offered rent a *second* glove for another 500
+     * coins, since neither state was found anywhere.
+     */
+    @Test
+    fun rentingRefusedWhileWearingEitherGlove() {
+        for (worn in listOf(FALCON_GLOVE, FALCON_GLOVE_WITH_BIRD)) {
+            val world = HunterFalconryTestWorld()
+            val player = world.addPlayer(FALCONRY_TILE, hunterLvl = 43)
+            world.giveCoins(player, FALCONRY_RENTAL_FEE)
+            world.wear(player, worn)
+
+            val rented = world.runProtected(player) { with(it) { rentFalcon() } }
+
+            assertFalse(rented, "should refuse while wearing $worn")
+            assertEquals(FALCONRY_RENTAL_FEE, player.inv.count("obj.coins"), "no charge for $worn")
+            assertFalse(player.inv.contains(FALCON_GLOVE_WITH_BIRD), "no second glove for $worn")
+        }
+    }
+
     /* Catching */
+
+    /**
+     * The whole technique, done the way the client's own `Wear` option leaves the player.
+     *
+     * With the glove worn rather than carried, the catch used to refuse with "You need a falcon to
+     * catch a kebbit" while the player was visibly holding one. The bird has to leave and return on
+     * the hand it was on, too: both states share a `wearpos`, so the swap transforms the worn obj
+     * rather than dropping an empty glove into the backpack.
+     */
+    @Test
+    fun catchAndRetrieveWorkWithTheGloveWorn() {
+        val world = HunterFalconryTestWorld()
+        val player = world.addPlayer(FALCONRY_TILE, hunterLvl = 99)
+        world.wear(player, FALCON_GLOVE_WITH_BIRD)
+        val kebbitTile = FALCONRY_TILE.translateX(2)
+        val kebbit = world.addNpc("npc.huntingbeast_speedy", kebbitTile)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        val caught = world.runProtected(player) { with(it) { catchKebbit(kebbit) } }
+
+        assertTrue(caught, "a worn glove is a held glove")
+        assertTrue(player.worn.contains(FALCON_GLOVE), "the empty glove stays on the hand")
+        assertFalse(player.inv.contains(FALCON_GLOVE), "and does not fall into the backpack")
+
+        // The despawned kebbit is still on its tile, hidden, so the visible npc is the falcon.
+        val falcon = checkNotNull(world.npcRepo.findAll(kebbitTile).firstOrNull { it.isVisible })
+        val retrieved = world.runProtected(player) { with(it) { retrieveFalcon(falcon) } }
+
+        assertTrue(retrieved)
+        assertTrue(player.worn.contains(FALCON_GLOVE_WITH_BIRD), "the bird comes back to the hand")
+        assertTrue(player.inv.contains("obj.huntingbeast_speedy_fur"), "and the catch is paid out")
+    }
 
     @Test
     fun successfulCatchDespawnsKebbitAndSpawnsTheMatchingFalcon() {
@@ -547,6 +605,33 @@ class FalconryTest {
 
             assertTrue(stripped, "should strip $held")
             assertFalse(player.inv.contains(held), "$held should be gone")
+            assertTrue(player.inv.contains("obj.bones"), "the catch is kept, only the glove goes")
+        }
+    }
+
+    /**
+     * A glove on the hand leaves with Matthias too.
+     *
+     * "When attempting to leave the area with the glove equipped, the player will state 'I should
+     * return the glove I borrowed from the falconer before leaving.'... Teleporting bypasses this
+     * restriction with the text *As you leave, Matthias' falcon flies back to him.*" (wiki,
+     * *Falconer's glove*.) A strip that walked `inv` alone let a worn glove out of the enclosure for
+     * good - it is untradeable and unobtainable outside the area, so nothing would ever take it
+     * back.
+     */
+    @Test
+    fun leavingTheAreaStripsAWornGlove() {
+        for (worn in listOf(FALCON_GLOVE, FALCON_GLOVE_WITH_BIRD)) {
+            val world = HunterFalconryTestWorld()
+            val player = world.addPlayer(FALCONRY_TILE, hunterLvl = 99)
+            world.wear(player, worn)
+            world.giveItem(player, "obj.bones")
+
+            val stripped = world.runProtected(player) { with(it) { stripFalconGloves() } }
+
+            assertTrue(stripped, "should strip a worn $worn")
+            assertFalse(player.worn.contains(worn), "$worn should be off the hand")
+            assertFalse(player.inv.contains(worn), "and not moved into the backpack")
             assertTrue(player.inv.contains("obj.bones"), "the catch is kept, only the glove goes")
         }
     }

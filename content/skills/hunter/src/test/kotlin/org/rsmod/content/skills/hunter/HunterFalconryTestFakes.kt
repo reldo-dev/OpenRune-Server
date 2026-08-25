@@ -4,6 +4,7 @@ import dev.openrune.ServerCacheManager
 import dev.openrune.rscm.RSCM
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
+import dev.openrune.util.Wearpos
 import kotlin.coroutines.startCoroutine
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.protect.ProtectedAccessContextFactory
@@ -134,6 +135,10 @@ class HunterFalconryTestWorld {
         player.statMap.setCurrentLevel("stat.hitpoints", hitpoints.toByte())
         player.inv = Inventory.create("inv.inv")
         player.inv.owner = player
+        // `InvMapInit` builds this at login on a real player. Both glove objs are equipable, so
+        // every glove check in `HunterFalconry` reads it; a world without one throws on the first.
+        player.worn = Inventory.create("inv.worn")
+        player.worn.owner = player
         return player
     }
 
@@ -156,6 +161,16 @@ class HunterFalconryTestWorld {
 
     fun giveCoins(player: Player, amount: Int) {
         giveItem(player, "obj.coins", amount)
+    }
+
+    /**
+     * Equips [obj], which is what the client's own `Wear` option on either glove does.
+     *
+     * Placed at the obj's `wearpos` rather than the first free slot, exactly as `HeldEquipOp` would;
+     * both gloves are `wearpos=righthand`.
+     */
+    fun wear(player: Player, obj: String) {
+        protectedAccess(player).invAdd(player.worn, obj, 1, slot = Wearpos.RightHand.slot)
     }
 
     /** Leaves exactly zero free slots, so any award has to be refused. */
