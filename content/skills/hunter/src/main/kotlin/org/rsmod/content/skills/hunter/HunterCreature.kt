@@ -88,6 +88,34 @@ enum class TrapFamily {
                 NETTRAP -> true
                 DEADFALL -> false
             }
+
+    /**
+     * How far from the trap a creature is drawn in from, in tiles, measured Chebyshev.
+     *
+     * Only the box trap's radius is sourced; see the constants themselves for what each is and where
+     * it came from. Held here rather than as a `when` inside [HunterTrap] so that all four
+     * per-family attribute tables sit together and a sixth family has one file to answer in.
+     */
+    val triggerDistance: Int
+        get() =
+            when (this) {
+                SNARE -> SNARE_TRIGGER_DISTANCE
+                BOX -> BOX_TRAP_TRIGGER_DISTANCE
+                MAGICBOX -> MAGIC_BOX_TRIGGER_DISTANCE
+                DEADFALL -> DEADFALL_TRIGGER_DISTANCE
+                NETTRAP -> NET_TRAP_TRIGGER_DISTANCE
+            }
+
+    /** How often an armed trap rolls for a catch, in cycles. Only the box trap's is sourced. */
+    val attemptCycles: Int
+        get() =
+            when (this) {
+                SNARE -> SNARE_ATTEMPT_CYCLES
+                BOX -> BOX_TRAP_ATTEMPT_CYCLES
+                MAGICBOX -> MAGIC_BOX_ATTEMPT_CYCLES
+                DEADFALL -> DEADFALL_ATTEMPT_CYCLES
+                NETTRAP -> NET_TRAP_ATTEMPT_CYCLES
+            }
 }
 
 /**

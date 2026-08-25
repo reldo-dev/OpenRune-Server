@@ -511,7 +511,7 @@ constructor(
         // lure in an animal that is currently in range." (wiki). Phased on the trap's own creation
         // cycle rather than the raw map clock, so traps laid on different cycles do not all roll
         // in lockstep.
-        if ((mapClock.cycle - creationCycle) % attemptCycles(family) != 0) {
+        if ((mapClock.cycle - creationCycle) % family.attemptCycles != 0) {
             return
         }
 
@@ -853,7 +853,7 @@ constructor(
             .findAll(ZoneKey.from(centre), zoneRadius = 1)
             .filter { npc ->
                 npc.coords.level == centre.level &&
-                    npc.coords.chebyshevDistance(centre) <= triggerDistance(family)
+                    npc.coords.chebyshevDistance(centre) <= family.triggerDistance
             }
             .mapNotNull { npc ->
                 val creature = HunterCreatures.byNpcId(npc.visType.id)
@@ -1129,24 +1129,5 @@ constructor(
                 TrapFamily.NETTRAP -> NET_TRAP_COMPONENTS
             }
 
-        /** Per-family, because only the box trap's radius is sourced. */
-        private fun triggerDistance(family: TrapFamily): Int =
-            when (family) {
-                TrapFamily.SNARE -> SNARE_TRIGGER_DISTANCE
-                TrapFamily.BOX -> BOX_TRAP_TRIGGER_DISTANCE
-                TrapFamily.MAGICBOX -> MAGIC_BOX_TRIGGER_DISTANCE
-                TrapFamily.DEADFALL -> DEADFALL_TRIGGER_DISTANCE
-                TrapFamily.NETTRAP -> NET_TRAP_TRIGGER_DISTANCE
-            }
-
-        /** Per-family, because only the box trap's cadence is sourced. */
-        private fun attemptCycles(family: TrapFamily): Int =
-            when (family) {
-                TrapFamily.SNARE -> SNARE_ATTEMPT_CYCLES
-                TrapFamily.BOX -> BOX_TRAP_ATTEMPT_CYCLES
-                TrapFamily.MAGICBOX -> MAGIC_BOX_ATTEMPT_CYCLES
-                TrapFamily.DEADFALL -> DEADFALL_ATTEMPT_CYCLES
-                TrapFamily.NETTRAP -> NET_TRAP_ATTEMPT_CYCLES
-            }
     }
 }
