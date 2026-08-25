@@ -1,5 +1,6 @@
 package org.rsmod.content.skills.hunter
 
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -106,6 +107,43 @@ class FalconryTest {
             assertEquals(falcon, creature.falconNpc, "$npc falcon npc")
             // The falcon npc has to round-trip, or the retrieve path cannot recover the reward.
             assertEquals(creature, FalconryCreatures.byFalconNpc(falcon))
+        }
+    }
+
+    /**
+     * The three falcon npcs are pinned to the spot in `.data/raw-cache/server/npcs.toml`.
+     *
+     * Nothing in the cache does this for us: none of the three carries a server override, so all
+     * three fall back on `NpcServerType`'s defaults - `moveRestrict = Normal`, `defaultMode =
+     * Wander`, `wanderRange = 5` - and a falcon sitting on its prey wanders away from it. The
+     * identity link in `HunterFalconry` means a wandering bird no longer voids its catch, but a
+     * falcon that strolls off with a kebbit in its talons is still wrong, and this is the half of
+     * that fix nothing else can observe: it lives in a data file, not in code.
+     *
+     * Asserted against the TOML rather than against the packed npc definition on purpose. The
+     * declaration is only *packed* by a cache build, so a test that read the packed def would fail
+     * on every checkout until someone ran one; the file is the thing this change is responsible
+     * for. The single-block check is not incidental either - duplicate ids in a `raw-cache` TOML
+     * are last-wins and silently drop the earlier entry's scalars.
+     */
+    @Test
+    fun falconNpcsAreDeclaredStationary() {
+        val toml = File(HunterTestCache.repoRoot, ".data/raw-cache/server/npcs.toml").readText()
+        val blocks = toml.split("[[npc]]")
+
+        for (creature in FalconryCreatures.all) {
+            val declaring =
+                blocks.filter { block ->
+                    block.lineSequence().any { it.trim() == "id = \"${creature.falconNpc}\"" }
+                }
+            assertEquals(1, declaring.size, "${creature.falconNpc} should be declared once")
+
+            val lines = declaring.single().lines().map(String::trim)
+            assertTrue(
+                "moveRestrict = \"NoMove\"" in lines,
+                "${creature.falconNpc} must not walk off its prey",
+            )
+            assertTrue("wanderRange = 0" in lines, "${creature.falconNpc} must not wander")
         }
     }
 
@@ -341,6 +379,48 @@ class FalconryTest {
         assertFalse(player.inv.contains(FALCON_GLOVE))
         assertFalse(world.npcIsSpawned(falcon), "the falcon npc should be gone")
         assertNull(world.falconControllerAt(tile), "its controller should be gone")
+    }
+
+    /**
+     * A falcon that has walked off its prey's tile is still that catch's falcon.
+     *
+     * The three falcon npcs take `NpcServerType`'s defaults - `moveRestrict = Normal`, `defaultMode
+     * = Wander`, `wanderRange = 5` - and `NpcMainProcess` wander-processes every npc in the list, so
+     * a bird left standing for a few cycles moves. Keyed on the catch tile, the tick then read that
+     * as "the npc is gone" and deleted the controller, and the retrieve that followed found no
+     * controller and returned silently: no message, no loot, no xp, no bird back, and an
+     * `Int.MAX_VALUE` npc left in the world for good.
+     *
+     * This is the case the other 22 falconry tests could not see. None of them moves a falcon,
+     * because this world has no `NpcMainProcess` and nothing else makes an npc walk.
+     */
+    @Test
+    fun falconStaysItsOwnAfterWanderingOffThePreyTile() {
+        val world = HunterFalconryTestWorld()
+        val player = world.addPlayer(FALCONRY_TILE, hunterLvl = 99)
+        world.giveItem(player, FALCON_GLOVE)
+        val tile = FALCONRY_TILE.translateX(2)
+        val creature = checkNotNull(FalconryCreatures.byNpc("npc.huntingbeast_speedy"))
+        val falcon = world.placeCaughtFalcon(tile, player, creature)
+
+        world.moveNpc(falcon, tile.translateX(1))
+        world.advanceFalconCycle(tile)
+
+        assertNotNull(
+            world.falconControllerAt(tile),
+            "A bird that walked one tile has not gone anywhere.",
+        )
+        assertTrue(world.npcIsSpawned(falcon), "and it is certainly not despawned")
+
+        val retrieved = world.runProtected(player) { with(it) { retrieveFalcon(falcon) } }
+
+        assertTrue(retrieved, "the catch is still the player's to collect")
+        for (reward in creature.caught) {
+            assertTrue(player.inv.contains(reward.obj), "should hold ${reward.obj}")
+        }
+        assertTrue(player.inv.contains(FALCON_GLOVE_WITH_BIRD), "the bird comes back")
+        assertFalse(world.npcIsSpawned(falcon), "and the npc is cleaned up, not leaked")
+        assertNull(world.falconControllerAt(tile))
     }
 
     /** Somebody else's falcon is not yours to take. */

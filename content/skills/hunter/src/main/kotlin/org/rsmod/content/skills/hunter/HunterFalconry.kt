@@ -4,6 +4,7 @@ import dev.openrune.ServerCacheManager
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
 import jakarta.inject.Inject
+import java.util.IdentityHashMap
 import org.rsmod.api.controller.vars.intVarCon
 import org.rsmod.api.player.output.ChatType
 import org.rsmod.api.player.output.mes
@@ -94,9 +95,11 @@ var Controller.falconCreature: Int by intVarCon("varcon.hunter_falcon_creature")
  * the [TrapFamily] enum, the trap cap, the laid-coord bookkeeping or any loc handling, because
  * falconry has no trap item, no cap and no loc.
  *
- * The controller is anchored at the **falcon's** tile, which is the kebbit's old tile. That tile is
- * the key for everything, exactly as a trap's tile is: the retrieve path finds the controller from
- * the npc it clicked, and the timeout finds the npc from the controller it is ticking.
+ * The controller is anchored at the **falcon's** tile, which is the kebbit's old tile, but that tile
+ * is only where the controller lives - it is **not** how the bird and the controller find each
+ * other. That pairing is [FalconLinks], keyed on identity: the retrieve path finds the controller
+ * from the npc it clicked, and the timeout finds the npc from the controller it is ticking, and
+ * neither cares where the bird is standing when it happens.
  *
  * Ownership lives in [falconOwner] rather than an npc attribute. There is no npc-attribute system in
  * this engine, and inventing one for a single feature would be a much larger change than reusing the
@@ -117,6 +120,8 @@ constructor(
     private val gameRandom: GameRandom,
     private val xpMods: XpModifiers,
 ) {
+    private val falcons = FalconLinks()
+
     /**
      * Hands over a glove with a falcon on it for [FALCONRY_RENTAL_FEE] coins.
      *
@@ -231,14 +236,27 @@ constructor(
         npcRepo.despawn(target, target.visType.respawnRate)
 
         val falcon = spawnFalcon(creature, tile)
-        val controller = Controller(FALCON_CONTROLLER, tile)
+        check(falcon.coords == tile) { "Falcon spawned off its prey's tile." }
+        anchorFalcon(falcon, creature, player.uid.packed)
+        return true
+    }
+
+    /**
+     * Gives [falcon] the controller that owns its timeout, and pairs the two by identity.
+     *
+     * `internal` because the falconry test world builds a caught falcon directly - most of the
+     * cases that matter start from a catch that has already happened - and a harness that
+     * reimplemented this would be free to disagree with it. It is not a second way in: [catchKebbit]
+     * is the only caller in the running server.
+     */
+    internal fun anchorFalcon(falcon: Npc, creature: FalconryCreature, ownerUid: Int): Controller {
+        val controller = Controller(FALCON_CONTROLLER, falcon.coords)
         conRepo.add(controller, FALCON_TIMEOUT_CYCLES)
-        controller.falconOwner = player.uid.packed
+        controller.falconOwner = ownerUid
         controller.falconCreature = FalconryCreatures.all.indexOf(creature)
         controller.aiTimer(1)
-
-        check(falcon.coords == tile) { "Falcon spawned off its prey's tile." }
-        return true
+        falcons.link(controller, falcon)
+        return controller
     }
 
     /**
@@ -258,7 +276,7 @@ constructor(
     fun ProtectedAccess.retrieveFalcon(falcon: Npc): Boolean {
         val creature = FalconryCreatures.byFalconNpcId(falcon.visType.id) ?: return false
 
-        val controller = conRepo.findExact(falcon.coords, FALCON_CONTROLLER) ?: return false
+        val controller = falcons.controller(falcon) ?: return false
         if (controller.falconOwner != player.uid.packed) {
             mes("This isn't your falcon.")
             return false
@@ -291,7 +309,7 @@ constructor(
         statAdvance("stat.hunter", xp)
 
         npcRepo.del(falcon, Int.MAX_VALUE)
-        conRepo.del(controller)
+        endFalcon(controller)
         return true
     }
 
@@ -309,11 +327,13 @@ constructor(
      * is dropped - the bird leaves and the prey goes with it.
      */
     fun Controller.falconTick() {
-        val falcon = falconAt(coords)
+        val falcon = falcons.falcon(this)?.takeIf(Npc::isSlotAssigned)
         if (falcon == null) {
             // The npc is gone but the controller is not - a retrieve that raced the tick, or a
-            // despawn from outside this feature. Nothing to wait for.
-            conRepo.del(this)
+            // delete from outside this feature. Nothing to wait for. Note that a bird which has
+            // merely walked off its prey's tile does *not* land here: the link is by identity, so
+            // this branch means the npc really was unregistered.
+            endFalcon(this)
             return
         }
 
@@ -332,11 +352,17 @@ constructor(
                     "Your falcon has left its prey. You see it heading back toward the falconer.",
                     ChatType.GameMessage,
                 )
-            conRepo.del(this)
+            endFalcon(this)
             return
         }
 
         aiTimer(1)
+    }
+
+    /** Ends a catch: the controller goes, and its link with the bird goes with it. */
+    private fun endFalcon(controller: Controller) {
+        falcons.unlink(controller)
+        conRepo.del(controller)
     }
 
     /**
@@ -382,12 +408,6 @@ constructor(
     private fun isStillThere(npc: Npc, coords: CoordGrid): Boolean =
         npcRepo.findAll(coords).any { it === npc }
 
-    /** The falcon-with-prey standing on [coords], whichever of the three it is. */
-    private fun falconAt(coords: CoordGrid): Npc? =
-        npcRepo.findAll(coords).firstOrNull { npc ->
-            FalconryCreatures.byFalconNpcId(npc.visType.id) != null
-        }
-
     /**
      * Spawns [creature]'s own falcon on [coords] with no lifetime of its own.
      *
@@ -427,5 +447,41 @@ constructor(
     private companion object {
         /** Both glove states, in the order the area-exit strip walks them. */
         private val FALCON_GLOVES: List<String> = listOf(FALCON_GLOVE, FALCON_GLOVE_WITH_BIRD)
+    }
+}
+
+/**
+ * Which bird belongs to which controller, paired by **identity** rather than by tile.
+ *
+ * Position is not a usable key. A falcon npc takes `NpcServerType`'s defaults - `moveRestrict =
+ * Normal`, `defaultMode = Wander`, `wanderRange = 5` - and `NpcMainProcess` runs `processModes()`
+ * over every npc in the list, so within a few cycles the bird has stepped off the tile the catch
+ * happened on. A lookup keyed on that tile then reports the falcon missing, the tick deletes the
+ * controller, and the retrieve that follows finds nothing to pay out: the catch is silently voided
+ * and the npc, added for [Int.MAX_VALUE] cycles, is left standing in the world for good. Pinning
+ * the birds down in `.data/raw-cache/server/npcs.toml` removes today's trigger; keying on identity
+ * removes the defect.
+ *
+ * Not persisted, and it does not need to be: both halves of every pair are runtime objects that a
+ * restart takes with it - the falcon npc is a temporary spawn and the controller is only ever in
+ * [org.rsmod.game.entity.ControllerList]. The two maps are private and only ever written through
+ * [link] and [unlink], so they cannot fall out of step.
+ */
+private class FalconLinks {
+    private val byController = IdentityHashMap<Controller, Npc>()
+    private val byFalcon = IdentityHashMap<Npc, Controller>()
+
+    fun link(controller: Controller, falcon: Npc) {
+        byController[controller] = falcon
+        byFalcon[falcon] = controller
+    }
+
+    fun falcon(controller: Controller): Npc? = byController[controller]
+
+    fun controller(falcon: Npc): Controller? = byFalcon[falcon]
+
+    fun unlink(controller: Controller) {
+        val falcon = byController.remove(controller) ?: return
+        byFalcon.remove(falcon)
     }
 }

@@ -238,11 +238,20 @@ class HunterFalconryTestWorld {
         creature: FalconryCreature,
     ): Npc {
         val falcon = addNpc(creature.falconNpc, coords)
-        val controller = Controller(FALCON_CONTROLLER, coords)
-        conRepo.add(controller, FALCON_TIMEOUT_CYCLES)
-        controller.falconOwner = owner.uid.packed
-        controller.falconCreature = FalconryCreatures.all.indexOf(creature)
-        controller.aiTimer(1)
+        falconry.anchorFalcon(falcon, creature, owner.uid.packed)
         return falcon
+    }
+
+    /**
+     * Walks [npc] to [to], the way `NpcMainProcess`'s wander mode eventually does.
+     *
+     * Movement proper is a `PathingEntity` concern this world has no processor for, and the only
+     * part of it falconry cares about is that the npc leaves the tile it was caught on: the zone
+     * entry moves, so a coord lookup on the old tile stops finding it.
+     */
+    fun moveNpc(npc: Npc, to: CoordGrid) {
+        npcRegistry.change(npc, ZoneKey.from(npc.coords), ZoneKey.from(to))
+        npc.coords = to
+        npc.lastProcessedZone = ZoneKey.from(to)
     }
 }
