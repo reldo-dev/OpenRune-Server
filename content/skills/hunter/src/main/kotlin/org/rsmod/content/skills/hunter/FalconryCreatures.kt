@@ -97,28 +97,23 @@ object FalconryCreatures {
     fun byFalconNpc(npc: String): FalconryCreature? = byFalconNpc[npc]
 
     /**
-     * Like [HunterCreatures.snare] and its deadfall twin, the reward columns are parallel lists and
-     * a ragged set of them: the dashing kebbit awards three lines where the other two award two. The
-     * guard turns a column edit that drops an entry into a named failure at boot rather than an
-     * `IndexOutOfBounds` on the first catch of the one creature affected.
+     * Like [HunterCreatures.snare] and its deadfall twin, and ragged the same way: the dashing
+     * kebbit awards three reward lines where the other two award two. See [parallelCatches].
      */
-    private fun creature(row: HunterFalconryCreaturesRow): FalconryCreature {
-        val itemCount = row.caughtItems.size
-        require(row.caughtMin.size == itemCount && row.caughtMax.size == itemCount) {
-            "Row ${row.rowId} has mismatched caught reward sizes: items=$itemCount, " +
-                "min=${row.caughtMin.size}, max=${row.caughtMax.size}"
-        }
-        return FalconryCreature(
+    private fun creature(row: HunterFalconryCreaturesRow): FalconryCreature =
+        FalconryCreature(
             npc = row.npc.internalName,
             level = row.level,
             xp = row.xp,
             caught =
-                row.caughtItems.mapIndexed { i, obj ->
-                    HunterCatch(obj.internalName, row.caughtMin[i]..row.caughtMax[i])
-                },
+                parallelCatches(
+                    row.rowId,
+                    row.caughtItems.map { it.internalName },
+                    row.caughtMin,
+                    row.caughtMax,
+                ),
             successLow = row.successLow,
             successHigh = row.successHigh,
             falconNpc = row.falconNpc.internalName,
         )
-    }
 }

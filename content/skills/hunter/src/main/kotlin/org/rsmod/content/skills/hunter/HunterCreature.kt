@@ -129,6 +129,32 @@ enum class TrapFamily {
 data class HunterCatch(val obj: String, val quantity: IntRange = 1..1)
 
 /**
+ * Builds one catch's reward lines from the three parallel columns that describe them.
+ *
+ * The bird snare, the deadfall and falconry all store a catch as `caught_items` plus a `caught_min`
+ * and a `caught_max` of the same length, entry `i` of each describing the same line. All three
+ * re-derived the same guard and the same `mapIndexed`, which meant three wordings for one failure.
+ *
+ * The guard is the point of the function rather than a formality. The deadfall's columns are
+ * genuinely ragged - wild kebbit, barb-tailed kebbit and pyre fox award three lines, prickly and
+ * sabre-toothed award two, because neither drops meat - so nothing may assume a fixed width. A
+ * column edit that drops one entry has to fail by name at boot, not as an `IndexOutOfBounds` on the
+ * one tick that catches the one creature affected.
+ */
+internal fun parallelCatches(
+    rowId: Int,
+    objs: List<String>,
+    min: List<Int>,
+    max: List<Int>,
+): List<HunterCatch> {
+    require(min.size == objs.size && max.size == objs.size) {
+        "Row $rowId has mismatched caught reward sizes: items=${objs.size}, " +
+            "min=${min.size}, max=${max.size}"
+    }
+    return objs.mapIndexed { i, obj -> HunterCatch(obj, min[i]..max[i]) }
+}
+
+/**
  * A single laid-trap creature.
  *
  * [successLow] and [successHigh] are the `(low, high)` pair fed into

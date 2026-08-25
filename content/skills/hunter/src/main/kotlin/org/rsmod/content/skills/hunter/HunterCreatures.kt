@@ -129,30 +129,24 @@ object HunterCreatures {
 
     fun byNetTrapLoc(locId: Int): HunterCreature? = byNetTrapLoc[locId]
 
-    /**
-     * A bird snare catch awards three items in one go, so `caught_items` and its two quantity
-     * columns are parallel lists: entry `i` of each describes the same reward line.
-     */
-    private fun snare(row: HunterSnareCreaturesRow): HunterCreature {
-        val itemCount = row.caughtItems.size
-        require(row.caughtMin.size == itemCount && row.caughtMax.size == itemCount) {
-            "Row ${row.rowId} has mismatched caught reward sizes: items=$itemCount, " +
-                "min=${row.caughtMin.size}, max=${row.caughtMax.size}"
-        }
-        return HunterCreature(
+    /** A bird snare catch awards three items in one go; see [parallelCatches]. */
+    private fun snare(row: HunterSnareCreaturesRow): HunterCreature =
+        HunterCreature(
             family = TrapFamily.SNARE,
             npc = row.npc.internalName,
             level = row.level,
             xp = row.xp,
             caught =
-                row.caughtItems.mapIndexed { i, obj ->
-                    HunterCatch(obj.internalName, row.caughtMin[i]..row.caughtMax[i])
-                },
+                parallelCatches(
+                    row.rowId,
+                    row.caughtItems.map { it.internalName },
+                    row.caughtMin,
+                    row.caughtMax,
+                ),
             successLow = row.successLow,
             successHigh = row.successHigh,
             locKey = row.locKey,
         )
-    }
 
     private fun box(row: HunterBoxCreaturesRow): HunterCreature =
         HunterCreature(
@@ -168,34 +162,29 @@ object HunterCreatures {
         )
 
     /**
-     * Like [snare], the deadfall's reward columns are parallel lists - but a ragged set of them:
-     * wild kebbit, barb-tailed kebbit and pyre fox award three lines, prickly and sabre-toothed
-     * award two, because neither drops meat. Nothing here may assume a fixed width; the guard is
-     * what turns a column edit that drops one entry into a named failure at boot instead of an
-     * `IndexOutOfBounds` on the tick that catches that one creature.
+     * Like [snare], and the raggedest of the three: wild kebbit, barb-tailed kebbit and pyre fox
+     * award three reward lines, prickly and sabre-toothed award two, because neither drops meat.
+     * [parallelCatches] carries the guard that keeps that legitimate and a dropped column not.
      */
-    private fun deadfall(row: HunterDeadfallCreaturesRow): HunterCreature {
-        val itemCount = row.caughtItems.size
-        require(row.caughtMin.size == itemCount && row.caughtMax.size == itemCount) {
-            "Row ${row.rowId} has mismatched caught reward sizes: items=$itemCount, " +
-                "min=${row.caughtMin.size}, max=${row.caughtMax.size}"
-        }
-        return HunterCreature(
+    private fun deadfall(row: HunterDeadfallCreaturesRow): HunterCreature =
+        HunterCreature(
             family = TrapFamily.DEADFALL,
             npc = row.npc.internalName,
             level = row.level,
             xp = row.xp,
             caught =
-                row.caughtItems.mapIndexed { i, obj ->
-                    HunterCatch(obj.internalName, row.caughtMin[i]..row.caughtMax[i])
-                },
+                parallelCatches(
+                    row.rowId,
+                    row.caughtItems.map { it.internalName },
+                    row.caughtMin,
+                    row.caughtMax,
+                ),
             successLow = row.successLow,
             successHigh = row.successHigh,
             trappingLoc = row.trappingLoc.internalName,
             trappingLocM = row.trappingLocM.internalName,
             fullLoc = row.fullLoc.internalName,
         )
-    }
 
     /**
      * The net trap's eight loc columns, split across its two tiles: `up`/`setting`/`set` are the
