@@ -326,6 +326,88 @@ class HunterTrackingTest {
         assertEquals(1, world.itemCount(player, HunterTracking.RING_OF_PURSUIT), "and is not spent")
     }
 
+    /* Check and Break */
+
+    @Test
+    fun `checking an unused ring reports all ten charges`() {
+        val world = HunterTrackingTestWorld()
+        val player = world.addPlayer()
+        world.giveItem(player, HunterTracking.RING_OF_PURSUIT)
+
+        world.checkRingCharges(player)
+
+        // Ten, not zero: the counter stores charges used, and that representation must not reach
+        // the player. The literal is pinned rather than read off `RING_CHARGES`.
+        assertTrue(world.wasTold(player, "has 10 charges remaining"))
+    }
+
+    @Test
+    fun `checking a part-spent ring reports what is left, not what is used`() {
+        val world = HunterTrackingTestWorld()
+        val player = world.addPlayer()
+        world.giveItem(player, HunterTracking.RING_OF_PURSUIT)
+        player.trackingRingCharges = 4
+
+        world.checkRingCharges(player)
+
+        assertTrue(world.wasTold(player, "has 6 charges remaining"), "four used leaves six")
+    }
+
+    @Test
+    fun `the last charge is reported in the singular`() {
+        val world = HunterTrackingTestWorld()
+        val player = world.addPlayer()
+        world.giveItem(player, HunterTracking.RING_OF_PURSUIT)
+        player.trackingRingCharges = 9
+
+        world.checkRingCharges(player)
+
+        assertTrue(world.wasTold(player, "has 1 charge remaining"))
+    }
+
+    @Test
+    fun `breaking a ring destroys it and restores the full allowance`() {
+        val world = HunterTrackingTestWorld()
+        val player = world.addPlayer()
+        world.giveItem(player, HunterTracking.RING_OF_PURSUIT)
+        player.trackingRingCharges = 4
+
+        world.breakRing(player)
+
+        assertEquals(0, world.itemCount(player, HunterTracking.RING_OF_PURSUIT), "the ring is gone")
+        assertEquals(0, player.trackingRingCharges)
+        world.checkRingCharges(player)
+        assertTrue(world.wasTold(player, "has 10 charges remaining"), "the next ring starts full")
+    }
+
+    @Test
+    fun `breaking with nothing in that slot destroys nothing and keeps the count`() {
+        val world = HunterTrackingTestWorld()
+        val player = world.addPlayer()
+        player.trackingRingCharges = 4
+
+        world.breakRing(player)
+
+        assertEquals(4, player.trackingRingCharges, "a failed deletion is not a free reset")
+    }
+
+    @Test
+    fun `checking after the ring crumbles reports a full allowance for the next one`() {
+        val world = HunterTrackingTestWorld()
+        val network = HunterTrackingTestWorld.network()
+        val player = world.addPlayer()
+        world.wearRingOfPursuit(player)
+        world.random.nextInt = 0
+        // Nine spent, so this inspect is the tenth use and the ring crumbles on it.
+        player.trackingRingCharges = 9
+        assertTrue(world.inspectBurrow(player, network))
+        assertFalse(player.worn.contains(HunterTracking.RING_OF_PURSUIT), "test setup")
+
+        world.checkRingCharges(player)
+
+        assertTrue(world.wasTold(player, "has 10 charges remaining"))
+    }
+
     /* Lifecycle */
 
     @Test

@@ -169,6 +169,16 @@ class HunterTrackingTestWorld {
             with(access) { attackCatchSpot(network, catchLoc(network, coords)) }
         }
 
+    /** `Check`, which the ring carries both held and worn; both ops call the one function. */
+    fun checkRingCharges(player: Player) {
+        with(tracking) { protectedAccess(player).checkRingCharges() }
+    }
+
+    /** `Break` on the ring in backpack [slot]; [giveItem] fills an empty inventory from slot 0. */
+    fun breakRing(player: Player, slot: Int = 0) {
+        with(tracking) { protectedAccess(player).breakRing(player.inv, slot) }
+    }
+
     /** Reveals every step of [player]'s trail by clicking each remaining clue in turn. */
     fun followToTheEnd(player: Player, network: TrackingNetwork) {
         var guard = TrailLogic.MAX_SEGMENTS + 1

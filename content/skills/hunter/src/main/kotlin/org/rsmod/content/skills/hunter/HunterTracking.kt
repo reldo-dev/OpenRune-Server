@@ -8,6 +8,7 @@ import org.rsmod.api.player.vars.VarPlayerIntMapSetter
 import org.rsmod.api.random.GameRandom
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.game.entity.Player
+import org.rsmod.game.inv.Inventory
 import org.rsmod.game.loc.BoundLocInfo
 
 /**
@@ -205,6 +206,47 @@ constructor(
 
         clearTrail(player, network)
         return true
+    }
+
+    /**
+     * `Check`, held or worn: how many of the ring's ten charges are left.
+     *
+     * Reports charges **remaining**, which is not what the counter holds - [trackingRingCharges]
+     * stores charges *used*, so that an unwritten varp is a full allowance. The subtraction belongs
+     * here; the internal representation is never something the player is shown.
+     *
+     * The wording follows the ring of shadows' transcript - "Your ring of shadows has [amount]
+     * charge[s] remaining." - which is the nearest sibling with a recorded message. The ring of
+     * pursuit's own transcript page records only its herbiboar refusal line, so the exact live
+     * wording of this one is unsourced.
+     */
+    fun ProtectedAccess.checkRingCharges() {
+        val remaining = RING_CHARGES - player.trackingRingCharges
+        val plural = if (remaining == 1) "charge" else "charges"
+        mes("Your ring of pursuit has $remaining $plural remaining.")
+    }
+
+    /**
+     * `Break` on a held ring: destroys it and hands the player a fresh allowance.
+     *
+     * "Players can right-click a ring of pursuit to either 'check' how many charges remain in it or
+     * 'break' it and reset the next one they use to its maximum charges." (wiki, *Ring of pursuit*.)
+     * Because the charges are the player's and not the ring's, this is the **only** way to clear a
+     * part-spent allowance: without it a fresh ring silently inherits the used count.
+     *
+     * [inventory] and [slot] come straight off the op, so breaking one of several rings takes the
+     * one that was clicked. A failed deletion - nothing of the sort in that slot - leaves the count
+     * alone rather than granting a free reset. The message is unsourced; the wiki records the
+     * behaviour and no transcript records the line.
+     */
+    fun ProtectedAccess.breakRing(inventory: Inventory, slot: Int) {
+        val removed = invDel(inventory, RING_OF_PURSUIT, 1, slot)
+        if (removed.failure) {
+            return
+        }
+        player.trackingRingCharges = 0
+        mes("You break the ring of pursuit.")
+        mes("The next one you wear will hold all $RING_CHARGES charges.")
     }
 
     /**

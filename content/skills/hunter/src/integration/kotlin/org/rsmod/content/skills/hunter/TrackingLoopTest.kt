@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.rsmod.api.game.process.GameCycle
+import org.rsmod.api.player.events.interact.HeldObjEvents
 import org.rsmod.api.player.events.interact.LocEvents
+import org.rsmod.api.player.events.interact.WornObjEvents
 import org.rsmod.api.player.interact.LocInteractions
 import org.rsmod.api.player.protect.ProtectedAccessLauncher
 import org.rsmod.api.player.vars.VarPlayerIntMapSetter
@@ -34,7 +36,8 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * a hand-built world of two locs and a scripted RNG. That proves the bodies. It cannot prove any of
  * the three things below, and neither can `hunterVerify`, which decodes the packed cache offline
  * and never boots anything:
- * 1. that a real boot puts the ops on the bus at all, for all ninety-seven registrations;
+ * 1. that a real boot puts the ops on the bus at all - all ninety-seven loc registrations, and
+ *    the ring of pursuit's three obj ops;
  * 2. that the authored coordinates name locs a booted world actually holds - `GameMapDecoder`
  *    filters map groups and shifts locs down a plane on bridge tiles, so "placed in the cache"
  *    and "clickable in a running server" are different claims;
@@ -83,6 +86,25 @@ class TrackingLoopTest {
         // network dropped from `TrackingNetworks.all` fails here rather than shrinking the loops
         // above into a vacuous pass.
         assertEquals(97, registrations, "tracking should register 97 loc ops")
+    }
+
+    /**
+     * The ring of pursuit's three ops are on the bus after a real boot.
+     *
+     * Worth asking here and not only of the synthetic bus in `HunterWiringTest`, because the worn
+     * `Check` is the one registration whose op index is not readable off the item's own `iop`
+     * list: `WornInteractions` maps `IfButtonOp.Op2` onto `param.wear_op1`, and the ring carries
+     * its worn `Check` in that param. An `onOpWorn3` here would look just as registered and the
+     * client would never send that button.
+     */
+    @Test
+    fun theRealBootRegistersTheRingOfPursuitOps() {
+        val world = world()
+        val ring = HunterTracking.RING_OF_PURSUIT
+
+        assertTrue(world.hasOpHeld3(ring), "no held op3 (Check) handler for $ring")
+        assertTrue(world.hasOpHeld4(ring), "no held op4 (Break) handler for $ring")
+        assertTrue(world.hasOpWorn2(ring), "no worn op2 (Check) handler for $ring")
     }
 
     /**
@@ -372,6 +394,17 @@ class TrackingLoopTest {
 
         fun hasOpLoc2(loc: String): Boolean =
             eventBus.contains(LocEvents.Op2::class.java, loc.asRSCM(RSCMType.LOC).toLong())
+
+        /** The lookup `HeldInteractions` performs before it dispatches an inventory click. */
+        fun hasOpHeld3(obj: String): Boolean =
+            eventBus.contains(HeldObjEvents.Op3::class.java, obj.asRSCM(RSCMType.OBJ).toLong())
+
+        fun hasOpHeld4(obj: String): Boolean =
+            eventBus.contains(HeldObjEvents.Op4::class.java, obj.asRSCM(RSCMType.OBJ).toLong())
+
+        /** The equipped counterpart, which `WornInteractions` looks up on the same obj id. */
+        fun hasOpWorn2(obj: String): Boolean =
+            eventBus.contains(WornObjEvents.Op2::class.java, obj.asRSCM(RSCMType.OBJ).toLong())
 
         fun locOrNull(coords: CoordGrid, loc: String) =
             locRegistry.findType(coords, loc.asRSCM(RSCMType.LOC))

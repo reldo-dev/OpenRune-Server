@@ -1,8 +1,11 @@
 package org.rsmod.content.skills.hunter
 
 import jakarta.inject.Inject
+import org.rsmod.api.script.onOpHeld3
+import org.rsmod.api.script.onOpHeld4
 import org.rsmod.api.script.onOpLoc1
 import org.rsmod.api.script.onOpLoc2
+import org.rsmod.api.script.onOpWorn2
 import org.rsmod.api.script.onPlayerLogin
 import org.rsmod.api.script.onPlayerLogout
 import org.rsmod.api.script.onPlayerSoftQueue
@@ -14,7 +17,10 @@ import org.rsmod.plugin.scripts.ScriptContext
  *
  * **Every op registered here already exists on the cache type; none is invented.** Every burrow
  * carries `op1=Inspect`, every clue carries `op1=Inspect`, and every catch spot carries
- * `op1=Search`/`op2=Attack` (`hunting_trail_end_polar` and its four siblings among them).
+ * `op1=Search`/`op2=Attack` (`hunting_trail_end_polar` and its four siblings among them). The ring
+ * of pursuit carries `iop3=Check`, `iop4=Break` and `param.wear_op1=Check`, and an op a type does
+ * not carry never reaches a handler at all - `LocInteractions` and `WornInteractions` both check
+ * the packed type before dispatching.
  *
  * **Registered per loc gameval, not by content group.** These are client-cache locs, and a content
  * group would need `.data/raw-cache/server/loc.toml` patched for the ~90 loc types tracking
@@ -72,6 +78,20 @@ class TrackingEvents @Inject constructor(private val tracking: HunterTracking) :
                 with(tracking) { attackCatchSpot(network, it.loc) }
             }
         }
+
+        // The ring of pursuit's own ops - the only handlers here that are obj ops rather than loc
+        // ops, and the only ones not driven by the authored tables. `Break` is what makes the
+        // charge counter something a player can act on: the count belongs to the player, so a
+        // part-spent allowance follows them onto the next ring until one is deliberately broken.
+        //
+        // The worn `Check` is op2 and not op3: `WornInteractions` maps `IfButtonOp.Op2` to
+        // `param.wear_op1`, which is the param the ring carries its `Check` string in. Tumeken's
+        // shadow wires the identical param the same way.
+        onOpHeld3(HunterTracking.RING_OF_PURSUIT) { with(tracking) { checkRingCharges() } }
+        onOpHeld4(HunterTracking.RING_OF_PURSUIT) {
+            with(tracking) { breakRing(it.inventory, it.slot) }
+        }
+        onOpWorn2(HunterTracking.RING_OF_PURSUIT) { with(tracking) { checkRingCharges() } }
 
         // The single most important line here: without it, every player who logs out mid-trail is
         // retained forever in HunterTracking's IdentityHashMap - a real leak, not a theoretical

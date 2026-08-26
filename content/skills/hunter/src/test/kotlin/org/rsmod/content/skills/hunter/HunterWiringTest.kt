@@ -18,6 +18,7 @@ import org.rsmod.api.player.events.interact.HeldObjEvents
 import org.rsmod.api.player.events.interact.LocContentEvents
 import org.rsmod.api.player.events.interact.LocEvents
 import org.rsmod.api.player.events.interact.NpcEvents
+import org.rsmod.api.player.events.interact.WornObjEvents
 import org.rsmod.events.EventBus
 import org.rsmod.game.cheat.CheatCommandMap
 import org.rsmod.game.entity.player.SessionStateEvent
@@ -350,6 +351,31 @@ class HunterWiringTest {
             assertTrue(bus.hasOpLoc1(loc), "op1 (`Search`) on catch spot $loc")
             assertTrue(bus.hasOpLoc2(loc), "op2 (`Attack`) on catch spot $loc")
         }
+    }
+
+    /**
+     * The ring of pursuit's three ops, and the packed obj definition that carries two of them.
+     *
+     * Held `Check` and `Break` are `iop3`/`iop4`, asserted against the cache below rather than
+     * taken on trust. The worn `Check` is op**2**, not op3: `WornInteractions` maps
+     * `IfButtonOp.Op2` onto `param.wear_op1`, which is the param the ring carries its `Check`
+     * string in - registering `onOpWorn3` would put a handler on a button the client never sends.
+     * `TrackingLoopTest` asks the same question of a real boot.
+     */
+    @Test
+    fun `tracking registers check and break on the ring of pursuit`() {
+        val bus = Wiring().start(scripts.tracking)
+
+        assertTrue(bus.hasOpHeld3(RING_OBJ), "held op3 (`Check`) on $RING_OBJ")
+        assertTrue(bus.hasOpHeld4(RING_OBJ), "held op4 (`Break`) on $RING_OBJ")
+        assertTrue(bus.hasOpWorn2(RING_OBJ), "worn op2 (`Check`) on $RING_OBJ")
+
+        val type =
+            ServerCacheManager.getItem(RING_OBJ.asRSCM(RSCMType.OBJ))
+                ?: error("No packed obj definition for $RING_OBJ")
+        val ops = type.interfaceOptions
+        assertTrue(type.hasInvOp(HeldOp.Op3), "$RING_OBJ must carry iop3 (`Check`): $ops")
+        assertTrue(type.hasInvOp(HeldOp.Op4), "$RING_OBJ must carry iop4 (`Break`): $ops")
     }
 
     /**
@@ -726,6 +752,16 @@ class HunterWiringTest {
         fun hasOpHeld1(obj: String): Boolean =
             eventBus.contains(HeldObjEvents.Op1::class.java, obj.asRSCM(RSCMType.OBJ))
 
+        fun hasOpHeld3(obj: String): Boolean =
+            eventBus.contains(HeldObjEvents.Op3::class.java, obj.asRSCM(RSCMType.OBJ))
+
+        fun hasOpHeld4(obj: String): Boolean =
+            eventBus.contains(HeldObjEvents.Op4::class.java, obj.asRSCM(RSCMType.OBJ))
+
+        /** The equipped counterpart: a different event class, keyed on the same obj id. */
+        fun hasOpWorn2(obj: String): Boolean =
+            eventBus.contains(WornObjEvents.Op2::class.java, obj.asRSCM(RSCMType.OBJ))
+
         fun hasOpLoc1(loc: String): Boolean =
             eventBus.contains(LocEvents.Op1::class.java, loc.asRSCM(RSCMType.LOC))
 
@@ -787,6 +823,7 @@ class HunterWiringTest {
         private const val SNARE_OBJ = "obj.hunting_ojibway_bird_snare"
         private const val BOX_OBJ = "obj.hunting_box_trap"
         private const val MAGIC_BOX_OBJ = "obj.magic_imp_box"
+        private const val RING_OBJ = HunterTracking.RING_OF_PURSUIT
 
         private const val FALCONER_NPC = "npc.hunting_npc_falconer"
         private const val FALCONRY_AREA = "area.piscatoris_falconry"
