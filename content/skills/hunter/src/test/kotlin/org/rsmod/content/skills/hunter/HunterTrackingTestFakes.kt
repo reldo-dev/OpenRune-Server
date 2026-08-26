@@ -116,8 +116,8 @@ class HunterTrackingTestWorld {
     /* Vars */
 
     /** The value the client would render for [varbit] - read back one varbit at a time, never a
-     *  varp: the trail varps carry unrelated fields, so a varp assertion would be asserting other
-     *  systems' state too. */
+     *  varp: varp 925 carries unrelated fields (e.g., `lumbridge_alchemy_high`), so a varp write
+     *  would silently reset them. */
     fun varbitOf(player: Player, varbit: String): Int = player.vars[varbit]
 
     fun setVarbit(player: Player, varbit: String, value: Int) {

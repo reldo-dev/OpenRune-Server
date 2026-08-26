@@ -19,8 +19,8 @@ import org.rsmod.content.skills.hunter.HunterTrackingTestWorld.Companion.HOT_SPO
  * Every case builds the synthetic diamond from [HunterTrackingTestWorld.network], whose segments
  * carry **real** `varbit.hunting_trail_state8_*` gamevals so each write resolves through the same
  * `ServerCacheManager` path the running server takes. Assertions read those varbits back one at a
- * time and never a varp: varp 926 carries fields belonging to other systems, so a varp assertion
- * would be asserting their state too.
+ * time and never a varp: varp 925 carries unrelated fields (e.g., `lumbridge_alchemy_high`
+ * from another system), so a varp assertion would be asserting their state too.
  *
  * Serialised for the reason the rest of the suite is - `ServerCacheManager` is a singleton and
  * `RSCM` memoises into a plain `HashMap`, so a cache-touching class run beside another races on

@@ -23,6 +23,8 @@ const val TRACKING_RESET_QUEUE: String = "queue.hunter_tracking_reset"
  * a ring must not reset the count, which is exactly what a player varp models for free. Unwritten
  * reads back `0`, so a fresh account starts with the full ten-charge allowance.
  *
- * Declared here; nothing reads or decrements it yet - that is later work in this slice.
+ * The charges counter is read and advanced each time a worn ring of pursuit reveals a trail
+ * (via `HunterTracking.spendRingCharge`), and the ring is destroyed and the counter reset to zero
+ * on the tenth use.
  */
 internal var Player.trackingRingCharges: Int by intVarp("varp.hunter_ring_of_pursuit_charges")
