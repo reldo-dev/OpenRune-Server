@@ -159,6 +159,32 @@ constructor(
     private val collapses = ArrayList<Collapse>()
 
     /**
+     * How many creatures have gone into each pit since the log that armed it, keyed by the owning
+     * player and the site.
+     *
+     * [PIT_CAPACITY] bounds **one arming**, not how many catches are sitting in the pit
+     * uncollected, and those stop being the same number the moment a hunter collects the first of
+     * two. Counting the ledger instead let one pit take a third creature - and a fourth, and a
+     * fifth - on the single log [trapPit] spent: collecting creature A frees a place while creature
+     * B is still in the air, [takeCatch] correctly leaves such a pit at [PitState.Catching], and
+     * that is a state [jumpPit] accepts. The chain repeats for as long as one catch is still
+     * falling.
+     *
+     * Transient, and deliberately not persisted. It is a fact about the log currently in the pit,
+     * and a pit's whole saved state is the one 3-bit varbit [PitState] enumerates - there is no
+     * companion field, and authoring twenty-five server-side varps to record a count live gives no
+     * sign of keeping is the trade [Collapse] already refuses for the second catch itself. A
+     * restart therefore hands every pit a fresh arming, which is worth at most one extra creature
+     * to a player who was mid-window when it happened.
+     *
+     * An entry is written by a catch in [jumpPit] and dropped by [setPitState] the moment the pit
+     * is armed again or returns to [PitState.Empty] - the two writes that end an arming - so it
+     * lives only while a pit is holding something. [tick] drops what a logout leaves behind, as it
+     * does for [collapses], because a [PlayerUid] does not survive its player.
+     */
+    private val armedCatches = HashMap<Arming, Int>()
+
+    /**
      * `Trap` on an empty pit: one log, and the pit becomes a spiked pit.
      *
      * "With the required Hunter level, a knife or fletching knife and logs in the inventory,
@@ -247,8 +273,9 @@ constructor(
      * [PitState.Catching] is refused. The cache gives that state no ops at all, so no click can
      * reach it; the choice matters only if some later path ever calls this with a pit mid-collapse.
      * Emptying it would destroy a catch that is still landing and paying out would mint one that
-     * has not landed, so it does neither and leaves the pit exactly as it found it. [clearPits] is
-     * the escape hatch if a pit is ever stranded there.
+     * has not landed, so it does neither and leaves the pit exactly as it found it. The one thing
+     * that really strands a pit there is a logout mid-collapse, and [rebuildPits] resolves that on
+     * the way back in.
      *
      * @return false, with a message already sent where one is warranted, if nothing was dismantled.
      */
@@ -363,12 +390,23 @@ constructor(
     /**
      * How many creatures this player's copy of [site] is holding, landed or still falling.
      *
-     * What [PIT_CAPACITY] is counted against, and the only count that matters: a catch collected by
-     * [collectPit] leaves the pit, so a hunter who takes creature A out of a two-creature pit has
-     * room for another behind creature B.
+     * The ledger's own count, and **not** what [PIT_CAPACITY] is counted against - see
+     * [catchesThisArming] for the two-creature pit that made those different numbers. [rebuildPits]
+     * is the only caller: a site with a live entry behind it is one a landing is still counting
+     * down to, so it is not a site a logout stranded.
      */
     private fun pendingCatches(owner: PlayerUid, site: PitfallSite): Int =
         collapses.count { it.owner == owner && it.site == site }
+
+    /**
+     * How many creatures this player's copy of [site] has taken on the log currently in it.
+     *
+     * What [PIT_CAPACITY] is counted against. Unlike [pendingCatches] this does **not** fall when a
+     * catch is collected: the log is spent either way, and a pit that has taken its two takes no
+     * more until somebody arms it with another.
+     */
+    private fun catchesThisArming(owner: PlayerUid, site: PitfallSite): Int =
+        armedCatches[Arming(owner, site)] ?: 0
 
     /**
      * `Tease` on a pitfall creature: the only thing that makes one hostile, and the whole of the
@@ -506,9 +544,9 @@ constructor(
      * player has to lure it again." (wiki, *Pitfall*, oldid=15201220).
      *
      * So the whole of this op is: is anything of this pit's own kind chasing *this* player and
-     * close enough to be crossing, has the pit room for it ([PIT_CAPACITY]), will it go in, and if
-     * it does, which of the two collapsed renderings the pit ends on. A jump with nothing behind
-     * you is just a jump.
+     * close enough to be crossing, has the log that armed the pit any of its [PIT_CAPACITY] catches
+     * left, will it go in, and if it does, which of the two collapsed renderings the pit ends on.
+     * A jump with nothing behind you is just a jump.
      *
      * ## Which creature
      *
@@ -576,10 +614,10 @@ constructor(
         val creature = site.creature
         val chaser = crossingCreature(player, site) ?: return false
 
-        // A fact about the pit rather than about this creature, so it is asked before the memory
-        // below and long before the roll: a pit that already holds [PIT_CAPACITY] creatures takes
-        // no more, whatever is chasing.
-        if (pendingCatches(player.uid, site) >= PIT_CAPACITY) {
+        // A fact about the log in the pit rather than about this creature, so it is asked before
+        // the memory below and long before the roll: one arming buys [PIT_CAPACITY] catches and no
+        // more, whatever is chasing and however many of them the hunter has already collected.
+        if (catchesThisArming(player.uid, site) >= PIT_CAPACITY) {
             mes("There is no room in your trap for another creature.")
             return false
         }
@@ -612,6 +650,9 @@ constructor(
 
         setPitState(player, site, PitState.Catching)
         collapses += Collapse(player.uid, site, rotated)
+        // Counted after the state write, and it has to be that way round: [setPitState] drops the
+        // count for a pit that has just been armed or emptied, and [PitState.Catching] is neither.
+        armedCatches.merge(Arming(player.uid, site), 1, Int::plus)
         return true
     }
 
@@ -735,6 +776,12 @@ constructor(
                 }
             }
         }
+        // The counts a logout left behind. A [PlayerUid] does not survive its player, so an entry
+        // whose owner no longer resolves is one nothing will ever read or clear again - the sweep
+        // [landCollapses] does for the ledger, and the whole of what bounds this map.
+        if (armedCatches.isNotEmpty()) {
+            armedCatches.keys.removeAll { it.owner.resolve(playerList) == null }
+        }
         landCollapses()
     }
 
@@ -854,15 +901,20 @@ constructor(
     /**
      * Returns every one of this player's twenty-five pits to [PitState.Empty].
      *
-     * The whole of a player's pitfall state is these twenty-five varbits, so this is the one call
-     * that resets the technique - and the only way back out of a pit stranded in
-     * [PitState.Catching], which [dismantlePit] deliberately refuses to touch. It writes every site
-     * rather than only the non-empty ones because writing [PitState.Empty] over
-     * [PitState.Empty] costs nothing and a filtered pass would need the read anyway.
+     * **Test-only, and deliberately left that way.** Nothing in [PitfallEvents] or anywhere else in
+     * the server calls it: the recovery it was once described as - the way back out of a pit
+     * stranded in [PitState.Catching] - has a real, wired owner in [rebuildPits], which runs off
+     * the login queue, and no source describes a "reset my traps" action to hang a second one on.
+     * What it is genuinely for is the suites, which need a hunter's fifty-first catch to start from
+     * an empty pit without going through the op under test.
+     *
+     * It writes every site rather than only the non-empty ones because writing [PitState.Empty]
+     * over [PitState.Empty] costs nothing and a filtered pass would need the read anyway.
      *
      * The player's half of [collapses] goes with the varbits. A catch left in the ledger after its
      * pit had been emptied would land - or be collected - on a pit that no longer holds anything,
-     * which is the one way this feature could mint a creature out of nothing.
+     * which is the one way this feature could mint a creature out of nothing. Their half of
+     * [armedCatches] goes with them through [setPitState], since an emptied pit has no log in it.
      */
     fun clearPits(player: Player) {
         for (site in PitfallSites.all) {
@@ -883,8 +935,9 @@ constructor(
      * the landing comes back to a pit reading [PitState.Catching] with no ledger entry behind it,
      * and **nothing in the feature will ever move it again**: [landCollapses] only walks entries
      * that exist, [dismantlePit] deliberately refuses that state, and [trapPit] refuses it too. The
-     * pit is bricked - it counts against the trap cap, shows the collapsing frame forever, and the
-     * only way out is [clearPits].
+     * pit is bricked - it counts against the trap cap and shows the collapsing frame forever, and
+     * no click a player has reaches it. This is the way out, and it is the only one in the game:
+     * [clearPits] has no caller outside the test suites.
      *
      * ## Why it finishes the catch rather than returning the pit to [PitState.Set]
      *
@@ -940,6 +993,23 @@ constructor(
      */
     private fun setPitState(player: Player, site: PitfallSite, state: PitState) {
         VarPlayerIntMapSetter.set(player, site.varbit, state.varbitValue)
+        // The two writes that end an arming, and the one choke point every path to them goes
+        // through: [trapPit] puts a fresh log in ([PitState.Set]), and every route back to
+        // [PitState.Empty] - a dismantle, the last collection, [clearPits] - leaves a pit with no
+        // log in it at all. Every other state is the same arming still going.
+        if (state == PitState.Empty || state == PitState.Set) {
+            armedCatches.remove(Arming(player, site))
+        }
+    }
+
+    /**
+     * One player's copy of one pit, for as long as the log currently in it lasts.
+     *
+     * A key and nothing else: [armedCatches] is what it counts for, and a pit's identity here is
+     * the player who armed it and the site, exactly as [Collapse]'s first two fields are.
+     */
+    private data class Arming(val owner: PlayerUid, val site: PitfallSite) {
+        constructor(player: Player, site: PitfallSite) : this(player.uid, site)
     }
 
     /**
@@ -961,9 +1031,9 @@ constructor(
      * rules out the obvious implementation, a per-pit lock naming the creature that is heading into
      * it. Two things bound the window instead. [COLLAPSE_CYCLES] shuts it in time: the pit is in
      * [PitState.Catching] only until the first catch lands, and a jump on a pit that has finished
-     * collapsing catches nothing. [PIT_CAPACITY] shuts it by count at the two the wiki describes,
-     * because a hunter with a third creature pre-teased could otherwise fit it inside the same
-     * frame - see that constant for why the count is the bound worth having.
+     * collapsing catches nothing. [PIT_CAPACITY] shuts it by count, at the two per log the wiki
+     * describes, because a hunter with a third creature pre-teased could otherwise fit it inside
+     * the same frame - see that constant for why the count is the bound worth having.
      *
      * **The second catch is worth its own dismantle, and that half is the divergence to know
      * about.** A pit's persisted state is a single three-bit varbit with five defined values and no
@@ -1103,7 +1173,7 @@ constructor(
         private const val COLLAPSE_CYCLES: Int = 5
 
         /**
-         * How many creatures one pit will hold at once: **two**.
+         * How many creatures **one arming** buys: **two**.
          *
          * The window is bounded by a count as well as by [COLLAPSE_CYCLES], and the count is the
          * bound that is **sourced**. The wiki describes the technique as a two-for-one and spells
@@ -1111,16 +1181,24 @@ constructor(
          * trap and tease a second one into the same trap ... netting two kills for one trap" (wiki,
          * *Pitfall*, oldid=15201220) - and no page, newspost or reference server describes a third.
          *
-         * Without this, the ceiling would be whatever [COLLAPSE_CYCLES] happens to allow: a hunter
-         * with creatures pre-teased can put a third into the same collapse, and how many is a
-         * function of a constant that is admittedly *chosen for feel*. That makes "how many
-         * creatures one log buys" a number nobody decided, and one that a later tweak to the
-         * collapse timing would silently change. Two is the number the source gives, so two is the
-         * number that ships, and lengthening the collapse can no longer move it.
+         * **"Two kills for one trap" is read as two per log**, which is why the count lives in
+         * [armedCatches] and is read through [catchesThisArming]. Counting the pit's uncollected
+         * catches instead is the obvious alternative and it does not hold: collecting the first of
+         * two frees a place while the second is still falling, on a pit [takeCatch] correctly
+         * leaves at [PitState.Catching] and [jumpPit] therefore still accepts - so one log bought a
+         * third creature, and a fourth behind that, for as long as the hunter kept one in the air.
+         * `HunterPitfallTest` walks that sequence.
          *
-         * The refusal is a message rather than a silent false, per this file's rule: the hunter
-         * could have done something about it - dismantle the pit first, which frees a place the
-         * same cycle, since [pendingCatches] counts what is still in the pit.
+         * Without a count of some kind the ceiling would be whatever [COLLAPSE_CYCLES] happens to
+         * allow: a hunter with creatures pre-teased can put a third into the same collapse, and how
+         * many is a function of a constant that is admittedly *chosen for feel*. That makes "how
+         * many creatures one log buys" a number nobody decided, and one that a later tweak to the
+         * collapse timing would silently change. Two is the number the source gives, so two is the
+         * number that ships, and lengthening the collapse cannot move it.
+         *
+         * The refusal is a message rather than a silent false, per this file's rule - though the
+         * only remedy it leaves the hunter is another log: collecting what the pit already holds
+         * frees nothing, which is the whole point of counting the arming.
          */
         private const val PIT_CAPACITY: Int = 2
 

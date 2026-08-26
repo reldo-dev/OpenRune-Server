@@ -62,10 +62,12 @@ class HunterPitfallTest {
      * The two `IdentityHashMap`s are named here on purpose: teasing needed somewhere to record who
      * a creature is chasing and which pit it last refused, and the cheapest wrong answer to either
      * would have been a repository to look creatures up through. They hold nothing but npcs the
-     * caller already handed them. `PlayerList` is the engine's own player array, which is what
-     * `NpcPlayerFollowModeProcessor` resolves a follow target through and what
-     * [HunterPitfall.tick] resolves one through in turn; it is not a repository and cannot
-     * add, delete or move anything. The `ArrayList` is the collapse ledger.
+     * caller already handed them. The `HashMap` is the per-arming catch count, and it is named for
+     * the same reason: "how many creatures has this log taken" is per-player state, and the wrong
+     * answer to it would have been twenty-five new server-side varps. `PlayerList` is the engine's
+     * own player array, which is what `NpcPlayerFollowModeProcessor` resolves a follow target
+     * through and what [HunterPitfall.tick] resolves one through in turn; it is not a repository
+     * and cannot add, delete or move anything. The `ArrayList` is the collapse ledger.
      *
      * `NpcRepository` **is** held, and is deliberately not in the forbidden list: a creature that
      * falls into a pit dies, and `despawn` is how every hunter technique kills one. It is the loc
@@ -93,6 +95,7 @@ class HunterPitfallTest {
                 "PlayerList",
                 "IdentityHashMap",
                 "ArrayList",
+                "HashMap",
             ),
             collaborators,
         )
@@ -594,7 +597,8 @@ class HunterPitfallTest {
      * The cache gives state 2 no ops at all, so no click can reach this; it is here because the
      * *choice* matters if anything ever does. Returning the pit to empty would destroy a catch that
      * is still landing, and paying out would mint one that has not landed yet. Refusing does
-     * neither, and [HunterPitfall.clearPits] is the escape hatch if a pit is ever left there.
+     * neither; the one thing that really leaves a pit there is a logout mid-collapse, and
+     * [HunterPitfall.rebuildPits] resolves that on the way back in.
      */
     @Test
     fun `a collapsing pit cannot be dismantled, and is left exactly as it was`() {
@@ -1290,8 +1294,11 @@ class HunterPitfallTest {
     /**
      * Once the collapse has landed the window is shut: a full pit catches nothing more.
      *
-     * This is the bound on the two-creature technique below. Without it, a hunter could keep
-     * feeding creatures into one pit indefinitely on a single log.
+     * This is the two-creature technique's bound **in time**, and only that. What stops a hunter
+     * feeding creature after creature into one pit on a single log is the count in
+     * `HunterPitfall.PIT_CAPACITY`, which is charged against the arming rather than against what
+     * the pit is holding - see `a third creature cannot be caught on the log that already took
+     * two` and the test below it. This one says the window closes even with the count unspent.
      */
     @Test
     fun `a jump on a pit that has finished collapsing catches nothing`() {
@@ -1696,7 +1703,7 @@ class HunterPitfallTest {
     }
 
     /**
-     * A pit holds two creatures and no more, however quick the hunter is.
+     * One log takes two creatures and no more, however quick the hunter is.
      *
      * The wiki's technique is a two-for-one and its four steps name exactly two creatures: "lure
      * one creature into a trap and tease a second one into the same trap as the first is still
@@ -1706,11 +1713,15 @@ class HunterPitfallTest {
      * how many creatures a single log buys would be a number nobody chose, and one that a later
      * tweak to the collapse timing would quietly change.
      *
+     * This is the narrow half: nothing has been collected, so the pit is holding two and the count
+     * charged against the log is two, and a cap counting either would refuse the third. The test
+     * below it is the half that tells those apart, and it is the one that was failing.
+     *
      * The draw counter is asserted for the reason the refusal rule's is: a cap implemented as a
      * roll that loses would leave the outcome right and the meaning wrong.
      */
     @Test
-    fun `a third creature cannot be caught in a pit that already holds two`() {
+    fun `a third creature cannot be caught on the log that already took two`() {
         val site = HunterPitfallTestWorld.LARUPIA_SITE
         world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
         val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
@@ -1737,6 +1748,104 @@ class HunterPitfallTest {
         assertTrue(world.dismantle(player, site))
         assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"), "two, not three")
         assertEquals(PitState.Empty, world.stateOf(player, site), "two dismantles empty the pit")
+    }
+
+    /**
+     * Collecting the first of two catches does **not** buy the log a third creature.
+     *
+     * The bug this pins was live, and the sequence is four clicks a hunter doing the documented
+     * two-for-one would make anyway. A cap counted against what the pit is *holding* falls by one
+     * the instant creature A is collected - and `HunterPitfall.takeCatch` correctly leaves such a
+     * pit at [PitState.Catching], because creature B has still to land in it, which is a state the
+     * `Jump` op accepts. So the freed place is immediately usable, and the chain repeats for as
+     * long as the hunter keeps one catch in the air: three creatures on one log, then four.
+     *
+     * The count therefore belongs to the **arming**, not to the pit's contents. Charged that way,
+     * the log that took A and B is spent whatever the hunter collects, and the third creature is
+     * refused with B still falling - which is exactly the moment the old cap said yes.
+     *
+     * The draw counter is asserted for the reason the narrow half's is: a refusal implemented as a
+     * roll that loses would leave the outcome right and the meaning wrong. The two dismantles at
+     * the end are what says nothing was destroyed to get it - two creatures went in and two are
+     * paid for.
+     */
+    @Test
+    fun `collecting one catch does not free the log a place for a third`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site), "creature A goes in")
+        world.tick(2)
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site), "creature B goes in behind it")
+
+        world.tick(3)
+        assertEquals(PitState.Full, world.stateOf(player, site), "A has landed, B has two to go")
+        assertTrue(world.dismantle(player, site), "the results of creature A falling")
+        assertEquals(
+            PitState.Catching,
+            world.stateOf(player, site),
+            "the pit stays collapsing: creature B has still to land in it",
+        )
+
+        val third = world.addCreatureAt(site, tilesAway = 2)
+        assertTrue(world.tease(player, third))
+        val drawsBefore = world.random.doubleDraws
+
+        assertFalse(world.jump(player, site), "the log that armed this pit has taken its two")
+
+        assertTrue(third.isVisible, "the third creature is left standing on the map")
+        assertEquals(drawsBefore, world.random.doubleDraws, "a spent log must not roll")
+
+        world.tick(2)
+        assertTrue(world.dismantle(player, site), "the results of creature B falling")
+        assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"), "two, not three")
+        assertEquals(PitState.Empty, world.stateOf(player, site))
+    }
+
+    /**
+     * A second log buys a second pair, which is the bound not being a lifetime.
+     *
+     * The counterweight to the two tests above: the cap is charged against the arming, so arming
+     * the pit again with another log has to hand it a full pair back. A cap that had over-tightened
+     * into "this pit has taken its two, ever" would pass both of those and fail here, and the two
+     * are indistinguishable until a pit is emptied and rebuilt.
+     *
+     * Built through `trapPit` rather than written, because the log is the thing under test: the
+     * hunter pays a second one and gets a second window for it.
+     */
+    @Test
+    fun `a second log buys the pit a second pair of catches`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site), "creature A goes in")
+        world.tick(2)
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site), "creature B goes in behind it")
+
+        world.tick(5)
+        assertTrue(world.dismantle(player, site), "the results of creature A falling")
+        assertTrue(world.dismantle(player, site), "the results of creature B falling")
+        assertEquals(PitState.Empty, world.stateOf(player, site), "the first log is spent")
+
+        world.giveTrapKit(player)
+        assertTrue(world.trap(player, site), "a second log arms the pit again")
+        assertEquals(PitState.Set, world.stateOf(player, site))
+
+        val third = world.addCreatureAt(site, tilesAway = 2)
+        assertTrue(world.tease(player, third))
+
+        assertTrue(world.jump(player, site), "the new log takes a creature of its own")
+
+        assertEquals(PitState.Catching, world.stateOf(player, site))
+        world.tick(5)
+        assertTrue(world.dismantle(player, site))
+        assertEquals(3, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"), "two, then one")
     }
 
     /**
@@ -1894,8 +2003,8 @@ class HunterPitfallTest {
     /**
      * Clearing a player's pits cancels a collapse that has not landed yet.
      *
-     * [HunterPitfall.clearPits] is the only way out of a pit stranded mid-collapse, and a catch
-     * left in the ledger by it does not merely linger: it lands on whatever that pit is doing
+     * [HunterPitfall.clearPits] is the suites' own reset - nothing in the game calls it - and a
+     * catch left in the ledger by it does not merely linger: it lands on whatever that pit is doing
      * later. The sequence below is the one that turns it into a duplicated payout - clear a pit
      * mid-collapse, rebuild it, catch something else, and the abandoned catch lands on the *new*
      * collapse's frame, ending it early and leaving the real one behind it as a second, unearned
