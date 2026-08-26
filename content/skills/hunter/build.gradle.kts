@@ -26,7 +26,11 @@ dependencies {
     // that flips it back and forth.
     testImplementation(projects.content.quest)
 
-
+    // Test-only. `PitfallSitesTest` proves every authored pitfall coordinate against the packed map
+    // the way `GameMapDecoder` reads it, and `MapLocListDefinition.spawns` is a fastutil
+    // `LongArrayList`. `or-cache` depends on fastutil with `implementation`, so the type is not on
+    // this module's compile classpath without saying so.
+    testImplementation(libs.fastutil)
 }
 
 /**
