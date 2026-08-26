@@ -91,7 +91,8 @@ class TrackingLoopTest {
      * All 119 of them - 12 burrows, 75 clues, 32 catch spots - because the lookup is a zone hash
      * and the whole sweep costs milliseconds against an already-booted world.
      *
-     * `hunterVerify` check 7 asks this of the packed cache. This asks it of [LocRegistry], which is
+     * The local-only `hunterVerify` task asks this of the packed cache. This asks it of
+     * [LocRegistry], which is
      * where a click lands: `GameMapDecoder` drops map groups past its cutoff and shifts locs down a
      * plane on `LINK_BELOW` tiles, so a coordinate can be correct in the cache and absent from the
      * running world. The catch spots are the ones that would hurt - `isHotSpot` compares the
@@ -148,10 +149,16 @@ class TrackingLoopTest {
         assertEquals(TrailLogic.VISIBLE_FORWARD, player.vars[stranded], "test setup")
 
         world.login(player)
-        repeat(3) { world.cycle.tick() }
+        try {
+            repeat(3) { world.cycle.tick() }
 
-        assertEquals(0, player.vars[stranded], "$stranded should be hidden by the login reset")
-        world.logout(player)
+            assertEquals(0, player.vars[stranded], "$stranded should be hidden by the login reset")
+        } finally {
+            // In a `finally` because the world is shared with every other class in this source set:
+            // a failed assertion that leaked a registered player would surface as an unrelated
+            // failure somewhere downstream.
+            world.logout(player)
+        }
     }
 
     /**
@@ -437,8 +444,8 @@ class TrackingLoopTest {
          * Hunter experience per catch, x10 as `PlayerStatMap.getFineXP` reports it.
          *
          * Literals off the wiki technique table rather than `TrackingCreatures.xp`, so that this
-         * asserts the award against a source outside the code under test. `hunterVerify` check 9
-         * pins the same five numbers independently.
+         * asserts the award against a source outside the code under test. The local-only
+         * `hunterVerify` task pins the same five numbers independently.
          */
         private val WIKI_FINE_XP =
             mapOf(
