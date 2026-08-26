@@ -476,9 +476,13 @@ class TrackingLoopTest {
         /**
          * Hunter experience per catch, x10 as `PlayerStatMap.getFineXP` reports it.
          *
-         * Literals off the wiki technique table rather than `TrackingCreatures.xp`, so that this
-         * asserts the award against a source outside the code under test. The local-only
-         * `hunterVerify` task pins the same five numbers independently.
+         * Literals off each creature's own wiki page - the "Hunter info" box - rather than
+         * `TrackingCreatures.xp`, so that this asserts the award against a source outside the code
+         * under test. Per-creature pages and not a summary table: the summary tables round, which
+         * is how the razor-backed kebbit's 348.5 shipped as 348 with a green test beside it. Polar
+         * (oldid 15196366), common (15161155), feldip weasel (15196280), desert devil (15196431),
+         * razor-backed (15196430). The local-only `hunterVerify` task pins the same five
+         * independently.
          */
         private val WIKI_FINE_XP =
             mapOf(

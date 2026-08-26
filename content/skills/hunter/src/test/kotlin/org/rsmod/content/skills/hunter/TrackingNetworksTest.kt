@@ -117,6 +117,17 @@ class TrackingNetworksTest {
         // landing in two networks would otherwise vanish without a symptom.
         assertEquals(TrackingNetworks.all.sumOf { it.segments.size }, clues.size)
         assertEquals(TrackingNetworks.all.sumOf { it.burrows.size }, burrows.size)
+        // Catch spots are counted per network rather than per placement: one gameval covers
+        // several tiles in an area - `hunting_trail_end_polar` is placed four times in Rellekka -
+        // which is exactly why a catch spot is matched on coordinate. What must not collide is a
+        // gameval across two *areas*: `toMap()` would bind both to whichever came last, and every
+        // trail in the other would end at a loc no handler routes to that network. Silent.
+        val endsPerNetwork = TrackingNetworks.all.map { it.catchSpots.map(TrailCatchSpot::loc) }
+        assertTrue(
+            endsPerNetwork.all { it.toSet().size == 1 },
+            "each network's catch spots share exactly one gameval",
+        )
+        assertEquals(TrackingNetworks.all.size, ends.size)
     }
 
     @Test

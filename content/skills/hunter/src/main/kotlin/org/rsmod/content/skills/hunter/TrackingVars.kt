@@ -11,7 +11,10 @@ import org.rsmod.game.entity.Player
  * is exactly the state during the login event. So the reset has to ride a soft queue instead,
  * exactly as the bird house fill does.
  *
- * Declared here; nothing arms this queue yet - that is later work in this slice.
+ * So the queue is the reset's only entry point: `TrackingEvents` arms it from `onPlayerLogin` and
+ * runs `HunterTracking.loginReset` from the `onPlayerSoftQueue` body. Calling `loginReset` from the
+ * login handler directly would still pass every unit test - the varps do change - and leave the
+ * client drawing the footprints it had before.
  */
 const val TRACKING_RESET_QUEUE: String = "queue.hunter_tracking_reset"
 

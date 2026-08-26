@@ -82,6 +82,35 @@ class HunterTrackingTest {
         assertTrue(world.wasTold(player, "already following"))
     }
 
+    @Test
+    fun `inspecting a burrow in another area clears the trail abandoned in the first`() {
+        val world = HunterTrackingTestWorld()
+        // Two networks off different varbit blocks, which is what two areas are: a trail cleared
+        // in one has to be observable separately from a trail rendered in the other.
+        val rellekka = HunterTrackingTestWorld.network(TrackingCreatures.polar)
+        val feldip = HunterTrackingTestWorld.network(TrackingCreatures.feldipWeasel, block = 6)
+        val player = world.addPlayer()
+        world.random.nextInt = 0
+        assertTrue(world.inspectBurrow(player, rellekka))
+        assertTrue(world.inspectClue(player, rellekka, "loc.hunting_trail_clue8_1"))
+        assertEquals(listOf(4, 4, 0, 0, 0), world.segmentValues(player, rellekka), "test setup")
+
+        assertTrue(world.inspectBurrow(player, feldip))
+
+        // The footprints left behind are the whole point: dropping the entry without clearing them
+        // would leave a trail rendering in Rellekka that the server has no state for and that no
+        // clue can ever advance. This switch is the only way out of that short of relogging.
+        assertEquals(
+            List(5) { 0 },
+            world.segmentValues(player, rellekka),
+            "the abandoned trail stops rendering",
+        )
+        assertEquals(listOf(4, 0, 0, 0, 0), world.segmentValues(player, feldip))
+        val trail = checkNotNull(world.tracking.trailOf(player))
+        assertEquals(feldip, trail.network, "the tracked trail is the new area's")
+        assertEquals(1, trail.revealed)
+    }
+
     /* Inspecting a clue */
 
     @Test

@@ -5,9 +5,12 @@ import org.rsmod.map.CoordGrid
 /**
  * The authored trail geometry, one entry per AREA, transcribed from the packed-map sweep
  * (`.data/cache/wiki-hunter/tracking-network-sweep.md`). This file is the only place that knows a
- * coordinate. A later task is expected to add `hunterVerify`, re-checking every loc coordinate
- * against the packed map so a typo here becomes a build-time finding; that check is not written
- * yet, so today a wrong coordinate here is a dead trail rather than a build failure.
+ * coordinate, and a wrong one is silent where it is used: a burrow that inspects into nothing, or a
+ * kebbit that can never be caught, with no error anywhere. So no coordinate here stands on its own
+ * authority - all 119 are checked against sources outside this file, by the local-only
+ * `hunterVerify` task against the packed map and by
+ * `TrackingLoopTest.theAuthoredTrailLocsArePlacedInTheBootedWorld` against a booted world's
+ * `LocRegistry`, which is where a click actually lands. Neither runs in `assemble`.
  *
  * **Not one entry per varp.** Four of the five creatures span two or three varp blocks, and varps
  * 922 and 924 are each split between two creatures - grouping by varp would merge the common kebbit

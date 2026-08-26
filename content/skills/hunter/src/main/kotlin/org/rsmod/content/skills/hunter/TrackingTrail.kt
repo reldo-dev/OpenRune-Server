@@ -80,8 +80,9 @@ object TrailLogic {
 
     /**
      * The values the footprint multilocs key on: 3 and 4 are the two visible variants of a
-     * run, 5/6 their fading twins, 0 hidden. Both draw the same footprints; they differ by
-     * a 180-degree flip.
+     * run, 5 and 6 their fading twins - which nothing here writes, so they have no constant -
+     * and 0 hidden. Both visible values draw the same footprints; they differ by a
+     * 180-degree flip.
      *
      * **Which of the two points toward the catch is not a constant, and swapping these will
      * not fix it.** Measured off the packed map, 2026-08-25. Two findings:
@@ -105,8 +106,6 @@ object TrailLogic {
      */
     const val VISIBLE_FORWARD = 4
     const val VISIBLE_REVERSED = 3
-    const val FADE_FORWARD = 6
-    const val FADE_REVERSED = 5
 
     /**
      * All simple paths from [origin] to any catch spot with length in

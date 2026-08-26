@@ -263,18 +263,26 @@ class HunterTrackingTestWorld {
          * Both catch spots deliberately share one loc gameval, because that is what the map does -
          * `hunting_trail_end_polar` is placed four times in Rellekka - and it is why a catch spot is
          * the one thing here matched on coordinate rather than on gameval.
+         *
+         * [block] picks which `hunting_trail_state<block>_*` run of varbits the segments name, so
+         * that two calls can build two networks a player can hold trails in one after the other.
+         * Two networks off the *same* block would write the same varbits, and clearing the first
+         * would be indistinguishable from never having rendered the second.
          */
-        fun network(creature: TrackingCreature = TrackingCreatures.polar): TrackingNetwork =
+        fun network(
+            creature: TrackingCreature = TrackingCreatures.polar,
+            block: Int = 8,
+        ): TrackingNetwork =
             TrackingNetwork(
-                area = "test_area",
+                area = "test_area_$block",
                 creature = creature,
                 segments =
                     listOf(
-                        segment(0, ORIGIN, NODE_A),
-                        segment(1, NODE_A, HOT_SPOT),
-                        segment(2, ORIGIN, NODE_B),
-                        segment(3, NODE_B, COLD_SPOT),
-                        segment(4, NODE_A, NODE_B),
+                        segment(block, 0, ORIGIN, NODE_A),
+                        segment(block, 1, NODE_A, HOT_SPOT),
+                        segment(block, 2, ORIGIN, NODE_B),
+                        segment(block, 3, NODE_B, COLD_SPOT),
+                        segment(block, 4, NODE_A, NODE_B),
                     ),
                 burrows =
                     listOf(
@@ -291,10 +299,15 @@ class HunterTrackingTestWorld {
                     ),
             )
 
-        private fun segment(index: Int, endA: CoordGrid, endB: CoordGrid): TrailSegment =
+        private fun segment(
+            block: Int,
+            index: Int,
+            endA: CoordGrid,
+            endB: CoordGrid,
+        ): TrailSegment =
             TrailSegment(
-                varbit = "varbit.hunting_trail_state8_$index",
-                clue = "loc.hunting_trail_clue8_$index",
+                varbit = "varbit.hunting_trail_state${block}_$index",
+                clue = "loc.hunting_trail_clue${block}_$index",
                 // Off to one side of the run, as a real clue placement is. Never compared against.
                 clueCoords = CoordGrid(x = 2690 + index, z = 3790, level = 0),
                 endA = endA,
