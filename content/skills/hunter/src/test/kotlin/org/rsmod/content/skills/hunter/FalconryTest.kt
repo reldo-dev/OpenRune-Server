@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.rsmod.map.CoordGrid
 
@@ -23,6 +25,7 @@ import org.rsmod.map.CoordGrid
  * [falconTimesOutWithOwnerLoggedOut], because they assert the *absence* of a reward. A timeout that
  * quietly paid out would look identical to a correct one from inside the game.
  */
+@Execution(ExecutionMode.SAME_THREAD)
 @ResourceLock(HUNTER_TEST_WORLD_LOCK)
 class FalconryTest {
     /* Rates and table integrity - code against an independent source, not against code. */
