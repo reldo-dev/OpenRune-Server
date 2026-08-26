@@ -11,10 +11,12 @@ import org.rsmod.api.registry.npc.NpcRegistry
 import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.player.isSuccess
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
+import org.rsmod.api.repo.npc.NpcRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.coroutine.suspension.GameCoroutineSimpleCompletion
 import org.rsmod.events.EventBus
+import org.rsmod.game.MapClock
 import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.NpcList
 import org.rsmod.game.entity.Player
@@ -28,14 +30,18 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * A world for pitfall trapping: a player, two inventories, one stat, and the creatures that get
  * teased into a pit.
  *
- * There is still no loc registry, no controller repository and no
- * [org.rsmod.api.random.GameRandom], because [HunterPitfall] takes none of them. A pit is per-player
- * varbit state on permanent map scenery, and neither half of the tease rolls anything.
+ * There is still no loc registry and no controller repository, because [HunterPitfall] takes
+ * neither. A pit is per-player varbit state on permanent map scenery, so nothing this feature does
+ * can reach a loc at all.
  *
  * That absence is itself the point, and [HunterPitfallTest] asserts it on the *type* rather than by
  * watching a repository stay untouched: a test that could not delete a map loc even if the
  * production code tried is weaker evidence than one that could. A `locRepo.del` on a pit would take
  * it out of the world for every player until the next restart.
+ *
+ * The [NpcRepository] this world builds is the exception the catch needs, and it is not an
+ * exception to that invariant: a creature that goes into a pit dies, `despawn` is how every hunter
+ * technique kills one, and an npc repository cannot touch scenery.
  *
  * The two registries this world *does* build exist for the tease, and neither is reachable from
  * [HunterPitfall]:
@@ -58,11 +64,29 @@ class HunterPitfallTestWorld {
     private val eventBus = EventBus()
     private val zoneActivity = ZonePlayerActivityBitSet()
 
+    private val mapClock = MapClock()
     private val npcRegistry = NpcRegistry(npcList, collision, eventBus)
     private val playerRegistry = PlayerRegistry(playerList, collision, zoneActivity, eventBus)
+    private val npcRepo = NpcRepository(mapClock, npcRegistry, npcList)
+
+    /**
+     * The catch roll, dictated draw by draw.
+     *
+     * `rate > randomDouble()`, so [ScriptedRandom.ALWAYS_CATCH] catches whatever the level and
+     * [ScriptedRandom.HIGHEST_DRAW] misses any rate at or below 256/256 - and the two antelopes are
+     * caught either way, because their pair is null and no draw is taken for them at all.
+     * [ScriptedRandom.doubleDraws] is what proves that last part rather than merely asserting the
+     * outcome.
+     */
+    val random: ScriptedRandom = ScriptedRandom()
 
     val pitfall: HunterPitfall =
-        HunterPitfall(xpMods = XpModifiers(emptySet()), playerList = playerList)
+        HunterPitfall(
+            gameRandom = random,
+            npcRepo = npcRepo,
+            xpMods = XpModifiers(emptySet()),
+            playerList = playerList,
+        )
 
     private var nextUuid: Long = 1L
 
@@ -167,6 +191,24 @@ class HunterPitfallTestWorld {
         return npc
     }
 
+    /**
+     * The pit's **own** creature, live, [tilesAway] tiles east of the pit itself.
+     *
+     * Spawned from [PitfallSite.creature] rather than from a name the test picks, because a jump
+     * only catches the species the pit belongs to and a test that spelled the pairing out again
+     * would be free to disagree with the site table. The offset is what a range test varies.
+     */
+    fun addCreatureAt(site: PitfallSite, tilesAway: Int = 0): Npc =
+        addNpc(
+            site.creature.npc,
+            CoordGrid(x = site.coords.x + tilesAway, z = site.coords.z, level = site.coords.level),
+        )
+
+    /** Puts [npc] on the pit at [site], which is where a lure ends. */
+    fun moveNpcTo(npc: Npc, site: PitfallSite) {
+        npc.coords = site.coords
+    }
+
     /** Takes [npc] out of the world for good, the way a permanent despawn would. */
     fun removeNpc(npc: Npc) {
         npcRegistry.del(npc)
@@ -217,6 +259,27 @@ class HunterPitfallTestWorld {
         return result.getOrThrow()
     }
 
+    /**
+     * `Jump` on [site], driven to completion in one call.
+     *
+     * [HunterPitfall.jumpPit] is `suspend` for the same reason the tease is - it composes with the
+     * suspending op handler a later task registers it in - and has no suspension point of its own:
+     * the catch resolves in the cycle the player jumps, and the collapse is a cycle count on
+     * [HunterPitfall.tickChases] rather than a delay the player waits out. The [checkNotNull] is the
+     * assertion of exactly that.
+     */
+    fun jump(player: Player, site: PitfallSite): Boolean {
+        val coroutine = GameCoroutine()
+        val access = ProtectedAccess(player, coroutine, ProtectedAccessContextFactory.empty())
+        var outcome: Result<Boolean>? = null
+        val body: suspend GameCoroutine.() -> Unit = {
+            outcome = runCatching { with(pitfall) { access.jumpPit(site) } }
+        }
+        body.startCoroutine(coroutine, GameCoroutineSimpleCompletion)
+        val result = checkNotNull(outcome) { "jumpPit suspended; this harness cannot resume." }
+        return result.getOrThrow()
+    }
+
     fun teasedBy(npc: Npc): PlayerUid? = pitfall.teasedBy(npc)
 
     fun stopChasing(npc: Npc) {
@@ -232,6 +295,11 @@ class HunterPitfallTestWorld {
      */
     fun tickChases() {
         pitfall.tickChases()
+    }
+
+    /** [times] cycles of that same hook, which is how a collapse finishes landing. */
+    fun tick(times: Int) {
+        repeat(times) { pitfall.tickChases() }
     }
 
     /** Who [npc] is chasing, read exactly as `NpcPlayerFollowModeProcessor` reads it each cycle. */
@@ -319,6 +387,14 @@ class HunterPitfallTestWorld {
 
         val LARUPIA_SITE: PitfallSite
             get() = LARUPIA_SITES.first()
+
+        /**
+         * A second larupia pit, and the two are far enough apart to matter: site 7 is at
+         * (2556, 2893) and site 8 at (2543, 2908), so a creature standing on one is nowhere near
+         * the other. That is what makes it the "another pit" the refusal rule sends a creature to.
+         */
+        val SECOND_LARUPIA_SITE: PitfallSite
+            get() = LARUPIA_SITES[1]
 
         val SUNLIGHT_SITE: PitfallSite
             get() = SUNLIGHT_SITES.first()

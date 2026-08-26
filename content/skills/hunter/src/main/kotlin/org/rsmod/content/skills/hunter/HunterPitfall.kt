@@ -9,15 +9,19 @@ import org.rsmod.api.player.output.mes
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.stat.hunterLvl
 import org.rsmod.api.player.vars.VarPlayerIntMapSetter
+import org.rsmod.api.random.GameRandom
+import org.rsmod.api.repo.npc.NpcRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.table.FiremakingLogsRow
+import org.rsmod.api.utils.skills.SkillingSuccessRate
 import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
 import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.entity.player.PlayerUid
 
 /**
- * Pitfall trapping: the two halves a player performs by hand - setting a pit, and taking one apart.
+ * Pitfall trapping: setting a pit, jumping it, the catch that follows the hunter in, and taking the
+ * pit apart again.
  *
  * **Structurally a crab trap, not a trap.** Like [HunterCrabTrap], and unlike the five families
  * [HunterTrap] runs, a pitfall is not an object in the world at all: the map places a
@@ -25,37 +29,60 @@ import org.rsmod.game.entity.player.PlayerUid
  * `multiloc` children the *viewing player's* `hunt_pitfall_state<n>` varbit selects. So the
  * server's whole job is to write a varbit, and:
  * - **`locRepo` is never touched.** Not `del`, not `change`, not `add`. This class holds no loc,
- *   controller, npc or obj repository, so the invariant the deadfall and net trap need a runtime
+ *   controller or obj repository, so the invariant the deadfall and net trap need a runtime
  *   `check` to enforce - never delete a permanent map loc - is unrepresentable here rather than
  *   merely guarded. A `del` on a pit would take it out of the world for *every* player until the
- *   next restart.
+ *   next restart. The one repository it does hold is [NpcRepository], because a creature that goes
+ *   into a pit dies; it cannot reach scenery.
  * - **Never a computed bit offset.** Every write goes through [VarPlayerIntMapSetter] by the site's
  *   own gameval name and lets the cache place the bits, because the layout has a hole: site 18 ends
  *   at bit 23 of `varp.hunt_pitfall_states_basevar2` and site 19 starts at bit **25**. See
  *   [PitfallSite].
  * - **Pits are private.** Two players setting the same pit do not contend, so there is no owner to
  *   record, no controller to anchor and no tile to key anything on.
- * - **No random draw.** Neither half of this class rolls anything: the catch roll belongs to the
- *   creature that walks into the pit, and every reward line in [PitfallCreatures] is a flat
- *   quantity, so no [org.rsmod.api.random.GameRandom] is injected. `HunterPitfallTest` pins that
- *   flatness, so a ranged line added later fails there rather than silently awarding its minimum.
+ * - **One random draw, and only for three of the five creatures.** [jumpPit] rolls the catch for
+ *   the three cats and does not roll at all for the two antelopes; every reward line in
+ *   [PitfallCreatures] is a flat quantity, so nothing else here draws. `HunterPitfallTest` pins
+ *   both - the flatness, so a ranged line added later fails there rather than silently awarding
+ *   its minimum, and the antelopes' draw count, so "cannot fail" cannot decay into "rolls a rate
+ *   that always wins".
  *
  * ## What this class is not, yet
  *
- * Jumping the pit, the roll that decides a catch, the [PitState.Catching] frame and the transition
- * into [PitState.Full] are a later task's, as is registering any of this against a loc or npc op.
- * Nothing in this file is wired to a click.
+ * Nothing here is registered against a click. The op layer - a `Jump` on the spiked pit, a `Trap`
+ * and a `Dismantle` on the loc, a `Tease` on the creature - is a later task's, as is the player's
+ * own vault across the pit: that is an `exactMove` off the clicked loc's angle, and [PitfallSite]
+ * carries coordinates rather than an angle precisely because the click is what knows which way a
+ * pit faces. [jumpPit] resolves the catch; it does not move the player.
  *
  * **[tickChases] is the one thing here that is not an op, and it is not optional.** It needs a
  * `GameLifecycle.LateCycle` registration - `onEvent<GameLifecycle.LateCycle> { pitfall.tickChases()
  * }`, exactly as [ImplingSpawner] gets one - and without it a teased creature follows its hunter
- * across the world forever. See [tickChases] for why nothing else in the engine will stop it.
+ * across the world forever and every catch stays stuck mid-collapse. It is the feature's single
+ * per-cycle hook and it runs both halves: the chase leash, and the landing of a collapse [jumpPit]
+ * started. See [tickChases] for why nothing else in the engine will stop a chase, and
+ * [landCollapses] for why the landing is a cycle count rather than a queue.
  *
  * @see PitState for what each varbit value renders as, and which ops the cache declares on it.
  */
 class HunterPitfall
 @Inject
-constructor(private val xpMods: XpModifiers, private val playerList: PlayerList) {
+constructor(
+    // Named `gameRandom`, not `random`. `ProtectedAccess` has a `random` property of its own and an
+    // extension receiver's member wins over the dispatch receiver's field, so a field called
+    // `random` here would be silently shadowed at every use site and the catch roll would draw from
+    // the player's context RNG instead of the injected one - compiling, running, and untestable.
+    // [HunterButterfly] and [HunterFalconry] carry the same note for the same reason.
+    private val gameRandom: GameRandom,
+    // The one repository this class holds, and it is not a loc repository. A catch kills the
+    // creature that walked into the pit, and `despawn` is how every other hunter technique removes
+    // one; it cannot touch scenery. `HunterPitfallTest` still asserts that no *loc*, controller or
+    // obj repository is reachable from here, because a `del` on a pit would take it out of the
+    // world for every player until the next restart.
+    private val npcRepo: NpcRepository,
+    private val xpMods: XpModifiers,
+    private val playerList: PlayerList,
+) {
     /**
      * Which creature is chasing which player, keyed by npc **identity**.
      *
@@ -74,6 +101,40 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
      * than growing without limit. Identity keying, and the reasoning behind it, is `FalconLinks`'.
      */
     private val chases = IdentityHashMap<Npc, PlayerUid>()
+
+    /**
+     * The one pit each creature will not jump into next, keyed by npc **identity**.
+     *
+     * "Since these creatures will not jump the same pit twice in a row, the next attempt must be at
+     * another pit." (wiki, *Pitfall*, oldid=15201220). Read that literally: it is **one** pit per
+     * creature, replaced by the next pit it vaults, and **not** a set that accumulates. A creature
+     * that jumps over pit A refuses pit A on the very next attempt and is catchable by pit A again
+     * as soon as any other pit has intervened. A set would quietly retire the whole hunting ground
+     * one pit at a time, which no source describes.
+     *
+     * An entry is written by a failed [jumpPit], overwritten by the next failure elsewhere, removed
+     * by a catch - a creature in a pit has nothing left to refuse - and dropped by [tickChases]
+     * when the world takes the creature away, which is also what keeps this bounded and what gives
+     * a respawn a clean slate. Deliberately **not** cleared by a tease: a hunter who re-teases the
+     * creature they just failed to catch must still be sent to another pit, or the rule means
+     * nothing.
+     */
+    private val lastVaulted = IdentityHashMap<Npc, PitfallSite>()
+
+    /**
+     * Every catch that is still falling, and every catch that has landed and not been collected.
+     *
+     * This is the pit's [PitState.Catching] frame given a length, and it is the only state in this
+     * feature that is **not** the player's varbit. It is deliberately transient - a restart takes
+     * it, and the varbit it wrote survives, which is the right way round for a ledger whose whole
+     * job is to say what is happening *now*. [Collapse] carries what the varbit has no room for and
+     * nothing else.
+     *
+     * A list rather than a map because a pit can hold more than one: see [Collapse] for the
+     * documented two-creature window that requires it, and [collectPit] for what an uncollected
+     * second entry does to a dismantle.
+     */
+    private val collapses = ArrayList<Collapse>()
 
     /**
      * `Trap` on an empty pit: one log, and the pit becomes a spiked pit.
@@ -188,12 +249,22 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
         }
 
     /**
-     * Hands over what a full pit holds, then returns it to an empty pit.
+     * Hands over what a full pit holds, then returns it to an empty pit - or leaves it full, if a
+     * second creature went in behind the first.
      *
      * Room is checked for the **whole** catch before any of it is awarded, and the pit is left full
      * if there is not enough: a catch that half-landed and spilled the rest on the floor puts a
      * rare fur under a despawn timer, where a refused one is still in the pit when a slot is freed.
      * This is falconry's rule and the crab trap's, in the same words.
+     *
+     * **One dismantle pays for one creature.** "It is possible, if acting quickly, to lure one
+     * creature into a trap and tease a second one into the same trap as the first is still walking
+     * over it, netting two kills for one trap ... Dismantle the results of creature A falling.
+     * Dismantle the results of creature B falling." (wiki, *Pitfall*, oldid=15201220). So a pit
+     * that took two catches is dismantled twice, and this leaves it full for as long as [collapses]
+     * still holds a landed catch for it. A pit that is full with nothing in the ledger - which is
+     * what a relog leaves, since the ledger is transient and the varbit is not - pays once and
+     * empties, exactly as it did before the window existed.
      */
     private fun ProtectedAccess.collectPit(site: PitfallSite): Boolean {
         val creature = site.creature
@@ -218,8 +289,22 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
         val xp = (creature.xp / 10.0) * xpMods.get(player, "stat.hunter")
         statAdvance("stat.hunter", xp)
 
-        setPitState(player, site, PitState.Empty)
+        val next = takeLandedCatch(player.uid, site)
+        setPitState(player, site, next?.fullState ?: PitState.Empty)
         return true
+    }
+
+    /**
+     * Removes one landed catch from [site]'s ledger and returns the next one still in the pit.
+     *
+     * Removed before the next is read, so a pit holding exactly one catch comes back null and
+     * empties. Order is the order they landed in, which is the order they went in.
+     */
+    private fun takeLandedCatch(owner: PlayerUid, site: PitfallSite): Collapse? {
+        val landed = collapses.filter { it.owner == owner && it.site == site && it.landed }
+        val collected = landed.firstOrNull() ?: return null
+        collapses.remove(collected)
+        return landed.getOrNull(1)
     }
 
     /**
@@ -349,7 +434,181 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
     fun teasedBy(npc: Npc): PlayerUid? = chases[npc]
 
     /**
+     * `Jump` on a spiked pit: vault it, and whatever is chasing you may go in.
+     *
+     * "With a teasing stick in the inventory or a hunter's spear equipped, the player has to tease
+     * the creature and then jump over the spiked pit. When the creature passes the trap, it may be
+     * caught." and "If the prey is successfully caught, the trap will collapse and the creature
+     * will fall into the pit ... If not successful, the creature will jump over the trap and the
+     * player has to lure it again." (wiki, *Pitfall*, oldid=15201220).
+     *
+     * So the whole of this op is: is anything of this pit's own kind chasing *this* player and
+     * close enough to be crossing, will it go in, and if it does, which of the two collapsed
+     * renderings the pit ends on. A jump with nothing behind you is just a jump.
+     *
+     * ## Which creature
+     *
+     * [chases] is filtered by three things, and each one is a bug it prevents:
+     * - **the teaser is this player**, so jumping your own pit cannot take somebody else's lure.
+     *   That is the fact [chases] exists to keep, as a [PlayerUid] rather than a slot;
+     * - **the species is the pit's own**, so a graahk that wandered over a larupia pit cannot be
+     *   collected as larupia fur and meat. The five hunting grounds do not overlap, so this cannot
+     *   happen by walking - but nothing stops a later task from teasing across one;
+     * - **it is within [CATCH_RANGE] of the pit**, which is what "passes the trap" reduces to.
+     *
+     * The nearest qualifying creature is taken, so a hunter with two on their heels catches the one
+     * actually crossing rather than whichever the map happens to iterate first.
+     *
+     * The player's **own** position is not checked, deliberately. The op layer resolves a click to
+     * a loc and walks the player onto it before this runs, exactly as every other hunter op does,
+     * and a second distance check here would only disagree with the pathing that put them there.
+     *
+     * ## The roll, and the two creatures that do not get one
+     *
+     * [PitfallCreature.successLow] and [PitfallCreature.successHigh] are null for both antelopes,
+     * because their catch is documented as certain - "players will **always succeed** in hunting
+     * sunlight antelopes" (wiki, *Sunlight antelope*, oldid=15240378), and the same sentence for
+     * the moonlight antelope. A null pair therefore means **no draw is taken at all**, not a rate
+     * that always wins: the two are indistinguishable in outcome and completely different in
+     * meaning, and only the first one is what the source says. `HunterPitfallTest` counts the draws
+     * to keep it that way. The three cats roll [SkillingSuccessRate], the same curve every other
+     * technique in this module rolls, against pairs [PitfallCreature] documents as derived rather
+     * than published.
+     *
+     * **The hunter's spear's +5% is not applied here, and must not be moved here.** It modifies the
+     * *tease*: "they give a 5% increased chance to successfully tease creatures" (wiki, *Pitfall*,
+     * oldid=15201220), agreeing with the Jagex newspost that page cites. The *Hunter's spear* page
+     * reads the same bonus onto the catch and contradicts both. See [teaseCreature] for the whole
+     * argument and for why the tease implements no bonus either; `HunterPitfallTest` pins the
+     * spear's absence from this roll so the two pages' disagreement cannot be silently resolved the
+     * wrong way by a later edit.
+     *
+     * ## What a miss costs, and what a catch costs
+     *
+     * A miss leaves the pit armed and the creature chasing - it has to be lured again - and records
+     * the pit in [lastVaulted] so the next attempt has to be at another one. A catch stops the
+     * chase, kills the creature by [NpcRepository.despawn] on its own packed respawn timer, and
+     * puts the pit into [PitState.Catching] with a [Collapse] to land it.
+     *
+     * There is deliberately no message on a catch. Live sends one - the 18 June 2020 update made
+     * "chat messages about catching large animals in pit traps" filterable, so a string exists -
+     * but its text is not recoverable offline, and the pit collapsing in front of the player says
+     * it. The two refusal strings below are ours.
+     *
+     * @return true only if a creature was caught. A vault over an armed pit with nothing behind it
+     *   is a legal, silent false, as is a jump that lands on a state no `Jump` op can reach.
+     */
+    suspend fun ProtectedAccess.jumpPit(site: PitfallSite): Boolean {
+        val state = pitState(player, site)
+
+        // The cache declares `Jump` on state 1 alone, so an empty or a full pit cannot be jumped by
+        // clicking. State 2 is accepted as well as state 1, and that is the two-creature window
+        // rather than an oversight - see [Collapse]. Silent: a click that cannot reach here is not
+        // something to write a message for.
+        if (state != PitState.Set && state != PitState.Catching) {
+            return false
+        }
+
+        val creature = site.creature
+        val chaser = crossingCreature(player, site) ?: return false
+
+        if (lastVaulted[chaser] == site) {
+            // No draw is taken. The refusal is not a failed catch: the creature will not go near
+            // this pit at all, and a roll here would make the rule cost a random number and
+            // occasionally read as a catch to whoever is counting draws.
+            mes("It refuses to go anywhere near that trap again.")
+            return false
+        }
+
+        if (!rollCatch(creature)) {
+            lastVaulted[chaser] = site
+            // The same leap either way: the creature clears the pit instead of landing in it, and
+            // the cache gives these five one leap sequence apiece rather than a pair.
+            chaser.anim(creature.leapSeq)
+            mes("It leaps clear over your trap. You will have to lure it into another one.")
+            return false
+        }
+
+        // Read before the despawn, because the despawn is what makes the creature's tile
+        // meaningless, and the side it came from is what picks the corpse's facing.
+        val rotated = crossedFromSouthWest(chaser, site)
+
+        lastVaulted.remove(chaser)
+        stopChasing(chaser)
+        chaser.anim(creature.leapSeq)
+        npcRepo.despawn(chaser, chaser.visType.respawnRate)
+
+        setPitState(player, site, PitState.Catching)
+        collapses += Collapse(player.uid, site, rotated)
+        return true
+    }
+
+    /**
+     * The creature this player's jump has a chance of catching, or null if nothing is crossing.
+     *
+     * Liveness first, so nothing is measured off an npc the registry has torn down; the checks are
+     * [jumpPit]'s, in the order that KDoc gives them.
+     */
+    private fun crossingCreature(player: Player, site: PitfallSite): Npc? {
+        val npcId = site.creature.npc.asRSCM(RSCMType.NPC)
+        return chases.entries
+            .filter { (npc, teaser) ->
+                teaser == player.uid &&
+                    npc.isSlotAssigned &&
+                    npc.isVisible &&
+                    npc.visType.id == npcId &&
+                    npc.coords.chebyshevDistance(site.coords) <= CATCH_RANGE
+            }
+            .minByOrNull { (npc, _) -> npc.coords.chebyshevDistance(site.coords) }
+            ?.key
+    }
+
+    /**
+     * Whether this creature goes in, which for two of the five is not a question.
+     *
+     * A [ProtectedAccess] extension for the Hunter level alone, and the level is the *effective*
+     * one, so a boost helps the catch exactly as it helps every other technique's.
+     */
+    private fun ProtectedAccess.rollCatch(creature: PitfallCreature): Boolean {
+        val low = creature.successLow
+        val high = creature.successHigh
+        if (low == null || high == null) {
+            return true
+        }
+        val rate =
+            SkillingSuccessRate.successRate(
+                low = low,
+                high = high,
+                level = player.hunterLvl,
+                maxLevel = MAX_HUNTER_LEVEL,
+            )
+        return rate > gameRandom.randomDouble()
+    }
+
+    /**
+     * Which of the two collapsed renderings this catch ends on.
+     *
+     * [PitState.Full] and [PitState.FullRotated] are the same corpse a half-turn apart: the cache
+     * pairs every creature's collapsed loc with a `_180` twin (larupia 19232/19235, graahk
+     * 19231/19234, kyatt 19233/19236, and a pair each for the two antelopes), and the *Pitfall*
+     * page's infobox lists each pair under one "Collapsed trap" entry. Which twin is drawn is
+     * therefore purely which way the animal is lying, and the honest input for that is the side it
+     * crossed from: a creature that came at the pit from the south or the west lies the opposite
+     * way round to one that came from the north or the east.
+     *
+     * Summed rather than compared per axis because a pit is not axis-aligned to anything - the
+     * twenty-five sites face every which way - so this is a diagonal split, which is the cheapest
+     * rule that is symmetric and has no undefined case. It is **cosmetic**: both states carry the
+     * same `Dismantle` op, [collectPit] pays them identically, and nothing else reads it.
+     */
+    private fun crossedFromSouthWest(npc: Npc, site: PitfallSite): Boolean =
+        (npc.coords.x + npc.coords.z) < (site.coords.x + site.coords.z)
+
+    /**
      * The cycle hook that gives every chase somewhere to stop. Register it, or none of them do.
+     *
+     * It is the feature's only per-cycle hook, so it carries the other thing that happens on a
+     * clock as well: [landCollapses], where a pit [jumpPit] set collapsing finishes doing so.
      *
      * ## Why this has to exist
      *
@@ -384,16 +643,80 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
      * keeps a creature circling its own pits is doing the technique, not abusing it.
      */
     fun tickChases() {
-        if (chases.isEmpty()) {
+        if (chases.isNotEmpty()) {
+            // Collected before anything is ended, because `stopChasing` writes the map being read.
+            val ended = chases.entries.filterNot { (npc, teaser) -> chaseContinues(npc, teaser) }
+            for ((npc, _) in ended) {
+                if (npc.isSlotAssigned) {
+                    stopChasing(npc)
+                } else {
+                    chases.remove(npc)
+                    lastVaulted.remove(npc)
+                }
+            }
+        }
+        landCollapses()
+    }
+
+    /**
+     * The other half of the cycle hook: pits finish collapsing, and stale ledger entries go.
+     *
+     * ## Why a cycle count and not a queue
+     *
+     * The crab trap defers its catch with `player.softQueue(CRAB_CATCH_QUEUE, ...)`, and this is
+     * the same shape of problem, so the queue is the idiom to reach for first. It is not reachable
+     * here: a queue is a **gameval**, `queue.hunter_crab_catch = 60` and its two siblings are
+     * declared in this module's `gamevals.toml`, and a pitfall collapse would need a fourth id
+     * packed into `gamevals.dat` before `RSCM` could resolve it. This task authors no gamevals, so
+     * the collapse rides the per-cycle hook this feature already requires instead - which costs no
+     * new registration, and cannot be half-wired: whoever registers [tickChases] for the chase
+     * leash gets the landing with it.
+     *
+     * ## Where a collapse can land
+     *
+     * - **[PitState.Catching]** is the ordinary case: the pit finishes collapsing and shows the
+     *   corpse, at whichever of the two rotations [jumpPit] recorded.
+     * - **[PitState.Full] or [PitState.FullRotated]** means a sibling from the same window has
+     *   already landed. The varbit is left exactly as it is and this entry simply stays in the
+     *   ledger as a second, uncollected catch; see [Collapse] and [collectPit].
+     * - **anything else** means the pit is no longer the one that was collapsing - [clearPits] is
+     *   the only way there - so the entry is dropped rather than writing a catch over whatever the
+     *   player has since done to the pit. The crab trap's matured-catch-on-an-unbaited-trap branch
+     *   makes the same call.
+     *
+     * A landed entry stays until [collectPit] takes it, and is dropped here once its owner is no
+     * longer in the world or its pit no longer holds a catch. That is what bounds this list: a
+     * player who logs out mid-collapse leaves nothing behind but the varbit, and a varbit stranded
+     * in [PitState.Catching] is what a login rebuild reads back - the whole of a pit's persistent
+     * state is that one value, which is why nothing here needs saving.
+     */
+    private fun landCollapses() {
+        if (collapses.isEmpty()) {
             return
         }
-        // Collected before anything is ended, because `stopChasing` writes to the map being read.
-        val ended = chases.entries.filterNot { (npc, teaser) -> chaseContinues(npc, teaser) }
-        for ((npc, _) in ended) {
-            if (npc.isSlotAssigned) {
-                stopChasing(npc)
-            } else {
-                chases.remove(npc)
+        val iterator = collapses.iterator()
+        while (iterator.hasNext()) {
+            val collapse = iterator.next()
+            val owner = collapse.owner.resolve(playerList)
+            if (owner == null) {
+                iterator.remove()
+                continue
+            }
+            if (collapse.landed) {
+                // An uncollected catch whose pit is no longer full: only `clearPits` can do that.
+                if (pitState(owner, collapse.site) !in FULL_STATES) {
+                    iterator.remove()
+                }
+                continue
+            }
+            if (--collapse.cyclesLeft > 0) {
+                continue
+            }
+            when (pitState(owner, collapse.site)) {
+                PitState.Catching -> setPitState(owner, collapse.site, collapse.fullState)
+                PitState.Full,
+                PitState.FullRotated -> Unit
+                else -> iterator.remove()
             }
         }
     }
@@ -439,11 +762,16 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
      * [PitState.Catching], which [dismantlePit] deliberately refuses to touch. It writes every site
      * rather than only the non-empty ones because writing [PitState.Empty] over
      * [PitState.Empty] costs nothing and a filtered pass would need the read anyway.
+     *
+     * The player's half of [collapses] goes with the varbits. A catch left in the ledger after its
+     * pit had been emptied would land - or be collected - on a pit that no longer holds anything,
+     * which is the one way this feature could mint a creature out of nothing.
      */
     fun clearPits(player: Player) {
         for (site in PitfallSites.all) {
             setPitState(player, site, PitState.Empty)
         }
+        collapses.removeAll { it.owner == player.uid }
     }
 
     /** How many of this player's pits are not empty, which is what the cap counts. */
@@ -462,6 +790,46 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
      */
     private fun setPitState(player: Player, site: PitfallSite, state: PitState) {
         VarPlayerIntMapSetter.set(player, site.varbit, state.varbitValue)
+    }
+
+    /**
+     * One creature falling into one player's copy of one pit.
+     *
+     * The three things the varbit cannot hold, and nothing else:
+     * - **whose pit it is.** A [PlayerUid] rather than a [Player], so a landing cannot be written
+     *   to a stranger who inherited the slot; `PlayerUid.resolve` is the lookup [tickChases] uses.
+     * - **which of the two collapsed rotations to draw.** See [crossedFromSouthWest].
+     * - **how far through the collapse it is.** [cyclesLeft] counts down to the landing and stops
+     *   at zero, where the entry becomes the pit's record of an uncollected catch.
+     *
+     * ## Why this is a list entry and not a flag on the pit
+     *
+     * "It is possible, if acting quickly, to lure one creature into a trap and tease a second one
+     * into the same trap as the first is still walking over it, netting two kills for one trap."
+     * (wiki, *Pitfall*, oldid=15201220). That is a documented technique with a four-step procedure,
+     * not a bug, so a pit must accept a second creature while the first is still crossing - which
+     * rules out the obvious implementation, a per-pit lock naming the creature that is heading into
+     * it. What bounds the window instead is [COLLAPSE_CYCLES]: the pit is in [PitState.Catching]
+     * only until the first catch lands, and a jump on a pit that has finished collapsing catches
+     * nothing.
+     *
+     * **The second catch is worth its own dismantle, and that half is the divergence to know
+     * about.** A pit's persisted state is a single three-bit varbit with five defined values and no
+     * companion, so "this pit holds two" is not expressible in anything that survives a logout. It
+     * lives here instead, which means two catches taken in the window and left uncollected across a
+     * relog come back as one. Recording it in the save would mean authoring twenty-five new
+     * server-side varps for a state the live game gives no sign of keeping, which is a worse trade
+     * than losing the second of two catches that a player is expected to collect seconds later.
+     */
+    private class Collapse(val owner: PlayerUid, val site: PitfallSite, val rotated: Boolean) {
+        var cyclesLeft: Int = COLLAPSE_CYCLES
+
+        val landed: Boolean
+            get() = cyclesLeft == 0
+
+        /** Which of the two collapsed renderings this catch shows once it has landed. */
+        val fullState: PitState
+            get() = if (rotated) PitState.FullRotated else PitState.Full
     }
 
     private companion object {
@@ -545,6 +913,45 @@ constructor(private val xpMods: XpModifiers, private val playerList: PlayerList)
          * how a chase feels.
          */
         private const val CHASE_RANGE: Int = 64
+
+        /**
+         * How close a chasing creature has to be to the pit to be crossing it: **3 tiles,
+         * Chebyshev, from the site's own tile**.
+         *
+         * **Chosen, not sourced.** The wiki says only "when the creature passes the trap", and no
+         * page, cache field or newspost puts a number on "passes". Both reference servers landed on
+         * the same figure from opposite directions, which is the closest thing to corroboration
+         * available: void requires the creature to be within 3 tiles of a staging tile two tiles
+         * off the pit before it will walk it over, and 2009scape requires the teased creature to be
+         * within 3 tiles of the player, who is standing on the pit.
+         *
+         * Measured from the pit rather than from the player because the pit is what has to be
+         * crossed, and because it is the one of the two that cannot move between the click and this
+         * call. A pit is a 2x2 loc and [PitfallSite.coords] is its south-west tile, so a creature
+         * standing off its far corner is 3 from the tile this measures and 2 from the loc.
+         */
+        private const val CATCH_RANGE: Int = 3
+
+        /**
+         * How long a pit stays in [PitState.Catching] before the corpse appears: **5 cycles**, or
+         * three seconds.
+         *
+         * **Chosen, not sourced**, and it is the width of the two-creature window rather than a
+         * piece of animation timing - which is why it is not read off [PitfallCreature.leapSeq].
+         * The wiki documents the window as real and gates it on the player "acting quickly", so the
+         * number has to be long enough for a human to click a second creature and then the pit
+         * again - two clicks, which is a second and a half at a comfortable pace - and short enough
+         * that a hunter who is not doing the trick never notices the pit spent any time collapsing.
+         * Three seconds sits between those with room on both sides.
+         *
+         * Neither reference server offers a figure to borrow: void's 100 ticks and 2009scape's two
+         * minutes are both trap *expiry* timers - how long a set pit lasts unattended - which is a
+         * different mechanic that this branch does not model at all.
+         */
+        private const val COLLAPSE_CYCLES: Int = 5
+
+        /** The two states a landed catch can be showing. Both carry `Dismantle`; see [PitState]. */
+        private val FULL_STATES: Set<PitState> = setOf(PitState.Full, PitState.FullRotated)
 
         /**
          * Every log a pit accepts, **lowest tier first**.

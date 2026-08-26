@@ -1,10 +1,14 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.ServerCacheManager
+import dev.openrune.rscm.RSCM.asRSCM
+import dev.openrune.rscm.RSCMType
 import dev.openrune.types.NpcMode
 import java.lang.reflect.Modifier
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -13,6 +17,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.rsmod.game.entity.Npc
+import org.rsmod.game.entity.Player
 
 /**
  * Building and dismantling a spiked pit, in the branches a live client cannot be made to take.
@@ -53,16 +59,22 @@ class HunterPitfallTest {
      * is the only way to say the failure is unrepresentable rather than merely unexercised - a test
      * that watched a repository stay untouched would keep passing the day somebody injected one.
      *
-     * The chase table is an `IdentityHashMap` and is named here on purpose: teasing needed
-     * somewhere to record who a creature is chasing, and the cheapest wrong answer would have been
-     * an `NpcRepository` to look creatures up through. It holds nothing but npcs the caller already
-     * handed it. `PlayerList` is the engine's own player array, which is what
+     * The two `IdentityHashMap`s are named here on purpose: teasing needed somewhere to record who
+     * a creature is chasing and which pit it last refused, and the cheapest wrong answer to either
+     * would have been a repository to look creatures up through. They hold nothing but npcs the
+     * caller already handed them. `PlayerList` is the engine's own player array, which is what
      * `NpcPlayerFollowModeProcessor` resolves a follow target through and what
      * [HunterPitfall.tickChases] resolves one through in turn; it is not a repository and cannot
-     * add, delete or move anything.
+     * add, delete or move anything. The `ArrayList` is the collapse ledger.
+     *
+     * `NpcRepository` **is** held, and is deliberately not in the forbidden list: a creature that
+     * falls into a pit dies, and `despawn` is how every hunter technique kills one. It is the loc
+     * repository that must stay unreachable, because a `del` on a pit would take the pit out of the
+     * world for everyone until the next restart, and that is the one this feature could plausibly
+     * have reached for.
      */
     @Test
-    fun `the pitfall engine has no way to reach a loc, controller or npc repository`() {
+    fun `the pitfall engine has no way to reach a loc, controller or obj repository`() {
         val collaborators =
             HunterPitfall::class
                 .java
@@ -70,11 +82,20 @@ class HunterPitfallTest {
                 .filterNot { Modifier.isStatic(it.modifiers) }
                 .map { it.type.simpleName }
                 .toSet()
-        for (forbidden in
-            listOf("LocRepository", "ControllerRepository", "NpcRepository", "ObjRepository")) {
+        for (forbidden in listOf("LocRepository", "ControllerRepository", "ObjRepository")) {
             assertFalse(forbidden in collaborators, "HunterPitfall must not hold a $forbidden")
         }
-        assertEquals(setOf("XpModifiers", "PlayerList", "IdentityHashMap"), collaborators)
+        assertEquals(
+            setOf(
+                "GameRandom",
+                "NpcRepository",
+                "XpModifiers",
+                "PlayerList",
+                "IdentityHashMap",
+                "ArrayList",
+            ),
+            collaborators,
+        )
     }
 
     /* Build: the happy path and the varbit it writes. */
@@ -1071,5 +1092,606 @@ class HunterPitfallTest {
         assertSame(second, world.chaseTarget(secondNpc))
         assertEquals(first.uid, world.teasedBy(firstNpc))
         assertEquals(second.uid, world.teasedBy(secondNpc))
+    }
+    /* The jump: who goes in, who does not, and what the pit does about it. */
+
+    /**
+     * The whole mechanic in one test: tease, jump, and the creature is in the pit.
+     *
+     * "If the prey is successfully caught, the trap will collapse and the creature will fall into
+     * the pit" (wiki, *Pitfall*, oldid=15201220). All three halves of that are asserted, because
+     * each can fail on its own: the varbit steps to the collapsing frame, the creature leaves the
+     * world, and the chase that led it there is over.
+     */
+    @Test
+    fun `jumping a set pit with a creature crossing catches it and collapses the trap`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, npc) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site))
+
+        assertEquals(PitState.Catching, world.stateOf(player, site))
+        assertEquals(2, world.varbitOf(player, site), "state 2 is the collapsing trap")
+        assertFalse(npc.isVisible, "the creature is in the pit, not on the map")
+        assertNull(world.teasedBy(npc), "a creature in a pit is not chasing anybody")
+        assertEquals(NpcMode.Wander, npc.mode)
+    }
+
+    /**
+     * The pit spends five cycles collapsing and then shows the catch.
+     *
+     * Both figures are literals rather than the constant under test, which is the point of pinning
+     * them: a collapse shortened or lengthened by a cycle has to fail here. The four-tick half also
+     * pins the comparison - a landing written on the cycle the count *reaches* zero rather than one
+     * cycle early is the off-by-one this catches.
+     */
+    @Test
+    fun `the collapse lands five cycles later and leaves a full pit`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+        assertTrue(world.jump(player, site))
+
+        world.tick(4)
+        assertEquals(PitState.Catching, world.stateOf(player, site), "four cycles is not enough")
+
+        world.tick(1)
+        assertEquals(PitState.Full, world.stateOf(player, site))
+        assertEquals(3, world.varbitOf(player, site), "state 3 is the collapsed trap")
+    }
+
+    /**
+     * A jump with nothing behind you is just a jump.
+     *
+     * The pit is left armed - a vault does not spring it - and no random draw is taken, which is
+     * the assertion that says the catch was never *rolled* rather than merely never landed.
+     */
+    @Test
+    fun `a jump with nothing chasing catches nothing and leaves the pit armed`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+        world.setState(player, site, PitState.Set)
+
+        assertFalse(world.jump(player, site))
+
+        assertEquals(PitState.Set, world.stateOf(player, site))
+        assertEquals(0, world.random.doubleDraws, "nothing to catch must not consume a draw")
+    }
+
+    /**
+     * An empty pit catches nothing, even with a creature standing on it.
+     *
+     * The cache declares `Jump` on the spiked pit alone - an empty pit carries `Trap` and nothing
+     * else - so this is unreachable by clicking, and that is exactly why it is worth a test: the op
+     * layer is a later task's, and a handler wired to the wrong loc state would otherwise catch
+     * creatures over a hole with no spikes in it.
+     */
+    @Test
+    fun `a jump on an empty pit does nothing, even with a creature crossing it`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        val npc = world.addCreatureAt(site)
+        assertTrue(world.tease(player, npc))
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        assertFalse(world.jump(player, site))
+
+        assertEquals(PitState.Empty, world.stateOf(player, site))
+        assertTrue(npc.isVisible, "the creature must be left where it was")
+        assertEquals(0, world.random.doubleDraws)
+    }
+
+    /**
+     * Once the collapse has landed the window is shut: a full pit catches nothing more.
+     *
+     * This is the bound on the two-creature technique below. Without it, a hunter could keep
+     * feeding creatures into one pit indefinitely on a single log.
+     */
+    @Test
+    fun `a jump on a pit that has finished collapsing catches nothing`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+        assertTrue(world.jump(player, site))
+        world.tick(5)
+        assertEquals(PitState.Full, world.stateOf(player, site))
+
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        val drawsBefore = world.random.doubleDraws
+
+        assertFalse(world.jump(player, site))
+
+        assertEquals(PitState.Full, world.stateOf(player, site))
+        assertTrue(second.isVisible, "a full pit must not swallow a second creature")
+        assertEquals(drawsBefore, world.random.doubleDraws, "a shut window must not roll")
+    }
+
+    /* The roll: two creatures that cannot fail, and three that can. */
+
+    /**
+     * An antelope is caught every time, and **no draw is taken for it at all**.
+     *
+     * "Unlike other creatures hunted via pitfall traps (such as horned graahks), players will
+     * always succeed in hunting sunlight antelopes" (wiki, *Sunlight antelope*, oldid=15240378),
+     * and the same sentence appears on *Moonlight antelope* (oldid=15197091). Both therefore carry
+     * a null `(low, high)` pair, and null has to mean "there is no roll" rather than "there is a
+     * roll that always wins": the two are indistinguishable in outcome and completely different in
+     * meaning, and a rate that always wins is a rate somebody can later tune downwards by accident.
+     *
+     * The draw counter is what tells them apart. The scripted RNG is left on its highest draw, so
+     * any roll at all - of a real rate, or of a `(256, 256)` pair standing in for certainty - would
+     * miss and fail the loop long before the counter is read.
+     */
+    @Test
+    fun `an antelope is always caught, and is never rolled for`() {
+        val site = HunterPitfallTestWorld.MOONLIGHT_SITE
+        val player = world.addPlayer(hunterLvl = 91)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+
+        repeat(50) { attempt ->
+            world.setState(player, site, PitState.Set)
+            val npc = world.addCreatureAt(site, tilesAway = attempt % 3)
+            assertTrue(world.tease(player, npc))
+            assertTrue(world.jump(player, site), "attempt $attempt must catch")
+        }
+
+        assertEquals(0, world.random.doubleDraws, "a null pair must take no draw whatever")
+    }
+
+    /**
+     * A cat can fail, and a failure leaves everything to be done again.
+     *
+     * "If not successful, the creature will jump over the trap and the player has to lure it
+     * again." (wiki, *Pitfall*, oldid=15201220). So the pit stays armed - the log is not spent by a
+     * miss - and the creature is still chasing, which is what "lure it again" is possible from.
+     */
+    @Test
+    fun `a cat can fail, and its miss leaves the pit armed and the creature chasing`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+        val (player, npc) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertFalse(world.jump(player, site))
+
+        assertEquals(PitState.Set, world.stateOf(player, site))
+        assertTrue(npc.isVisible, "a creature that jumped the trap is still on the map")
+        assertEquals(player.uid, world.teasedBy(npc), "it keeps chasing, to be lured again")
+        assertEquals(1, world.random.doubleDraws, "exactly one draw per attempt")
+    }
+
+    /**
+     * The larupia's chance at its own level is the engine's own curve, to the draw either side.
+     *
+     * `SkillingSuccessRate.successRate` is `(1 + floor(low * (99 - L) / 98 + high * (L - 1) / 98 +
+     * 0.5)) / 256`. For the larupia's `(53, 325)` at level 31 that is `(1 + floor(36.7755 + 99.4898
+     * + 0.5)) / 256` = `137 / 256` = **0.53515625**, worked out here rather than recomputed from
+     * the same function the production code calls - a test that asked `SkillingSuccessRate` what
+     * `SkillingSuccessRate` returns would pass whatever either did.
+     *
+     * The comparison is `rate > draw`, so a draw just under the rate catches and one just over it
+     * misses. A pair either side pins the curve, the level it was evaluated at, and the direction
+     * of the comparison at once.
+     */
+    @Test
+    fun `the larupia's catch chance at its own level is the published curve`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        world.setState(player, site, PitState.Set)
+        val lucky = world.addCreatureAt(site)
+        assertTrue(world.tease(player, lucky))
+        world.random.nextDouble = 0.535
+        assertTrue(world.jump(player, site), "0.535 is below 137/256 and must catch")
+
+        world.setState(player, site, PitState.Set)
+        val unlucky = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, unlucky))
+        world.random.nextDouble = 0.536
+        assertFalse(world.jump(player, site), "0.536 is above 137/256 and must miss")
+    }
+
+    /**
+     * The hunter's spear does **not** improve the catch, and this is the test that keeps it out.
+     *
+     * "When using hunter's spears, they give a 5% increased chance to successfully tease creatures"
+     * (wiki, *Pitfall*, oldid=15201220), agreeing with the Jagex newspost that page's sibling cites
+     * - "an increased chance to successfully tease creatures like Kyatt, Ghaark and Larupia by 5%"
+     * (*Varlamore: Part One - Overview*, 20 January 2024). The *Hunter's spear* page instead reads
+     * the same bonus onto the catch, contradicting both, and it is the weaker source.
+     *
+     * Until now that decision lived only in [HunterPitfall.teaseCreature]'s prose, which cannot
+     * fail. The draw is chosen so that **any** of the three plausible ways of applying a +5% would
+     * turn this miss into a catch: on the rate multiplicatively (0.5352 x 1.05 = 0.5619), on the
+     * rate as five points (0.5852), or on both coefficients as `(53 + 13, 325 + 13)`, which is
+     * `150 / 256` = 0.5859. All three sit above 0.55; the base rate, 0.53515625, sits below it.
+     */
+    @Test
+    fun `an equipped hunter's spear does not improve the catch`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val stickUser = world.addPlayer(hunterLvl = 31)
+        val spearUser = world.addPlayer(hunterLvl = 31)
+        world.giveItem(stickUser, HunterPitfallTestWorld.TEASING_STICK)
+        world.giveItem(spearUser, HunterPitfallTestWorld.TEASING_STICK)
+        world.wearItem(spearUser, HunterPitfallTestWorld.HUNTERS_SPEAR)
+
+        // The pits are private, so both hunters can arm and jump the same site.
+        world.setState(stickUser, site, PitState.Set)
+        world.setState(spearUser, site, PitState.Set)
+        val stickTarget = world.addCreatureAt(site)
+        val spearTarget = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(stickUser, stickTarget))
+        assertTrue(world.tease(spearUser, spearTarget))
+        world.random.nextDouble = 0.55
+
+        assertFalse(world.jump(stickUser, site), "0.55 misses 137/256")
+        assertFalse(world.jump(spearUser, site), "the spear must not move the catch roll")
+
+        assertEquals(PitState.Set, world.stateOf(spearUser, site))
+        assertEquals(2, world.random.doubleDraws, "both attempts rolled, once each")
+    }
+
+    /* The refusal: one pit deep, and not a grudge. */
+
+    /**
+     * "These creatures will not jump the same pit twice in a row."
+     *
+     * The second attempt is at the pit the creature has just vaulted, with an RNG that would catch
+     * anything - and it catches nothing, without taking a draw. The draw count is the load-bearing
+     * assertion: a refusal implemented as "roll and lose" would leave the outcome right and the
+     * meaning wrong, and would occasionally catch.
+     */
+    @Test
+    fun `a creature refuses the pit it has just jumped over`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+        val (player, npc) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertFalse(world.jump(player, site), "the first attempt misses")
+        assertEquals(1, world.random.doubleDraws)
+
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        assertFalse(world.jump(player, site), "the same pit, immediately, is refused")
+
+        assertEquals(PitState.Set, world.stateOf(player, site))
+        assertTrue(npc.isVisible)
+        assertEquals(1, world.random.doubleDraws, "a refusal must not roll")
+    }
+
+    /**
+     * The refusal is **one pit deep**, not a grudge that accumulates.
+     *
+     * "Since these creatures will not jump the same pit twice in a row, the next attempt must be at
+     * another pit." (wiki, *Pitfall*, oldid=15201220). Twice *in a row*: once another pit has
+     * intervened, the first one is fair game again. Modelling this as a set of every pit a creature
+     * has ever refused would quietly retire a hunting ground one pit at a time, and would pass any
+     * test that only checked the immediate refusal above.
+     */
+    @Test
+    fun `a creature is caught by the pit it vaulted once another pit has intervened`() {
+        val first = HunterPitfallTestWorld.LARUPIA_SITE
+        val second = HunterPitfallTestWorld.SECOND_LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+        val (player, npc) = armedPitWithChaser(first, hunterLvl = 31)
+        world.setState(player, second, PitState.Set)
+
+        assertFalse(world.jump(player, first), "vaults the first pit and remembers it")
+
+        world.moveNpcTo(npc, second)
+        assertFalse(world.jump(player, second), "vaults the second pit, which replaces the memory")
+
+        world.moveNpcTo(npc, first)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        assertTrue(world.jump(player, first), "the first pit is no longer the last one vaulted")
+
+        assertEquals(PitState.Catching, world.stateOf(player, first))
+        assertFalse(npc.isVisible)
+    }
+
+    /**
+     * A creature refused by one pit is catchable at the next pit along straight away.
+     *
+     * The other half of the rule: the memory is of the pit, not of the creature's willingness to be
+     * caught at all. Without this, a single miss would take a creature out of the technique.
+     */
+    @Test
+    fun `a creature that vaulted one pit is caught by another immediately`() {
+        val first = HunterPitfallTestWorld.LARUPIA_SITE
+        val second = HunterPitfallTestWorld.SECOND_LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+        val (player, npc) = armedPitWithChaser(first, hunterLvl = 31)
+        world.setState(player, second, PitState.Set)
+
+        assertFalse(world.jump(player, first))
+
+        world.moveNpcTo(npc, second)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        assertTrue(world.jump(player, second))
+
+        assertEquals(PitState.Catching, world.stateOf(player, second))
+        assertEquals(PitState.Set, world.stateOf(player, first), "the other pit is untouched")
+    }
+
+    /* Two creatures, one trap. */
+
+    /**
+     * The documented two-for-one, end to end, including both dismantles.
+     *
+     * "It is possible, if acting quickly, to lure one creature into a trap and tease a second one
+     * into the same trap as the first is still walking over it, netting two kills for one trap. 1.
+     * Tease creature A and jump over your pitfall trap. 2. Quickly tease nearby creature B and jump
+     * over your pitfall trap again while creature A is still walking over it. 3. Dismantle the
+     * results of creature A falling. 4. Dismantle the results of creature B falling." (wiki,
+     * *Pitfall*, oldid=15201220).
+     *
+     * This is the test that a per-pit lock would fail: the obvious implementation of a catch -
+     * reserving the pit for the creature heading into it, or refusing any state but a freshly armed
+     * one - makes a documented technique impossible. The pit is jumped a second time while it is
+     * still in [PitState.Catching], and the two catches are then collected one dismantle at a time.
+     */
+    @Test
+    fun `two creatures caught in one collapse are worth a dismantle each`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, first) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site), "creature A goes in")
+        world.tick(2)
+        assertEquals(PitState.Catching, world.stateOf(player, site), "A is still crossing")
+
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site), "creature B goes into the same trap")
+
+        assertFalse(first.isVisible)
+        assertFalse(second.isVisible)
+
+        world.tick(5)
+        assertEquals(PitState.Full, world.stateOf(player, site), "both have landed")
+
+        assertTrue(world.dismantle(player, site), "the results of creature A falling")
+        assertEquals(1, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"))
+        assertEquals(PitState.Full, world.stateOf(player, site), "creature B is still in there")
+
+        assertTrue(world.dismantle(player, site), "the results of creature B falling")
+        assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"))
+        assertEquals(2, world.itemCount(player, "obj.big_bones"))
+        assertEquals(PitState.Empty, world.stateOf(player, site), "and now the pit is empty")
+    }
+
+    /**
+     * A pit that is full with nothing left in the ledger empties on one dismantle.
+     *
+     * The transient half of the two-creature window - which pit holds two - does not survive a
+     * logout, and the varbit that does cannot express it. So a full pit with no ledger entry, which
+     * is what a relog leaves behind, has to pay exactly once and empty rather than becoming a pit
+     * that can never be emptied.
+     */
+    @Test
+    fun `a full pit with no pending catch pays once and empties`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+        world.setState(player, site, PitState.Full)
+
+        assertTrue(world.dismantle(player, site))
+
+        assertEquals(1, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"))
+        assertEquals(PitState.Empty, world.stateOf(player, site))
+    }
+
+    /* Whose catch it is, what kind, and how close. */
+
+    /**
+     * A creature chasing somebody else does not fall into your pit.
+     *
+     * The chase is recorded against the hunter who teased it, and this is what that record is for:
+     * without the owner check, the first player to jump any pit would collect whatever the whole
+     * hunting ground had lured.
+     */
+    @Test
+    fun `a creature chasing another hunter is not caught`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val teaser = world.addPlayer(hunterLvl = 31)
+        val jumper = world.addPlayer(hunterLvl = 31)
+        world.giveItem(teaser, HunterPitfallTestWorld.TEASING_STICK)
+        world.setState(jumper, site, PitState.Set)
+        val npc = world.addCreatureAt(site)
+        assertTrue(world.tease(teaser, npc))
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        assertFalse(world.jump(jumper, site))
+
+        assertEquals(PitState.Set, world.stateOf(jumper, site))
+        assertTrue(npc.isVisible)
+        assertEquals(teaser.uid, world.teasedBy(npc), "somebody else's lure is left alone")
+        assertEquals(0, world.random.doubleDraws)
+    }
+
+    /**
+     * A graahk does not fall into a larupia pit.
+     *
+     * The five hunting grounds do not overlap, so this cannot happen by walking - but the pit's
+     * loot, its experience and its catch rate are all the *site's* creature's, so a pit that
+     * accepted whatever was chasing would pay larupia fur for a graahk. The five species are
+     * checked by npc id rather than by area for that reason.
+     */
+    @Test
+    fun `a creature of another species does not fall into this pit`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 41)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        world.setState(player, site, PitState.Set)
+        val graahk = world.addNpc(HunterPitfallTestWorld.GRAAHK_NPC, site.coords)
+        assertTrue(world.tease(player, graahk))
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        assertFalse(world.jump(player, site))
+
+        assertEquals(PitState.Set, world.stateOf(player, site))
+        assertTrue(graahk.isVisible)
+        assertEquals(0, world.random.doubleDraws)
+    }
+
+    /**
+     * The catch reaches three tiles from the pit and stops at four.
+     *
+     * Both figures are literals rather than the constant they are testing, and the pair pins the
+     * comparison as well as the distance: a `<` where the code says `<=` would fail the first half
+     * and leave the second passing. Three is the figure both reference servers arrived at from
+     * opposite directions; see [HunterPitfall.jumpPit].
+     */
+    @Test
+    fun `a creature three tiles from the pit is caught and one four tiles away is not`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        val (near, _) = armedPitWithChaser(site, hunterLvl = 31, tilesAway = 3)
+        assertTrue(world.jump(near, site), "three tiles is crossing the pit")
+        assertEquals(PitState.Catching, world.stateOf(near, site))
+
+        val (far, farNpc) = armedPitWithChaser(site, hunterLvl = 31, tilesAway = 4)
+        assertFalse(world.jump(far, site), "four tiles is not")
+        assertEquals(PitState.Set, world.stateOf(far, site))
+        assertTrue(farNpc.isVisible)
+        assertEquals(1, world.random.doubleDraws, "only the catch within range rolled")
+    }
+
+    /* The collapsed rendering, the ledger, and the payout's timing. */
+
+    /**
+     * The two collapsed states are the same corpse a half-turn apart, and the side the creature
+     * crossed from is what picks between them.
+     *
+     * The cache pairs every creature's collapsed loc with a `_180` twin - larupia 19232/19235,
+     * graahk 19231/19234, kyatt 19233/19236 - and the *Pitfall* page's infobox lists each pair
+     * under one "Collapsed trap" entry, which is what says the difference is orientation and not
+     * content. Both states carry `Dismantle` and pay identically; this pins that the choice is made
+     * from the creature's tile at all rather than being hardcoded to one of the two.
+     */
+    @Test
+    fun `the collapsed rendering follows the side the creature crossed from`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        val (fromEast, _) = armedPitWithChaser(site, hunterLvl = 31, tilesAway = 1)
+        assertTrue(world.jump(fromEast, site))
+        world.tick(5)
+        assertEquals(PitState.Full, world.stateOf(fromEast, site))
+        assertEquals(3, world.varbitOf(fromEast, site))
+
+        val (fromWest, _) = armedPitWithChaser(site, hunterLvl = 31, tilesAway = -1)
+        assertTrue(world.jump(fromWest, site))
+        world.tick(5)
+        assertEquals(PitState.FullRotated, world.stateOf(fromWest, site))
+        assertEquals(4, world.varbitOf(fromWest, site))
+    }
+
+    /**
+     * A catch pays nothing until the pit is taken apart.
+     *
+     * Every other reward in this feature is on the dismantle, and the catch has to stay that way:
+     * the pit is what holds the creature, and a catch that paid on the way in would pay twice for
+     * anyone who then dismantled the pit it left behind.
+     */
+    @Test
+    fun `a catch awards nothing until the pit is dismantled`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site))
+        world.tick(5)
+
+        assertEquals(0, world.hunterXp(player), "no experience for the catch itself")
+        assertEquals(0, world.itemCount(player, "obj.big_bones"))
+
+        assertTrue(world.dismantle(player, site))
+
+        assertEquals(180, world.hunterXp(player), "the larupia's 180, paid on collection")
+        assertEquals(1, world.itemCount(player, "obj.big_bones"))
+    }
+
+    /**
+     * Clearing a player's pits cancels a collapse that has not landed yet.
+     *
+     * [HunterPitfall.clearPits] is the only way out of a pit stranded mid-collapse, and a catch
+     * left in the ledger by it does not merely linger: it lands on whatever that pit is doing
+     * later. The sequence below is the one that turns it into a duplicated payout - clear a pit
+     * mid-collapse, rebuild it, catch something else, and the abandoned catch lands on the *new*
+     * collapse's frame, ending it early and leaving the real one behind it as a second, unearned
+     * dismantle. One creature, two furs.
+     *
+     * The first assertion is where that shows: three cycles after the second catch the pit must
+     * still be collapsing, because nothing else is due to land.
+     */
+    @Test
+    fun `clearing a player's pits cancels a collapse that has not landed`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+        assertTrue(world.jump(player, site))
+
+        world.clearPits(player)
+        assertEquals(PitState.Empty, world.stateOf(player, site), "a cleared pit is empty")
+        world.tick(2)
+
+        // The pit is rebuilt and catches something else while the abandoned collapse would still
+        // have been in the air.
+        world.setState(player, site, PitState.Set)
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site))
+
+        world.tick(3)
+        assertEquals(PitState.Catching, world.stateOf(player, site), "nothing else is due to land")
+
+        world.tick(2)
+        assertEquals(PitState.Full, world.stateOf(player, site))
+
+        assertTrue(world.dismantle(player, site))
+        assertEquals(1, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"), "one creature")
+        assertEquals(PitState.Empty, world.stateOf(player, site), "one catch, one dismantle")
+    }
+
+    /**
+     * Every creature's leap sequence is **packed**, not merely resolvable to an id.
+     *
+     * `PathingEntityCommon.anim` reads the sequence's own priority out of the packed cache and
+     * dereferences the result, so a name that resolves to an id with no definition behind it throws
+     * on the first catch rather than at boot. That is `CLAUDE.md`'s two-declaration trap, and
+     * `PitfallCreaturesTest` only proves the first half of it.
+     */
+    @Test
+    fun `every creature's leap sequence is packed, not merely resolvable`() {
+        for (creature in PitfallCreatures.all) {
+            assertNotNull(
+                ServerCacheManager.getAnim(creature.leapSeq.asRSCM(RSCMType.SEQ)),
+                "no packed seq for ${creature.leapSeq}",
+            )
+        }
+    }
+
+    /**
+     * An armed pit, a hunter carrying a teasing stick, and the pit's own creature already chasing
+     * them from [tilesAway] tiles east of the pit.
+     *
+     * The pit is written rather than built, because what is under test below is the jump: a build
+     * would drag the level gate, the knife and the log tiers into every one of these tests.
+     */
+    private fun armedPitWithChaser(
+        site: PitfallSite,
+        hunterLvl: Int,
+        tilesAway: Int = 0,
+    ): Pair<Player, Npc> {
+        val player = world.addPlayer(hunterLvl = hunterLvl)
+        world.setState(player, site, PitState.Set)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        val npc = world.addCreatureAt(site, tilesAway)
+        assertTrue(world.tease(player, npc), "the test needs the creature chasing")
+        return player to npc
     }
 }
