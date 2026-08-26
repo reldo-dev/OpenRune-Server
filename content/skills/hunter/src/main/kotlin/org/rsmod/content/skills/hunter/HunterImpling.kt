@@ -3,6 +3,7 @@ package org.rsmod.content.skills.hunter
 import dtx.core.ArgMap
 import dtx.core.RollResult
 import dtx.core.flatten
+import dtx.rs.RSDropTable
 import jakarta.inject.Inject
 import org.rsmod.api.droptable.DropRollItem
 import org.rsmod.api.droptable.rollCount
@@ -15,12 +16,13 @@ import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.utils.skills.SkillingSuccessRate
 import org.rsmod.game.entity.Npc
+import org.rsmod.game.entity.Player
 
 /**
- * The empty jar a Puro-Puro catch consumes, `obj.ii_impling_jar` (11260), `name=Impling jar`.
+ * The empty jar a catch consumes, `obj.ii_impling_jar` (11260), `name=Impling jar`.
  *
- * One per impling kept, and - unlike [BUTTERFLY_JAR] - mandatory here rather than optional. See
- * [HunterImpling.catchImpling].
+ * One per impling kept. Mandatory inside Puro-Puro and optional everywhere else, which is the one
+ * rule this technique has that butterfly netting does not; see [HunterImpling.catchImpling].
  */
 const val IMPLING_JAR: String = "obj.ii_impling_jar"
 
@@ -38,17 +40,25 @@ private const val JAR_BREAK_CHANCE: Int = 10
  * varcon and no trap cap.
  *
  * The one rule that is not butterfly netting's, from *Puro-Puro* (oldid=15196042): "Unlike elsewhere
- * on Gielinor, impling jars must be used when catching implings in Puro-Puro." *Baby impling*
- * (oldid=15297388) says the same thing from the other side and closes the barehanded loophole: "In
- * Puro-Puro, empty impling jars are required to catch any implings, whether catching them by net or
- * by hand." So a jarless attempt is **refused** here, where a jarless butterfly catch is a legal
- * catch that simply flies away.
+ * on Gielinor, impling jars must be used when catching implings in Puro-Puro." Read the "unlike
+ * elsewhere" half as carefully as the rest, because it is half the rule. *Baby impling*
+ * (oldid=15297388) states both sides: "In Puro-Puro, empty impling jars are required to catch any
+ * implings, whether catching them by net or by hand," and "In Gielinor, they can also be caught
+ * barehanded or while wielding any item, with or without an empty impling jar. Without an empty jar
+ * the player will immediately receive the loot from the impling, instead of the impling itself."
+ * *Impling* (oldid=15303398) agrees in one sentence: "Implings caught without an impling jar will
+ * be looted immediately."
  *
- * **There is no area check, and there must not be one.** Every row in [ImplingCreatures] carries
- * both of its creature's npc ids, and the id that was caught is what
- * [ImplingCreature.experienceFor] keys on, because the wiki ties the experience to the spawn's
- * origin rather than to where the player is standing. An area lookup would be a second, weaker way
- * of asking a question the npc id has already answered, and the two could disagree.
+ * So a jarless attempt is **refused inside Puro-Puro** and is a **legal catch that pays its loot
+ * straight into the inventory** anywhere else - which includes every overworld spawn and the
+ * Prifddinas crystal impling, a creature that can never be caught in Puro-Puro at all.
+ *
+ * **Where the player is standing decides the jar; the npc id decides the experience.** The two are
+ * different questions and neither answers the other. Every row in [ImplingCreatures] carries both
+ * of its creature's npc ids, and the id that was caught is what [ImplingCreature.experienceFor]
+ * keys on, because the wiki ties the experience to the spawn's origin - an overworld impling can
+ * spawn inside Puro-Puro, so a location check would give the wrong experience and the npc id would
+ * give the wrong jar rule.
  *
  * ## What is not modelled
  *
@@ -69,19 +79,24 @@ constructor(
     private val xpMods: XpModifiers,
 ) {
     /**
-     * `Catch` on an impling: gate on level, then on the jar, then roll once.
+     * `Catch` on an impling: gate on level, gate on the jar if this is Puro-Puro, then roll once.
      *
-     * The two gates are both ahead of the roll, and both ahead of the animation. The level gate is
-     * there for the reason [HunterButterfly.catchButterfly] and the trap tick have theirs - so an
-     * under-levelled attempt never consumes a random draw - and the jar gate joins it because in
-     * Puro-Puro a jarless attempt is not a catch at all, so swinging at one and rolling for it would
-     * both mislead the player and burn a draw on an outcome that was already decided.
+     * Both gates are ahead of the roll and ahead of the animation. The level gate is there for the
+     * reason [HunterButterfly.catchButterfly] and the trap tick have theirs - so an under-levelled
+     * attempt never consumes a random draw - and the jar gate joins it because inside Puro-Puro a
+     * jarless attempt is not a catch at all, so swinging at one and rolling for it would both
+     * mislead the player and burn a draw on an outcome that was already decided.
+     *
+     * **Outside Puro-Puro there is no jar gate**, and the catch is not the same catch: a player
+     * carrying an empty jar keeps the impling, and a player without one gets the impling's loot
+     * instead, rolled off the very table its jar would have carried. See [lootBarehanded].
      *
      * No delay and no lock, exactly as butterfly netting has none: a net swing lands on the tile the
      * player is already standing next to, and no source describes a wait.
      *
-     * @return true only if the impling was caught and jarred; false covers a miss, an under-levelled
-     *   attempt, an attempt with no empty jar, and an npc that is not a shipped impling at all.
+     * @return true if the impling was caught, whether it was jarred or looted on the spot; false
+     *   covers a miss, an under-levelled attempt, a jarless attempt inside Puro-Puro, and an npc
+     *   that is not a shipped impling at all.
      */
     fun ProtectedAccess.catchImpling(target: Npc): Boolean {
         val creature = ImplingCreatures.byNpcId(target.visType.id) ?: return false
@@ -95,9 +110,15 @@ constructor(
             return false
         }
 
-        // Refused before the swing and before the draw. The live server string is not recoverable
-        // offline, so this says what the wiki says rather than guessing at Jagex's wording.
-        if (!inv.contains(IMPLING_JAR)) {
+        // Read once, before anything can change it, because it decides both the refusal below and
+        // which reward the catch pays out.
+        val jarred = inv.contains(IMPLING_JAR)
+
+        // Refused before the swing and before the draw, and only here: "Unlike elsewhere on
+        // Gielinor, impling jars must be used when catching implings in Puro-Puro." The live server
+        // string is not recoverable offline, so this says what the wiki says rather than guessing
+        // at Jagex's wording.
+        if (!jarred && player.coords.inPuroPuro()) {
             mes("You need an empty impling jar to catch implings here.")
             return false
         }
@@ -122,12 +143,16 @@ constructor(
             return false
         }
 
-        // Jarred *before* the creature is removed, so a swap that somehow fails leaves the impling
-        // on the map rather than deleting it for nothing. Reaching the `false` branch means the
-        // delete failed with the jar present, which nothing here can produce - but if it ever does,
-        // the impling has to survive it, because the alternative is a despawn that paid out nothing.
-        if (!jarCatch(creature)) {
-            return false
+        // Paid *before* the creature is removed, so a swap that somehow fails leaves the impling on
+        // the map rather than deleting it for nothing. Reaching the `false` branch means the delete
+        // failed with the jar present, which nothing here can produce - but if it ever does, the
+        // impling has to survive it, because the alternative is a despawn that paid out nothing.
+        if (jarred) {
+            if (!jarCatch(creature)) {
+                return false
+            }
+        } else {
+            lootBarehanded(creature)
         }
 
         // A spawner-made impling is removed outright and its marker starts again; a map-placed one
@@ -166,11 +191,7 @@ constructor(
             return false
         }
 
-        when (val result = table.roll(player, ArgMap()).flatten()) {
-            is RollResult.Nothing -> Unit
-            is RollResult.Single -> giveDrop(result.result)
-            is RollResult.ListOf -> result.results.forEach { giveDrop(it) }
-        }
+        rollTable(table)
 
         // "An empty impling jar is returned when removing the loot, with a 10% chance of it
         // breaking." Sourced to Mod Ash rather than to Jagex's published table - `Baby impling jar`
@@ -185,17 +206,57 @@ constructor(
     }
 
     /**
+     * The loot a jarless catch pays out, which is the loot its jar would have carried.
+     *
+     * "Without an empty jar the player will immediately receive the loot from the impling, instead
+     * of the impling itself" (*Baby impling*, oldid=15297388). There is no second table for this:
+     * the same [ImplingLoot] row the jar opens is the one that pays. Reachable only outside
+     * Puro-Puro, because [catchImpling] has already refused a jarless attempt inside it.
+     *
+     * The lucky impling pays nothing here, and that is the same disclosed gap its jar carries: its
+     * published loot is a clue-reward roll, [ImplingLoot] ships no table for it, and this server has
+     * no clue rewards to roll. A missing table is silence, not a failed catch - the impling is still
+     * caught and still pays its experience, exactly as a jarred lucky catch does.
+     */
+    private fun ProtectedAccess.lootBarehanded(creature: ImplingCreature) {
+        val jar = creature.caught.singleOrNull()?.obj ?: return
+        val table = ImplingLoot.forJar(jar) ?: return
+        rollTable(table)
+    }
+
+    /**
+     * One roll of a jar's table, paid out.
+     *
+     * Shared by [openJar] and [lootBarehanded] because the wiki describes the jarless catch as
+     * receiving *the loot from the impling*, not a variant of it, and two copies of this `when`
+     * could drift into being two different tables' worth of behaviour.
+     */
+    private fun ProtectedAccess.rollTable(table: RSDropTable<Player, DropRollItem>) {
+        when (val result = table.roll(player, ArgMap()).flatten()) {
+            is RollResult.Nothing -> Unit
+            is RollResult.Single -> giveDrop(result.result)
+            is RollResult.ListOf -> result.results.forEach { giveDrop(it) }
+        }
+    }
+
+    /**
      * One rolled reward.
      *
      * `isNothing` is a real outcome here, not an error: the baby impling's table carries a 1/10
      * nothing slot, and the wiki notes the "you acquire some loot" message still shows.
+     *
+     * The quantity is drawn from [gameRandom] rather than from the receiver's own `random`, for the
+     * reason this class names its field that way at all: `ProtectedAccess.random` resolves out of
+     * the player's context, and the two are only the same object because Guice happens to bind one
+     * [GameRandom]. Reaching for the injected one keeps every draw this feature takes coming from
+     * the same place.
      */
     private fun ProtectedAccess.giveDrop(drop: DropRollItem) {
         if (drop.isNothing || !drop.condition(player)) {
             return
         }
         val obj = drop.transformObj(player) ?: drop.obj
-        invAddOrDrop(objRepo, obj, drop.rollCount(random))
+        invAddOrDrop(objRepo, obj, drop.rollCount(gameRandom))
     }
 
     /**

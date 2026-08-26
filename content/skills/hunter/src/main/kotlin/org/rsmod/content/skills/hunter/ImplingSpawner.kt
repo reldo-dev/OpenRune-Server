@@ -169,14 +169,5 @@ constructor(
                 "npc.ii_rare_impling_precursor_maze" to ImplingTier.HighPuroPuro,
                 "npc.ii_impling_type_12_precursor" to ImplingTier.Crystal,
             )
-
-        /**
-         * Puro-Puro is exactly one map square, 40,67.
-         *
-         * Asked of the marker's own position rather than through an area lookup, because the answer
-         * has to agree with which npc form is spawned there and a second source could disagree with
-         * the first.
-         */
-        private fun CoordGrid.inPuroPuro(): Boolean = (x shr 6) == 40 && (z shr 6) == 67
     }
 }

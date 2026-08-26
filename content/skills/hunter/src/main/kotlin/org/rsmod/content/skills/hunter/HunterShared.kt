@@ -9,6 +9,7 @@ import org.rsmod.api.random.GameRandom
 import org.rsmod.game.entity.Controller
 import org.rsmod.game.inv.Inventory
 import org.rsmod.game.loc.BoundLocInfo
+import org.rsmod.map.CoordGrid
 
 /**
  * The handful of rules every hunter technique shares.
@@ -17,6 +18,16 @@ import org.rsmod.game.loc.BoundLocInfo
  * [HunterFalconry], [HunterButterfly] and [HunterCrabTrap] are deliberately independent of each
  * other, and the alternative to a shared file is one class reaching into another's private surface.
  */
+
+/**
+ * Whether this tile is inside Puro-Puro, which is exactly one map square, 40,67.
+ *
+ * Asked of a coordinate rather than through an area lookup, because [ImplingSpawner] has to ask the
+ * same question of a marker that is not a player and has no area membership, and two sources for
+ * one fact could disagree. Both callers - the spawner picking a creature's form, and
+ * [HunterImpling.catchImpling] deciding whether the jar is mandatory - need the same answer.
+ */
+internal fun CoordGrid.inPuroPuro(): Boolean = (x shr 6) == 40 && (z shr 6) == 67
 
 /**
  * The level [org.rsmod.api.utils.skills.SkillingSuccessRate] interpolates a creature's `(low, high)`

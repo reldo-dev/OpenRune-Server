@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 
 /**
@@ -20,12 +22,16 @@ import org.junit.jupiter.api.parallel.ResourceLock
  * instead of shipping.
  *
  * The two that matter most are [theExperienceAwardedIsThePuroPuroValue] and
- * [noEmptyJarRefusesTheAttemptBeforeAnyRoll]. The first is invisible in game to anyone not watching
- * the xp counter - the Puro-Puro and overworld values differ by two experience at this tier, which
- * looks like nothing until the magpie's 44-against-216 arrives on the same column. The second is the
- * one rule that is not butterfly netting's, and getting it wrong the butterfly way - a jarless catch
- * that succeeds and awards nothing - would look entirely plausible.
+ * [theSameCreatureNeedsAJarInPuroPuroAndNotOutsideIt]. The first is invisible in game to anyone not
+ * watching the xp counter - the Puro-Puro and overworld values differ by two experience at this
+ * tier, which looks like nothing until the magpie's 44-against-216 arrives on the same column. The
+ * second is the one rule that is not butterfly netting's, and it is a rule with **two** halves: the
+ * jar is mandatory in Puro-Puro and optional everywhere else. Every catch test in this file used to
+ * run at [HunterButterflyTestWorld.BUTTERFLY_TILE], which is mapsquare 50,50 and so is not
+ * Puro-Puro at all, which is exactly how a refusal that belongs in one map square came to be
+ * asserted across the whole of Gielinor.
  */
+@Execution(ExecutionMode.SAME_THREAD)
 @ResourceLock(HUNTER_TEST_WORLD_LOCK)
 class ImplingTest {
     /* The table, against the wiki. */
@@ -280,7 +286,7 @@ class ImplingTest {
     /* The jar rule, which is the one thing that is not butterfly netting */
 
     /**
-     * With no empty jar the attempt is refused, before the roll and whether or not a net is held.
+     * Inside Puro-Puro, no empty jar refuses the attempt before the roll, net or no net.
      *
      * *Puro-Puro* (oldid=15196042): "Unlike elsewhere on Gielinor, impling jars must be used when
      * catching implings in Puro-Puro." *Baby impling* (oldid=15297388) closes the barehanded
@@ -288,14 +294,17 @@ class ImplingTest {
      * catching them by net or by hand." The draw counter is the assertion with teeth - a refusal
      * that happened *after* the roll would look identical to the player and would still be wrong,
      * because it would decide the outcome of an attempt the game never allowed.
+     *
+     * The player stands on a real maze tile rather than on [HunterButterflyTestWorld.BUTTERFLY_TILE],
+     * because "in Puro-Puro" is now half of what is being asserted.
      */
     @Test
-    fun noEmptyJarRefusesTheAttemptBeforeAnyRoll() {
+    fun noEmptyJarRefusesTheAttemptInsidePuroPuroBeforeAnyRoll() {
         for (net in listOf(BUTTERFLY_NET, MAGIC_BUTTERFLY_NET, null)) {
             val world = HunterButterflyTestWorld()
-            val player = world.addPlayer(hunterLvl = 99)
+            val player = world.addPlayer(HunterButterflyTestWorld.PURO_PURO_TILE, hunterLvl = 99)
             net?.let { world.wield(player, it) }
-            val impling = world.addNpc(BABY)
+            val impling = world.addNpc(BABY, HunterButterflyTestWorld.PURO_PURO_TILE.translateX(1))
             world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
             val before = player.statMap.getXP("stat.hunter")
 
@@ -311,19 +320,123 @@ class ImplingTest {
     }
 
     /**
+     * Outside Puro-Puro a jarless catch is a catch, and it pays the impling's loot on the spot.
+     *
+     * *Baby impling* (oldid=15297388): "In Gielinor, they can also be caught barehanded or while
+     * wielding any item, with or without an empty impling jar. Without an empty jar the player will
+     * immediately receive the loot from the impling, instead of the impling itself." *Impling*
+     * (oldid=15303398) says it in one line: "Implings caught without an impling jar will be looted
+     * immediately."
+     *
+     * The eclectic rather than the baby, because the baby's is the one shipped table carrying a
+     * `nothing()` slot and "the inventory gained something" would then be a one-in-ten flake. The
+     * eclectic pays on every roll, so an empty inventory afterwards means the loot branch never ran.
+     *
+     * The jar assertions are the pair that says *which* reward arrived: a filled eclectic jar would
+     * mean the impling itself was kept, and an empty impling jar could only have come from nowhere.
+     */
+    @Test
+    fun aJarlessCatchOutsidePuroPuroIsLootedOnTheSpot() {
+        val world = HunterButterflyTestWorld()
+        val player = world.addPlayer(hunterLvl = 99)
+        world.wield(player, BUTTERFLY_NET)
+        val impling = world.addNpc(ECLECTIC_OVERWORLD)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val before = player.statMap.getXP("stat.hunter")
+        val freeBefore = player.inv.freeSpace()
+
+        val caught = world.runImpling(player) { with(it) { catchImpling(impling) } }
+
+        assertTrue(caught, "no jar is no obstacle outside Puro-Puro")
+        assertEquals(1, world.random.doubleDraws, "the catch is rolled for like any other")
+        assertFalse(world.npcIsSpawned(impling), "the impling is taken")
+        assertFalse(player.inv.contains(ECLECTIC_JAR), "the impling is looted, not kept")
+        assertFalse(player.inv.contains(IMPLING_JAR), "no jar was involved at either end")
+        assertTrue(player.inv.freeSpace() < freeBefore, "the loot must actually arrive")
+        assertNotEquals(before, player.statMap.getXP("stat.hunter"), "a catch pays experience")
+    }
+
+    /**
+     * The whole rule in one test: one creature, one draw, two places, two outcomes.
+     *
+     * Everything is held fixed except the tile the player is standing on - same npc, same level,
+     * same net, same empty inventory, same scripted draw - so the only thing either assertion can
+     * be reading is the location. That is the bug this pair exists for: the refusal is Puro-Puro's,
+     * and applying it to the rest of Gielinor made every overworld impling uncatchable without a
+     * jar the wiki never asked for.
+     *
+     * The overworld npc form is used on both sides deliberately. *Impling* (oldid=15303398) notes
+     * overworld spawns can appear inside Puro-Puro, so this is a creature that really can be met in
+     * both places, and it keeps the npc id - which is what decides the **experience** - identical
+     * across the two halves.
+     */
+    @Test
+    fun theSameCreatureNeedsAJarInPuroPuroAndNotOutsideIt() {
+        val inside = HunterButterflyTestWorld()
+        val insidePlayer = inside.addPlayer(HunterButterflyTestWorld.PURO_PURO_TILE, hunterLvl = 99)
+        inside.wield(insidePlayer, BUTTERFLY_NET)
+        val insideImpling =
+            inside.addNpc(
+                ECLECTIC_OVERWORLD,
+                HunterButterflyTestWorld.PURO_PURO_TILE.translateX(1),
+            )
+        inside.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        val outside = HunterButterflyTestWorld()
+        val outsidePlayer = outside.addPlayer(hunterLvl = 99)
+        outside.wield(outsidePlayer, BUTTERFLY_NET)
+        val outsideImpling = outside.addNpc(ECLECTIC_OVERWORLD)
+        outside.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        val caughtInside =
+            inside.runImpling(insidePlayer) { with(it) { catchImpling(insideImpling) } }
+        val caughtOutside =
+            outside.runImpling(outsidePlayer) { with(it) { catchImpling(outsideImpling) } }
+
+        assertFalse(caughtInside, "Puro-Puro requires the jar")
+        assertTrue(inside.npcIsSpawned(insideImpling), "and leaves the impling alone")
+        assertTrue(caughtOutside, "the rest of Gielinor does not")
+        assertFalse(outside.npcIsSpawned(outsideImpling), "and the impling is taken")
+    }
+
+    /**
+     * The Prifddinas crystal impling, jarless, which is the case no Puro-Puro rule can ever reach.
+     *
+     * `npc.ii_impling_type_12_johnny` has a single spawn marker and it is in Prifddinas; there is no
+     * maze form of this creature and no maze marker for it. So a jar rule keyed on the player's
+     * location leaves it catchable, and a jar rule applied everywhere made the one impling that
+     * cannot be caught in Puro-Puro require Puro-Puro's item.
+     */
+    @Test
+    fun theCrystalImplingIsCatchableWithNoJar() {
+        val world = HunterButterflyTestWorld()
+        val player = world.addPlayer(hunterLvl = 99)
+        world.wield(player, MAGIC_BUTTERFLY_NET)
+        val impling = world.addNpc(CRYSTAL_PRIFDDINAS)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        val caught = world.runImpling(player) { with(it) { catchImpling(impling) } }
+
+        assertTrue(caught, "Prifddinas is not Puro-Puro")
+        assertFalse(world.npcIsSpawned(impling))
+        assertFalse(player.inv.contains(IMPLING_JAR))
+    }
+
+    /**
      * A *filled* jar is not an empty one.
      *
      * The obvious way to get the jar check wrong, and the one that would only show up on the second
      * catch of a trip: `inv.contains` against the wrong obj passes for a player carrying nothing but
-     * the jars they have already filled.
+     * the jars they have already filled. Asked inside Puro-Puro, because that is the only place the
+     * empty jar is a requirement at all.
      */
     @Test
     fun aFilledJarDoesNotCountAsAnEmptyOne() {
         val world = HunterButterflyTestWorld()
-        val player = world.addPlayer(hunterLvl = 99)
+        val player = world.addPlayer(HunterButterflyTestWorld.PURO_PURO_TILE, hunterLvl = 99)
         world.wield(player, BUTTERFLY_NET)
         world.giveItem(player, BABY_JAR)
-        val impling = world.addNpc(BABY)
+        val impling = world.addNpc(BABY, HunterButterflyTestWorld.PURO_PURO_TILE.translateX(1))
         world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
 
         val caught = world.runImpling(player) { with(it) { catchImpling(impling) } }
@@ -554,6 +667,14 @@ class ImplingTest {
         private const val BABY = "npc.ii_impling_type_1_maze"
         private const val BABY_JAR = "obj.ii_captured_impling_1"
         private const val ECLECTIC = "npc.ii_impling_type_6_maze"
+
+        /** The eclectic's overworld form, and the filled jar both forms swap for. */
+        private const val ECLECTIC_OVERWORLD = "npc.ii_impling_type_6"
+
+        private const val ECLECTIC_JAR = "obj.ii_captured_impling_6"
+
+        /** The Prifddinas crystal impling, which has no Puro-Puro form at all. */
+        private const val CRYSTAL_PRIFDDINAS = "npc.ii_impling_type_12_johnny"
 
         /**
          * The six shipped implings as the wiki publishes them.

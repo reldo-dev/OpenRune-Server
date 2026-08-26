@@ -165,5 +165,15 @@ class HunterButterflyTestWorld(hunterXpBonus: Double = 0.0) {
     companion object {
         /** Well clear of `RegionRegistry.INSTANCE_MIN_X`, and mid-zone. */
         val BUTTERFLY_TILE: CoordGrid = CoordGrid(3204, 3204, 0)
+
+        /**
+         * A tile inside Puro-Puro, which the jar rule turns on.
+         *
+         * Not a made-up coordinate: `0_40_67_10_10` is one of the four guaranteed rare-impling
+         * markers `.data/raw-cache/map/npcs/mainland_extensions.toml` places in the maze, so this
+         * is a tile the game really does spawn implings on. [BUTTERFLY_TILE] is mapsquare 50,50 and
+         * is therefore ordinary Gielinor, which is what makes the pair usable as a contrast.
+         */
+        val PURO_PURO_TILE: CoordGrid = CoordGrid(2570, 4298, 0)
     }
 }
