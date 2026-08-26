@@ -54,7 +54,10 @@ object TrackingCreatures {
     val razorBacked = TrackingCreature(
         name = "razor-backed kebbit",
         level = 49,
-        xp = 3480,
+        // 348.5, not 348. The only fractional award of the five, and the reason [xp] is stored
+        // x10 at all; the wiki states it three times over - the infobox, the page lead, and the
+        // Hunter training guide. It shipped rounded because the survey document rounded it.
+        xp = 3485,
         fur = "obj.huntingbeast_bigspike",
         catchSeq = "seq.hunting_noose_razorback",
     )

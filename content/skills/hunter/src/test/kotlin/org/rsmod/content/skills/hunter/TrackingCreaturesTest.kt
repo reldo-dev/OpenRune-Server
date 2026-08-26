@@ -19,7 +19,10 @@ class TrackingCreaturesTest {
         assertEquals(13, TrackingCreatures.desertDevil.level)
         assertEquals(660, TrackingCreatures.desertDevil.xp)
         assertEquals(49, TrackingCreatures.razorBacked.level)
-        assertEquals(3480, TrackingCreatures.razorBacked.xp)
+        /* 348.5 per the creature's own page, which is where a fractional award has to be read
+         * from: the summary tables round it to 348, and both this literal and the constant it
+         * checks were originally written from one of those. */
+        assertEquals(3485, TrackingCreatures.razorBacked.xp)
     }
 
     @Test
