@@ -26,14 +26,30 @@ internal const val DOUBLE_HUNTER_XP: Double = 1.0
  * `1.0`: `0.5` is a 1.5x award and [DOUBLE_HUNTER_XP] is a 2x one. `0.0` returns the empty set the
  * worlds carried before, so a default-constructed world is byte for byte the world it was.
  */
-internal fun hunterXpModifiers(bonus: Double): XpModifiers =
-    if (bonus == 0.0) {
-        XpModifiers(emptySet())
-    } else {
-        XpModifiers(setOf(HunterXpBonus(bonus)))
+internal fun hunterXpModifiers(bonus: Double, craftingBonus: Double = 0.0): XpModifiers {
+    val mods = buildSet {
+        if (bonus != 0.0) {
+            add(HunterXpBonus(bonus))
+        }
+        if (craftingBonus != 0.0) {
+            add(CraftingXpBonus(craftingBonus))
+        }
     }
+    return XpModifiers(mods)
+}
 
 /** The shape a Hunter skilling outfit would have, with a bonus a test picks instead of a cape. */
 private class HunterXpBonus(private val bonus: Double) : StatXpMod("stat.hunter") {
+    override fun Player.modifier(): Double = bonus
+}
+
+/**
+ * The same, for `stat.crafting`.
+ *
+ * Bird house crafting is the only award in this module that is not Hunter experience, and its own
+ * `* xpMods.get(player, "stat.crafting")` needs a modifier scoped to *that* stat to be exercised at
+ * all - a Hunter bonus leaves it at 1.0 and would let the multiply be deleted unnoticed.
+ */
+private class CraftingXpBonus(private val bonus: Double) : StatXpMod("stat.crafting") {
     override fun Player.modifier(): Double = bonus
 }

@@ -16,6 +16,7 @@ import org.rsmod.api.game.process.GameLifecycle
 import org.rsmod.api.player.events.EngineQueueEvents
 import org.rsmod.api.player.events.PlayerQueueEvents
 import org.rsmod.api.player.events.interact.HeldObjEvents
+import org.rsmod.api.player.events.interact.HeldUEvents
 import org.rsmod.api.player.events.interact.LocContentEvents
 import org.rsmod.api.player.events.interact.LocEvents
 import org.rsmod.api.player.events.interact.NpcEvents
@@ -304,6 +305,36 @@ class HunterWiringTest {
         for (group in ALL_TRAP_GROUPS + CRAB_GROUP) {
             assertFalse(bus.hasOpContentLoc1(group), "bird houses must not claim $group")
         }
+    }
+
+    /**
+     * The nine `clockwork on logs` pairs, which are how a bird house enters the game at all.
+     *
+     * Walked off [BirdHouseTypes] rather than listed, the way the trap families' loc states are: a
+     * tenth tier joins this assertion on its own. The pair is asserted in *registration* order,
+     * because that is the only order `onOpHeldU` stores - see [Wiring.hasOpHeldU].
+     */
+    @Test
+    fun `bird houses register a craft pair on every tier's logs`() {
+        val bus = Wiring().start(scripts.birdHouse)
+
+        assertEquals(9, BirdHouseTypes.all.size, "nine tiers ship")
+        for (type in BirdHouseTypes.all) {
+            assertTrue(
+                bus.hasOpHeldU(HunterBirdHouse.CLOCKWORK, type.logs),
+                "a clockwork on ${type.logs} makes ${type.obj}",
+            )
+        }
+
+        // The tools are held and read, never used on anything, so neither carries a pair of its own.
+        assertFalse(
+            bus.hasOpHeldU(HunterBirdHouse.CLOCKWORK, HunterBirdHouse.CHISEL),
+            "the chisel is a held tool, not a material",
+        )
+        assertFalse(
+            bus.hasOpHeldU(HunterBirdHouse.CLOCKWORK, HunterBirdHouse.HAMMER),
+            "and so is the hammer",
+        )
     }
 
     /**
@@ -919,6 +950,18 @@ class HunterWiringTest {
 
         fun hasOpHeld1(obj: String): Boolean =
             eventBus.contains(HeldObjEvents.Op1::class.java, obj.asRSCM(RSCMType.OBJ))
+
+        /**
+         * `onOpHeldU` composes the two obj ids into one long key, in **registration** order.
+         *
+         * Order matters here and nowhere else in this class: the API refuses the reversed pair at
+         * boot, so asserting the wrong way round would fail against a correct registration.
+         */
+        fun hasOpHeldU(first: String, second: String): Boolean =
+            eventBus.contains(
+                HeldUEvents.Type::class.java,
+                EventBus.composeLongKey(first.asRSCM(RSCMType.OBJ), second.asRSCM(RSCMType.OBJ)),
+            )
 
         fun hasOpHeld3(obj: String): Boolean =
             eventBus.contains(HeldObjEvents.Op3::class.java, obj.asRSCM(RSCMType.OBJ))

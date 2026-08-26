@@ -102,8 +102,9 @@ class ScriptedDrawRandom(
  * `LocInteractions` hands an op.
  *
  * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
+ * @param craftingXpBonus Added to the `stat.crafting` award a craft pays; see [hunterXpModifiers].
  */
-class HunterBirdHouseTestWorld(hunterXpBonus: Double = 0.0) {
+class HunterBirdHouseTestWorld(hunterXpBonus: Double = 0.0, craftingXpBonus: Double = 0.0) {
     val random: ScriptedDrawRandom = ScriptedDrawRandom()
     val clock: WoundBirdHouseClock = WoundBirdHouseClock()
 
@@ -116,14 +117,14 @@ class HunterBirdHouseTestWorld(hunterXpBonus: Double = 0.0) {
     val birdHouse: HunterBirdHouse =
         HunterBirdHouse(
             gameRandom = random,
-            xpMods = hunterXpModifiers(hunterXpBonus),
+            xpMods = hunterXpModifiers(hunterXpBonus, craftingXpBonus),
             objRepo = objRepo,
             birdHouseClock = clock,
         )
 
     private var nextUuid: Long = 1L
 
-    fun addPlayer(hunterLvl: Int = 99): Player {
+    fun addPlayer(hunterLvl: Int = 99, craftingLvl: Int = 99): Player {
         val player = Player()
         player.coords = BIRDHOUSE_TILE
         player.slotId = playerList.nextFreeSlot() ?: error("No free player slot.")
@@ -132,6 +133,8 @@ class HunterBirdHouseTestWorld(hunterXpBonus: Double = 0.0) {
         playerList[player.slotId] = player
         player.statMap.setBaseLevel("stat.hunter", hunterLvl.toByte())
         player.statMap.setCurrentLevel("stat.hunter", hunterLvl.toByte())
+        player.statMap.setBaseLevel("stat.crafting", craftingLvl.toByte())
+        player.statMap.setCurrentLevel("stat.crafting", craftingLvl.toByte())
         player.inv = Inventory.create("inv.inv")
         player.inv.owner = player
         player.worn = Inventory.create("inv.worn")
@@ -186,6 +189,27 @@ class HunterBirdHouseTestWorld(hunterXpBonus: Double = 0.0) {
     fun seedUnits(player: Player, space: BirdHouseSpace): Int = player.birdHouseSeedUnits(space)
 
     /* Ops */
+
+    /** The body an `onOpHeldU` pair runs once the make menu has returned an amount of one. */
+    fun craft(player: Player, type: BirdHouseType): Boolean =
+        with(birdHouse) { protectedAccess(player).craftBirdHouse(type) }
+
+    /** The silent check the make menu gates on before it opens. */
+    fun craftRefusal(player: Player, type: BirdHouseType): String? =
+        with(birdHouse) { protectedAccess(player).birdHouseCraftRefusal(type) }
+
+    /** Both tools a craft holds but never spends. */
+    fun giveCraftingTools(player: Player) {
+        giveItem(player, HunterBirdHouse.CHISEL)
+        giveItem(player, HunterBirdHouse.HAMMER)
+    }
+
+    /** Everything one house of [type] costs: the logs, a clockwork, and both tools. */
+    fun giveCraftingKit(player: Player, type: BirdHouseType, houses: Int = 1) {
+        giveCraftingTools(player)
+        giveItem(player, type.logs, houses)
+        giveItem(player, HunterBirdHouse.CLOCKWORK, houses)
+    }
 
     fun build(player: Player, space: BirdHouseSpace): Boolean =
         with(birdHouse) { protectedAccess(player).buildBirdHouse(spaceLoc(space)) }

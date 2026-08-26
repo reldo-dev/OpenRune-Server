@@ -6,8 +6,14 @@ import org.rsmod.api.script.onOpContentLoc1
 import org.rsmod.api.script.onOpContentLoc2
 import org.rsmod.api.script.onOpContentLoc3
 import org.rsmod.api.script.onOpContentLoc4
+import org.rsmod.api.script.onOpHeldU
 import org.rsmod.api.script.onPlayerLogin
 import org.rsmod.api.script.onPlayerSoftQueueWithArgs
+import org.rsmod.content.skills.Material
+import org.rsmod.content.skills.SkillMultiConfig
+import org.rsmod.content.skills.SkillMultiEntry
+import org.rsmod.content.skills.SkillingActionType
+import org.rsmod.content.skills.openSkillMulti
 import org.rsmod.game.loc.BoundLocInfo
 import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
@@ -41,6 +47,10 @@ import org.rsmod.plugin.scripts.ScriptContext
  *
  * `onAiConTimer` is registered nowhere here. A bird house has no controller: nothing of it lives in
  * the world, and its fifty minutes are wall-clock time that no controller could outlive anyway.
+ *
+ * The nine `onOpHeldU` pairs are the technique's **entry point** and the only registration here that
+ * is not a loc op: without them a bird house cannot be obtained at all, which is what made the whole
+ * lifecycle unreachable until [HunterBirdHouse.craftBirdHouse] existed.
  */
 class BirdHouseEvents @Inject constructor(private val birdHouse: HunterBirdHouse) : PluginScript() {
     override fun ScriptContext.startup() {
@@ -50,6 +60,14 @@ class BirdHouseEvents @Inject constructor(private val birdHouse: HunterBirdHouse
         // what proves the derivation ran at all.
         check(BirdHouseSpaces.all.size == BIRDHOUSE_SPACES) {
             "Expected $BIRDHOUSE_SPACES bird house spaces, resolved ${BirdHouseSpaces.all.size}."
+        }
+
+        // One `HeldU` pair per tier: a clockwork on that tier's logs. Nine registrations rather than
+        // one, because the pair *is* the recipe - there is no ambiguity for a menu to resolve, and
+        // `onOpHeldU`'s catch-all overload would put this handler in front of every other use of a
+        // clockwork. No content group, interface or gameval is involved.
+        for (type in BirdHouseTypes.all) {
+            onOpHeldU(HunterBirdHouse.CLOCKWORK, type.logs) { craft(type) }
         }
 
         onOpContentLoc1(BIRD_HOUSE_GROUP) { op1(it.loc) }
@@ -65,6 +83,44 @@ class BirdHouseEvents @Inject constructor(private val birdHouse: HunterBirdHouse
         // be rebuilt on the way back in - and anything that matured while the player was away has to
         // be noticed. Both are the same call.
         onPlayerLogin { with(birdHouse) { player.rearmBirdHouseFills() } }
+    }
+
+    /**
+     * A clockwork used on [type]'s logs.
+     *
+     * The menu carries one entry, because the pair already names the product - it is here for the
+     * **quantity**, which is the half a bird house run actually uses: an ironman carrying four
+     * clockworks and four sets of logs makes four houses in one selection. That is also why the
+     * refusals are sent before it opens; `openSkillMulti` returns silently when nothing is
+     * affordable, so a player one Crafting level short would see no response at all.
+     *
+     * The whole run is made on the tick the amount is chosen. Fletching spreads a multi-make over a
+     * queue and a per-item animation, which is more faithful, but the queue costs a gameval and a
+     * cache repack; the instant loop is `DoughMakingEvents`' shape and the deviation is one tick per
+     * extra house.
+     */
+    private suspend fun ProtectedAccess.craft(type: BirdHouseType) {
+        val refusal = with(birdHouse) { birdHouseCraftRefusal(type) }
+        if (refusal != null) {
+            mes(refusal)
+            return
+        }
+        val materials = listOf(Material(type.logs), Material(HunterBirdHouse.CLOCKWORK))
+        val config =
+            SkillMultiConfig(
+                actionType = SkillingActionType.MAKE,
+                verb = "make",
+                entries = listOf(SkillMultiEntry(type.obj, materials)),
+            )
+        openSkillMulti(config) { selection ->
+            with(birdHouse) {
+                for (i in 0 until selection.amount) {
+                    if (!craftBirdHouse(type)) {
+                        break
+                    }
+                }
+            }
+        }
     }
 
     /** `Build` on a bare space, `Interact` on a full house. */

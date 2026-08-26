@@ -6,6 +6,7 @@ import dev.openrune.rscm.RSCMType
 import jakarta.inject.Inject
 import org.rsmod.api.player.output.mes
 import org.rsmod.api.player.protect.ProtectedAccess
+import org.rsmod.api.player.stat.craftingLvl
 import org.rsmod.api.player.stat.hunterLvl
 import org.rsmod.api.player.vars.VarPlayerIntMapSetter
 import org.rsmod.api.random.GameRandom
@@ -64,7 +65,13 @@ object SystemBirdHouseClock : BirdHouseClock {
  * - **Nothing about the technique lives in the world**, which is why the fill is a queue on the
  *   player rather than a controller on the space.
  *
- * ## The four transactions
+ * ## The five transactions
+ *
+ * **Craft** ([craftBirdHouse]) is where a bird house comes from: a clockwork used on the tier's logs,
+ * with a chisel and a hammer carried, awards the tier's Crafting experience. It is the only entry
+ * point to the whole technique - nothing else in the game gives a bird house - and it is also
+ * [placeBirdHouse]'s fallback, so `Build` and `Reset` make one out of materials when no pre-made
+ * house is carried.
  *
  * **Build** ([buildBirdHouse]) places the best bird house the player is carrying and can use. The
  * Hunter requirement is checked here and **only** here: "Dismantling a birdhouse does not have a
@@ -94,6 +101,75 @@ constructor(
     private val objRepo: ObjRepository,
     private val birdHouseClock: BirdHouseClock,
 ) {
+    /**
+     * Why [craftBirdHouse] would refuse [type] right now, or null if it would not.
+     *
+     * Split out because the make menu has to decide *before* it opens: `openSkillMulti` shows
+     * nothing at all when no entry is affordable, so a player one Crafting level short of a tier
+     * would otherwise click a clockwork onto logs and watch nothing happen. The order is the order
+     * the messages are worth reading in - the level first, because it is the one a run cannot fix.
+     */
+    fun ProtectedAccess.birdHouseCraftRefusal(type: BirdHouseType): String? =
+        when {
+            player.craftingLvl < type.craftingLevel ->
+                "You need a Crafting level of ${type.craftingLevel} to make that."
+            !inv.contains(CHISEL) || !inv.contains(HAMMER) ->
+                "You need a chisel and a hammer to make a bird house."
+            !inv.contains(type.logs) || !inv.contains(CLOCKWORK) ->
+                "You need ${type.logs.objName()} and a clockwork to make that."
+            else -> null
+        }
+
+    /**
+     * A clockwork used on [type]'s logs: one bird house, and the tier's Crafting experience.
+     *
+     * **The only way a bird house enters the game.** Until this existed the technique was
+     * unstartable and the table's [BirdHouseType.logs] and [BirdHouseType.craftingXp] columns were
+     * dead weight; both are read here rather than restated, which is why the nine tiers need one
+     * function and not nine.
+     *
+     * A `HeldU` pair rather than a make menu, because the pair already names the product: one log
+     * type plus a clockwork has exactly one outcome, unlike a knife on logs, which is the case make
+     * menus exist for. Nine registrations in [BirdHouseEvents] cover the family and no interface,
+     * content group or gameval is involved.
+     *
+     * The requirement is **Crafting**, not Hunter - "Crafting 5-90 if you wish to make your own
+     * houses", and the Hunter level is checked only when the house is placed. It is read from the
+     * effective level, so a boost makes a tier the base level cannot.
+     *
+     * Both tools are held, not consumed, and the animation is the cache's own `birdhouse_make`. The
+     * Imcando hammer's variant (`seq.birdhouse_make_imcando_hammer`, 8916) is not played; nothing in
+     * this module knows about that hammer yet.
+     *
+     * @return false, with a message already sent, if nothing was made.
+     */
+    fun ProtectedAccess.craftBirdHouse(type: BirdHouseType): Boolean {
+        val refusal = birdHouseCraftRefusal(type)
+        if (refusal != null) {
+            mes(refusal)
+            return false
+        }
+
+        // Charged one at a time and refunded on the second failure, the way the crab trap charges
+        // its three materials. Two deletes and one add can never overflow the backpack, so the
+        // product needs no space check.
+        if (invDel(inv, type.logs, 1).failure) {
+            return false
+        }
+        if (invDel(inv, CLOCKWORK, 1).failure) {
+            invAdd(inv, type.logs, 1)
+            return false
+        }
+
+        anim(BIRDHOUSE_MAKE_SEQ)
+        invAdd(inv, type.obj, 1)
+        // Stored x10, as every experience column in this module is.
+        val xp = (type.craftingXp / 10.0) * xpMods.get(player, "stat.crafting")
+        statAdvance("stat.crafting", xp)
+        mes("You carve the ${type.logs.objName()} and fit the clockwork inside.")
+        return true
+    }
+
     /**
      * `Build` on a bare space.
      *
@@ -262,8 +338,9 @@ constructor(
 
         if (rebuild && !placeBirdHouse(space, quiet = true)) {
             // Reset with nothing to place is not a failure - the house was still emptied - so this
-            // says what happened rather than reporting an error. Building the replacement out of
-            // logs and the returned clockwork, which live also does, is out of this slice.
+            // says what happened rather than reporting an error. The replacement may be made out of
+            // logs and the clockwork this payout just handed back, which live also does; only a
+            // player carrying neither a house nor materials lands here.
             mes("You have no bird house to put back here.")
         }
         return true
@@ -338,24 +415,24 @@ constructor(
     /* Internals. */
 
     /**
-     * Places the best carried bird house on [space].
+     * Places the best carried bird house on [space], making one out of materials if none is carried.
      *
-     * @return false if the player is carrying none they can use.
+     * The fallback is live's: "Bringing the extra clockwork allows the player to craft the bird
+     * houses while running to the next one" - the run is logs, seeds and one clockwork, and `Build`
+     * and `Reset` turn those into a house on the spot. `Reset` gets it for free, because the payout
+     * hands the clockwork back before this looks for anything.
+     *
+     * A pre-made house always wins over materials: it costs nothing to place and the logs stay in
+     * the bag. Only when none is usable does the crafting path run, and it picks the best tier the
+     * player can both *make* and *place* - both levels, both materials and both tools - so a
+     * carried redwood log is skipped rather than refused.
+     *
+     * @return false if the player is carrying neither a usable house nor the materials for one.
      */
     private fun ProtectedAccess.placeBirdHouse(space: BirdHouseSpace, quiet: Boolean = false): Boolean {
-        val best =
+        val carried =
             BirdHouseTypes.all.lastOrNull { it.hunterLevel <= player.hunterLvl && inv.contains(it.obj) }
-        if (best == null) {
-            if (!quiet) {
-                val carried = BirdHouseTypes.all.any { inv.contains(it.obj) }
-                if (carried) {
-                    mes("You aren't a high enough Hunter level to place any bird house you're carrying.")
-                } else {
-                    mes("You need a bird house to put here.")
-                }
-            }
-            return false
-        }
+        val best = carried ?: makeBirdHouseToPlace(quiet) ?: return false
         if (invDel(inv, best.obj, 1).failure) {
             return false
         }
@@ -364,6 +441,47 @@ constructor(
         player.clearBirdHouseReadyAt(space)
         mes("You place the ${best.obj.objName()} and it's ready to be seeded.")
         return true
+    }
+
+    /**
+     * Makes a house out of carried materials because none was carried ready-made.
+     *
+     * @return the tier now sitting in the backpack, or null with a message already sent.
+     */
+    private fun ProtectedAccess.makeBirdHouseToPlace(quiet: Boolean): BirdHouseType? {
+        val makeable = bestMakeableBirdHouse()
+        if (makeable == null) {
+            if (!quiet) {
+                // Three refusals worth telling apart. A player holding a redwood house at Hunter 80
+                // has a level problem, not a materials one, and sending them to the bank for logs
+                // they already carry would be the wrong instruction.
+                val carrying = BirdHouseTypes.all.any { inv.contains(it.obj) }
+                if (carrying) {
+                    mes("Your Hunter level is too low to place any bird house you're carrying.")
+                } else {
+                    mes("You need a bird house, or the logs and clockwork to make one.")
+                }
+            }
+            return null
+        }
+        return if (craftBirdHouse(makeable)) makeable else null
+    }
+
+    /**
+     * The best tier the player can make *and* place right now.
+     *
+     * Both level gates, not just the Crafting one: a house made here is placed in the same action,
+     * so making a tier the Hunter level cannot place would spend the logs on nothing.
+     */
+    private fun ProtectedAccess.bestMakeableBirdHouse(): BirdHouseType? {
+        if (!inv.contains(CHISEL) || !inv.contains(HAMMER) || !inv.contains(CLOCKWORK)) {
+            return null
+        }
+        return BirdHouseTypes.all.lastOrNull {
+            it.hunterLevel <= player.hunterLvl &&
+                it.craftingLevel <= player.craftingLvl &&
+                inv.contains(it.logs)
+        }
     }
 
     /** Moves [space] into the filling state and stamps its deadline. */
@@ -496,6 +614,21 @@ constructor(
 
         /** `obj.poh_clockwork_mechanism` (8792) is `name=Clockwork`; the `poh_` prefix is historical. */
         const val CLOCKWORK: String = "obj.poh_clockwork_mechanism"
+
+        /** `obj.chisel` (1755). Held, not consumed. */
+        const val CHISEL: String = "obj.chisel"
+
+        /** `obj.hammer` (2347), the same one the crab trap builds with. Held, not consumed. */
+        const val HAMMER: String = "obj.hammer"
+
+        /**
+         * `seq.birdhouse_make` (7057).
+         *
+         * The cache's own, and it names its own materials: `replaceheldright=hammer`,
+         * `replaceheldleft=logs` - which is independent confirmation that those two are what the
+         * action holds, from a source that is not the wiki.
+         */
+        const val BIRDHOUSE_MAKE_SEQ: String = "seq.birdhouse_make"
 
         /** `obj.spit_raw_bird_meat` (9978). There is no bare `raw_bird_meat` symbol. */
         const val RAW_BIRD_MEAT: String = "obj.spit_raw_bird_meat"
