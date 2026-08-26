@@ -1,0 +1,46 @@
+# Every seed a bird house accepts, and how many of it one house takes.
+# Source: OSRS Wiki `Bird house trapping` > Seeds (= `Bird house trapping/Seeds` >
+# Suitable bird bait), snapshot 20260817. 41 rows; 11 take 5, the rest take 10.
+# The symbol column is resolved against the packed cache, not taken from the wiki.
+symbol	name	per_house
+obj.barley_seed	Barley seed	10
+obj.hammerstone_hop_seed	Hammerstone seed	10
+obj.asgarnian_hop_seed	Asgarnian seed	10
+obj.jute_seed	Jute seed	10
+obj.yanillian_hop_seed	Yanillian seed	10
+obj.krandorian_hop_seed	Krandorian seed	10
+obj.wildblood_hop_seed	Wildblood seed	5
+obj.guam_seed	Guam seed	10
+obj.marrentill_seed	Marrentill seed	10
+obj.tarromin_seed	Tarromin seed	10
+obj.harralander_seed	Harralander seed	10
+obj.ranarr_seed	Ranarr seed	5
+obj.toadflax_seed	Toadflax seed	5
+obj.irit_seed	Irit seed	5
+obj.avantoe_seed	Avantoe seed	5
+obj.kwuarm_seed	Kwuarm seed	5
+obj.snapdragon_seed	Snapdragon seed	5
+obj.cadantine_seed	Cadantine seed	5
+obj.lantadyme_seed	Lantadyme seed	5
+obj.dwarf_weed_seed	Dwarf weed seed	5
+obj.torstol_seed	Torstol seed	5
+obj.marigold_seed	Marigold seed	10
+obj.rosemary_seed	Rosemary seed	10
+obj.nasturtium_seed	Nasturtium seed	10
+obj.woad_seed	Woad seed	10
+obj.limpwurt_seed	Limpwurt seed	10
+obj.white_lily_seed	White lily seed	10
+obj.potato_seed	Potato seed	10
+obj.onion_seed	Onion seed	10
+obj.cabbage_seed	Cabbage seed	10
+obj.tomato_seed	Tomato seed	10
+obj.sweetcorn_seed	Sweetcorn seed	10
+obj.strawberry_seed	Strawberry seed	10
+obj.watermelon_seed	Watermelon seed	10
+obj.snape_grass_seed	Snape grass seed	10
+obj.redberry_bush_seed	Redberry seed	10
+obj.poisonivy_bush_seed	Poison ivy seed	10
+obj.cadavaberry_bush_seed	Cadavaberry seed	10
+obj.dwellberry_bush_seed	Dwellberry seed	10
+obj.jangerberry_bush_seed	Jangerberry seed	10
+obj.whiteberry_bush_seed	Whiteberry seed	10

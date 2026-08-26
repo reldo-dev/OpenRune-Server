@@ -43,47 +43,35 @@ enum class BirdHouseState {
 }
 
 /**
- * The four bird house spaces on Fossil Island, and the nine tiers each can hold.
+ * The nine tiers a [BirdHouseSpace] can hold, and where each one sits in the space's multiloc chain.
  *
- * A space is a multiloc over a **varp**, one per space, holding `0..27`: index 0 is the bare space
- * and the rest are three states for each of nine tiers. That the state is a varp and not a varbit is
- * the whole reason this technique needs no server-authored state - varps default to
- * `VarpLifetime.Perm` and are saved on logout, so a bird house left filling survives one for free.
+ * A space is a multiloc over a **varp** holding `0..27`: index 0 is the bare space and the rest are
+ * three states for each of nine tiers. That the state is a varp and not a varbit is the whole reason
+ * this technique needs almost no server-authored state - see [BirdHouseSpaces].
  *
- * The four spaces and their varps are paired by the loc's own `multiVarp`, not by position or by
- * name, so the pairing cannot drift. The wiki's map pins agree with all four placements to within
- * one tile; where they differ the packed map wins.
+ * The chain is read from the first space, because all four carry byte-identical `multiLoc` lists;
+ * `BirdHouseTablesTest` asserts that rather than assuming it.
  */
 object BirdHouseTypes {
-    /** The four spaces, in varp order. Each names the loc a player clicks and the varp it reads. */
-    val spaces: List<String> =
-        listOf("loc.birdhouse_1", "loc.birdhouse_2", "loc.birdhouse_3", "loc.birdhouse_4")
-
     val all: List<BirdHouseType> by lazy {
         HunterBirdhouseTypesRow.all().sortedBy(HunterBirdhouseTypesRow::rowId).map(::type)
     }
 
-    /** The multiloc children of a space, masked the way `LocInteractions.multiLoc` masks them. */
+    /**
+     * The multiloc children of a space, masked the way `LocInteractions.multiLoc` masks them.
+     *
+     * 29 entries, not 28: indices 0..27 are the real children and index 28 is the `65535` "no loc"
+     * sentinel. Nothing here indexes past 27, and [stateOf] finds a child by searching rather than
+     * by arithmetic, so the tail is harmless - but it is why a length check against 28 would fail.
+     */
     private val children: List<Int> by lazy {
-        val space = spaces.first().asRSCM(RSCMType.LOC)
+        val space = BirdHouseSpaces.all.first()
         val type =
-            checkNotNull(ServerCacheManager.getObject(space)) { "Missing loc: ${spaces.first()}" }
-        require(type.multiVarp > 0) { "${spaces.first()} is not a varp multiloc." }
+            checkNotNull(ServerCacheManager.getObject(space.locId)) { "Missing loc: ${space.loc}" }
         type.multiLoc.map { it and 0xFFFF }
     }
 
     private val byObj: Map<String, BirdHouseType> by lazy { all.associateBy { it.obj } }
-
-    /** The varp each space reads, resolved from the loc itself rather than assumed. */
-    val varps: List<Int> by lazy {
-        spaces.map { space ->
-            val type =
-                checkNotNull(ServerCacheManager.getObject(space.asRSCM(RSCMType.LOC))) {
-                    "Missing loc: $space"
-                }
-            type.multiVarp
-        }
-    }
 
     /** The bird house a player is holding, or null if the obj is not one. */
     fun byObj(obj: String): BirdHouseType? = byObj[obj]

@@ -19,6 +19,13 @@ dependencies {
     // themselves and need its `PlayerItemStorage` argument on the classpath to do it.
     testImplementation(projects.api.invStorage)
 
+    // Test-only. The default quest policy is `assume-completed`, so `clueScrollTransformObj` always
+    // takes its X-Marks-the-Spot branch and the untransformed one - a real server running
+    // `respect-progress` - would never be exercised. `content/quest` owns the policy singleton and
+    // is already a transitive dependency of `content/drops`; this only makes it visible to the test
+    // that flips it back and forth.
+    testImplementation(projects.content.quest)
+
 
 }
 
