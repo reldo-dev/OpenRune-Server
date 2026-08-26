@@ -8,7 +8,6 @@ import kotlin.coroutines.startCoroutine
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.protect.ProtectedAccessContextFactory
 import org.rsmod.api.player.vars.VarPlayerIntMapSetter
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.coroutine.suspension.GameCoroutineSimpleCompletion
 import org.rsmod.game.MapClock
@@ -35,15 +34,17 @@ import org.rsmod.routefinder.loc.LocLayerConstants
  *
  * The [MapClock] exists only so [runProtected] can drive a suspending op; nothing in tracking reads
  * it.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterTrackingTestWorld {
+class HunterTrackingTestWorld(hunterXpBonus: Double = 0.0) {
     val mapClock: MapClock = MapClock()
     val random: ScriptedRandom = ScriptedRandom()
 
     private val playerList: PlayerList = PlayerList()
 
     val tracking: HunterTracking =
-        HunterTracking(gameRandom = random, xpMods = XpModifiers(emptySet()))
+        HunterTracking(gameRandom = random, xpMods = hunterXpModifiers(hunterXpBonus))
 
     /* Players */
 

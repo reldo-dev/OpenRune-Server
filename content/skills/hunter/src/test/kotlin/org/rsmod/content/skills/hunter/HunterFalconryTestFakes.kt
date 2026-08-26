@@ -14,7 +14,6 @@ import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
 import org.rsmod.api.repo.controller.ControllerRepository
 import org.rsmod.api.repo.npc.NpcRepository
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.coroutine.suspension.GameCoroutineSimpleCompletion
 import org.rsmod.events.EventBus
@@ -40,8 +39,10 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * binds its lambda receiver to `HunterTrap`, and generalising that would have meant editing every
  * one of the 81 trap tests' harness. A separate ~30 lines of registry construction is cheaper than
  * touching a green suite.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterFalconryTestWorld {
+class HunterFalconryTestWorld(hunterXpBonus: Double = 0.0) {
     val mapClock: MapClock = MapClock()
     val random: ScriptedRandom = ScriptedRandom()
 
@@ -66,7 +67,7 @@ class HunterFalconryTestWorld {
             npcRepo = npcRepo,
             playerList = playerList,
             gameRandom = random,
-            xpMods = XpModifiers(emptySet()),
+            xpMods = hunterXpModifiers(hunterXpBonus),
         )
 
     fun advance(cycles: Int = 1) {

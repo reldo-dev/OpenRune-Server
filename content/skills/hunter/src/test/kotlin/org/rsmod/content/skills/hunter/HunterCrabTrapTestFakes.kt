@@ -3,7 +3,6 @@ package org.rsmod.content.skills.hunter
 import dev.openrune.ServerCacheManager
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.protect.ProtectedAccessContextFactory
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.game.entity.Player
 import org.rsmod.game.entity.PlayerList
@@ -29,14 +28,16 @@ import org.rsmod.routefinder.loc.LocLayerConstants
  * The site locs are built by hand rather than registered, for the same reason: nothing ever looks
  * them up in a repository. A [BoundLocInfo] is what an op hands the content, and building one over
  * the packed type is exactly what `LocInteractions` does.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterCrabTrapTestWorld {
+class HunterCrabTrapTestWorld(hunterXpBonus: Double = 0.0) {
     val random: ScriptedRandom = ScriptedRandom()
 
     private val playerList: PlayerList = PlayerList()
 
     val crabTrap: HunterCrabTrap =
-        HunterCrabTrap(gameRandom = random, xpMods = XpModifiers(emptySet()))
+        HunterCrabTrap(gameRandom = random, xpMods = hunterXpModifiers(hunterXpBonus))
 
     private var nextUuid: Long = 1L
 

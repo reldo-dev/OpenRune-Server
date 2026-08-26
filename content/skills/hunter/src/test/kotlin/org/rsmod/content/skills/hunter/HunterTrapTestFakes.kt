@@ -27,7 +27,6 @@ import org.rsmod.api.repo.loc.LocRepository
 import org.rsmod.api.repo.npc.NpcRepository
 import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.repo.player.PlayerRepository
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.coroutine.suspension.GameCoroutineSimpleCompletion
 import org.rsmod.events.EventBus
@@ -175,8 +174,10 @@ object HunterTestCache {
  *
  * Coordinates default well below [RegionRegistry.INSTANCE_MIN_X] so every loc goes through
  * `LocRegistryNormal` rather than the instanced-region path.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterTrapTestWorld {
+class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
     val mapClock: MapClock = MapClock()
     val random: ScriptedRandom = ScriptedRandom()
 
@@ -225,7 +226,7 @@ class HunterTrapTestWorld {
             playerRepo = playerRepo,
             playerList = playerList,
             random = random,
-            xpMods = XpModifiers(emptySet()),
+            xpMods = hunterXpModifiers(hunterXpBonus),
             mapClock = mapClock,
         )
 

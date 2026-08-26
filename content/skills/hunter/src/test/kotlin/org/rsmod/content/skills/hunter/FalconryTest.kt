@@ -440,6 +440,37 @@ class FalconryTest {
     }
 
     /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun theXpModifierScalesTheFalconryAward() {
+        val plain = retrievedKebbitFineXp(hunterXpBonus = 0.0)
+        val doubled = retrievedKebbitFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The dashing kebbit's pinned 156 xp, in the stat map's tenths.
+        assertEquals(1560, plain, "unmodified, the dashing kebbit is 156.0 xp")
+        assertEquals(3120, doubled, "a +100% modifier makes it 312.0")
+    }
+
+    /** One retrieved dashing kebbit, in tenths of a point. */
+    private fun retrievedKebbitFineXp(hunterXpBonus: Double): Int {
+        val world = HunterFalconryTestWorld(hunterXpBonus = hunterXpBonus)
+        val player = world.addPlayer(FALCONRY_TILE, hunterLvl = 99)
+        world.giveItem(player, FALCON_GLOVE)
+        val creature = checkNotNull(FalconryCreatures.byNpc("npc.huntingbeast_speedy2"))
+        val falcon = world.placeCaughtFalcon(FALCONRY_TILE.translateX(2), player, creature)
+
+        assertTrue(world.runProtected(player) { with(it) { retrieveFalcon(falcon) } })
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
+    /**
      * A falcon that has walked off its prey's tile is still that catch's falcon.
      *
      * The three falcon npcs take `NpcServerType`'s defaults - `moveRestrict = Normal`, `defaultMode

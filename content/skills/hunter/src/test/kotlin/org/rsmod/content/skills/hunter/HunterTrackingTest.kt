@@ -217,6 +217,39 @@ class HunterTrackingTest {
         assertEquals(List(5) { 0 }, world.segmentValues(player, network), "and stops rendering")
     }
 
+    /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun `the xp modifier scales the tracking award`() {
+        val plain = caughtPolarKebbitFineXp(hunterXpBonus = 0.0)
+        val doubled = caughtPolarKebbitFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The wiki *Tracking* table's 30 xp for a polar kebbit, in the stat map's tenths.
+        assertEquals(300, plain, "unmodified, the polar kebbit is 30.0 xp")
+        assertEquals(600, doubled, "a +100% modifier makes it 60.0")
+    }
+
+    /** One caught polar kebbit at the end of its trail, in tenths of a point. */
+    private fun caughtPolarKebbitFineXp(hunterXpBonus: Double): Int {
+        val world = HunterTrackingTestWorld(hunterXpBonus = hunterXpBonus)
+        val network = HunterTrackingTestWorld.network()
+        val player = world.addPlayer()
+        world.wieldNooseWand(player)
+        world.random.nextInt = 0
+        world.inspectBurrow(player, network)
+        world.followToTheEnd(player, network)
+
+        assertTrue(world.attackCatchSpot(player, network, HOT_SPOT))
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
     @Test
     fun `attacking a different catch spot of the same network misses without clearing the trail`() {
         val world = HunterTrackingTestWorld()

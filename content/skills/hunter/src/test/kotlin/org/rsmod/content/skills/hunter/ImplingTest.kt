@@ -193,6 +193,38 @@ class ImplingTest {
     }
 
     /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun theXpModifierScalesTheImplingAward() {
+        val plain = caughtBabyImplingFineXp(hunterXpBonus = 0.0)
+        val doubled = caughtBabyImplingFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The wiki's 18 Puro-Puro xp for a baby impling, in the stat map's tenths.
+        assertEquals(180, plain, "unmodified, the baby impling is 18.0 xp")
+        assertEquals(360, doubled, "a +100% modifier makes it 36.0")
+    }
+
+    /** One successful baby impling catch in Puro-Puro, in tenths of a point. */
+    private fun caughtBabyImplingFineXp(hunterXpBonus: Double): Int {
+        val world = HunterButterflyTestWorld(hunterXpBonus = hunterXpBonus)
+        val player = world.addPlayer(hunterLvl = 99)
+        world.wield(player, BUTTERFLY_NET)
+        world.giveItem(player, IMPLING_JAR)
+        val impling = world.addNpc(BABY)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        assertTrue(world.runImpling(player) { with(it) { catchImpling(impling) } })
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
+    /**
      * The failure branch: nothing is consumed and the impling stays put.
      *
      * Set at the creature's own requirement, where the rate is a real fraction - the baby impling's

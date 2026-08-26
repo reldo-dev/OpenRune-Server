@@ -380,6 +380,41 @@ class CrabTrapTest {
         )
     }
 
+    /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun `the xp modifier scales the crab award`() {
+        val plain = emptiedRedTrapFineXp(hunterXpBonus = 0.0)
+        val doubled = emptiedRedTrapFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The wiki overview table's 64 xp for a red crab, in the stat map's tenths.
+        assertEquals(640, plain, "unmodified, a red crab is 64.0 xp")
+        assertEquals(1280, doubled, "a +100% modifier makes it 128.0")
+    }
+
+    /**
+     * One emptied red trap, in tenths of a point.
+     *
+     * Replaces [world] rather than taking one as an argument: `baitedTrap` and the rest of the
+     * harness read the field, and `setUp` puts a fresh default one back before the next test.
+     */
+    private fun emptiedRedTrapFineXp(hunterXpBonus: Double): Int {
+        world = HunterCrabTrapTestWorld(hunterXpBonus = hunterXpBonus)
+        val site = HunterCrabTrapTestWorld.RED_SITE
+        val player = baitedTrap(site)
+        world.catchArrives(player, site)
+
+        assertTrue(world.empty(player, site))
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
     @Test
     fun `emptying a full trap is refused when there is no room for the crab`() {
         val site = HunterCrabTrapTestWorld.RED_SITE

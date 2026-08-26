@@ -437,6 +437,36 @@ class BirdHouseTest {
         assertTrue(world.itemCount(player, HunterBirdHouse.FEATHER) in listOf(30, 40, 50, 60))
     }
 
+    /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun `the xp modifier scales the bird house award`() {
+        val plain = emptiedNormalHouseFineXp(hunterXpBonus = 0.0)
+        val doubled = emptiedNormalHouseFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The wiki's 280 xp for a normal bird house, in the stat map's tenths.
+        assertEquals(2800, plain, "unmodified, a normal bird house is 280.0 xp")
+        assertEquals(5600, doubled, "a +100% modifier makes it 560.0")
+    }
+
+    /** One emptied normal bird house, in tenths of a point. */
+    private fun emptiedNormalHouseFineXp(hunterXpBonus: Double): Int {
+        val world = HunterBirdHouseTestWorld(hunterXpBonus = hunterXpBonus)
+        val player = world.addPlayer()
+        world.setState(player, FIRST_SPACE, NORMAL.birdState)
+        world.random.fallbackDouble = 1.0
+
+        assertTrue(world.empty(player, FIRST_SPACE))
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
     @Test
     fun `emptying is refused on a filling house`() {
         val world = HunterBirdHouseTestWorld()

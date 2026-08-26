@@ -43,6 +43,38 @@ class ButterflyTest {
     }
 
     /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun theXpModifierScalesTheButterflyAward() {
+        val plain = nettedWarlockFineXp(hunterXpBonus = 0.0)
+        val doubled = nettedWarlockFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // Fine xp is tenths of a point, so the black warlock's pinned 54 reads as 540 here.
+        assertEquals(540, plain, "unmodified, the black warlock is 54.0 xp")
+        assertEquals(1080, doubled, "a +100% modifier makes it 108.0")
+    }
+
+    /** One successful black warlock catch, in tenths of a point. */
+    private fun nettedWarlockFineXp(hunterXpBonus: Double): Int {
+        val world = HunterButterflyTestWorld(hunterXpBonus = hunterXpBonus)
+        val player = world.addPlayer(hunterLvl = 99)
+        world.wield(player, BUTTERFLY_NET)
+        world.giveItem(player, BUTTERFLY_JAR)
+        val butterfly = world.addNpc("npc.butterfly_warlock")
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        assertTrue(world.run(player) { with(it) { catchButterfly(butterfly) } })
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
+    /**
      * The failure branch: nothing is consumed and the butterfly stays put.
      *
      * Set at the creature's own requirement level, where the rate is a real fraction - at 99 the

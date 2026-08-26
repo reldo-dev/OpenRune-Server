@@ -12,7 +12,6 @@ import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.player.isSuccess
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
 import org.rsmod.api.repo.npc.NpcRepository
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.coroutine.suspension.GameCoroutineSimpleCompletion
 import org.rsmod.events.EventBus
@@ -55,8 +54,10 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * The ops take a [PitfallSite] rather than a `BoundLocInfo`, so unlike the crab trap's world this
  * one never has to build a loc over a packed type at all. Resolving a click to a site is the op
  * layer's job, and the op layer is not wired yet.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterPitfallTestWorld {
+class HunterPitfallTestWorld(hunterXpBonus: Double = 0.0) {
     val playerList: PlayerList = PlayerList()
     private val npcList: NpcList = NpcList()
 
@@ -84,7 +85,7 @@ class HunterPitfallTestWorld {
         HunterPitfall(
             gameRandom = random,
             npcRepo = npcRepo,
-            xpMods = XpModifiers(emptySet()),
+            xpMods = hunterXpModifiers(hunterXpBonus),
             playerList = playerList,
         )
 

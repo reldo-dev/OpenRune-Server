@@ -327,6 +327,40 @@ class HunterTrapOpsTest {
         assertEquals(creature.xp / 10, player.statMap.getXP("stat.hunter"))
     }
 
+    /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun `the xp modifier scales the trap award`() {
+        val plain = collectedChinchompaFineXp(hunterXpBonus = 0.0)
+        val doubled = collectedChinchompaFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The grey chinchompa's 198.4 xp, which is why the tables store tenths at all.
+        assertEquals(1984, plain, "unmodified, a grey chinchompa is 198.4 xp")
+        assertEquals(3968, doubled, "a +100% modifier makes it 396.8")
+    }
+
+    /**
+     * One collected box trap holding a chinchompa, in tenths of a point.
+     *
+     * Replaces [world]: `setUp` puts a fresh default one back before the next test.
+     */
+    private fun collectedChinchompaFineXp(hunterXpBonus: Double): Int {
+        world = HunterTrapTestWorld(hunterXpBonus = hunterXpBonus)
+        val player = hunter(level = 99, carrying = listOf("obj.hunting_box_trap"))
+        springBoxTrapOn(player)
+        val sprung = world.boundLocAt(TRAP_TILE)!!
+
+        assertTrue(world.runProtected(player) { it.collectTrap(sprung) })
+
+        return player.statMap.getFineXP("stat.hunter")
+    }
+
     @Test
     fun `collecting someone else's trap is refused and leaves it standing`() {
         val owner = hunter(level = 99, carrying = listOf("obj.hunting_box_trap"))

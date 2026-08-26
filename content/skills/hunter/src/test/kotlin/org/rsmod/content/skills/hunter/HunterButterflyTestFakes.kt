@@ -13,7 +13,6 @@ import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
 import org.rsmod.api.registry.zone.ZoneUpdateMap
 import org.rsmod.api.repo.npc.NpcRepository
 import org.rsmod.api.repo.obj.ObjRepository
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.events.EventBus
 import org.rsmod.game.MapClock
@@ -40,8 +39,10 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * two techniques share the nets, the barehanded cost, the faster curve and the jar swap, so a second
  * world would be this one with a different field name and a second place for the worn-inventory
  * setup to drift.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterButterflyTestWorld {
+class HunterButterflyTestWorld(hunterXpBonus: Double = 0.0) {
     val mapClock: MapClock = MapClock()
     val random: ScriptedRandom = ScriptedRandom()
 
@@ -64,7 +65,7 @@ class HunterButterflyTestWorld {
     val objRepo: ObjRepository = ObjRepository(mapClock, objRegistry)
 
     val butterfly: HunterButterfly =
-        HunterButterfly(npcRepo = npcRepo, gameRandom = random, xpMods = XpModifiers(emptySet()))
+        HunterButterfly(npcRepo = npcRepo, gameRandom = random, xpMods = hunterXpModifiers(hunterXpBonus))
 
     /** Exposed so the wiring test can build [ImplingEvents] without a second world. */
     val implingSpawner: ImplingSpawner = ImplingSpawner(npcList, npcRepo, random)
@@ -75,7 +76,7 @@ class HunterButterflyTestWorld {
             objRepo = objRepo,
             spawner = implingSpawner,
             gameRandom = random,
-            xpMods = XpModifiers(emptySet()),
+            xpMods = hunterXpModifiers(hunterXpBonus),
         )
 
     private var nextUuid: Long = 1L

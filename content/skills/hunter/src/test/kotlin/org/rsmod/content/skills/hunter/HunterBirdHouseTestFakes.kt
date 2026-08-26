@@ -10,7 +10,6 @@ import org.rsmod.api.random.GameRandom
 import org.rsmod.api.registry.obj.ObjRegistry
 import org.rsmod.api.registry.zone.ZoneUpdateMap
 import org.rsmod.api.repo.obj.ObjRepository
-import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.game.MapClock
 import org.rsmod.game.entity.Player
@@ -101,8 +100,10 @@ class ScriptedDrawRandom(
  * The space locs are built by hand rather than registered, for the same reason [CrabTrapSite]'s are:
  * nothing ever looks them up, and a [BoundLocInfo] over the packed type is exactly what
  * `LocInteractions` hands an op.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
-class HunterBirdHouseTestWorld {
+class HunterBirdHouseTestWorld(hunterXpBonus: Double = 0.0) {
     val random: ScriptedDrawRandom = ScriptedDrawRandom()
     val clock: WoundBirdHouseClock = WoundBirdHouseClock()
 
@@ -115,7 +116,7 @@ class HunterBirdHouseTestWorld {
     val birdHouse: HunterBirdHouse =
         HunterBirdHouse(
             gameRandom = random,
-            xpMods = XpModifiers(emptySet()),
+            xpMods = hunterXpModifiers(hunterXpBonus),
             objRepo = objRepo,
             birdHouseClock = clock,
         )

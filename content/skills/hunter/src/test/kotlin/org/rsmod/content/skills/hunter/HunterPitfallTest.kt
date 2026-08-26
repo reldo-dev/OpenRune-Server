@@ -512,6 +512,40 @@ class HunterPitfallTest {
         assertEquals(PitState.Empty, world.stateOf(player, site))
     }
 
+    /**
+     * The Hunter xp modifier is *applied*, not merely injected.
+     *
+     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
+     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * multiplication load-bearing.
+     */
+    @Test
+    fun `the xp modifier scales the pitfall award`() {
+        val plain = dismantledFullPitFineXp(hunterXpBonus = 0.0)
+        val doubled = dismantledFullPitFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
+
+        // The sunlight antelope's pinned 380 xp, in the stat map's tenths.
+        assertEquals(3800, plain, "unmodified, a sunlight antelope is 380.0 xp")
+        assertEquals(7600, doubled, "a +100% modifier makes it 760.0")
+    }
+
+    /**
+     * One dismantled full sunlight pit, in tenths of a point.
+     *
+     * Replaces [world]: `setUp` puts a fresh default one back before the next test.
+     */
+    private fun dismantledFullPitFineXp(hunterXpBonus: Double): Int {
+        world = HunterPitfallTestWorld(hunterXpBonus = hunterXpBonus)
+        val site = HunterPitfallTestWorld.SUNLIGHT_SITE
+        val player = world.addPlayer(hunterLvl = 72)
+        world.setState(player, site, PitState.Full)
+
+        assertTrue(world.dismantle(player, site))
+
+        return world.hunterFineXp(player)
+    }
+
     /** The rotated full state is the same pit facing the other way, and pays out identically. */
     @Test
     fun `the rotated full state pays out exactly as the unrotated one does`() {
