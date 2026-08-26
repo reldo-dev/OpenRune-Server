@@ -6,9 +6,8 @@ package org.rsmod.content.skills.hunter
  * other family, no success pair at all. The catch is deterministic: the wiki technique page
  * awards loot unconditionally and no tracking page carries a Hunting-chance chart.
  *
- * [xp] is stored x10 like [HunterCreature.xp]. [fur] is the biome-named cache symbol -
- * "common kebbit fur" is `huntingbeast_woodland_fur`, the third instance of wiki names
- * diverging from cache symbols on this branch.
+ * [xp] is stored x10 like [HunterCreature.xp]. [fur] is the biome-named cache symbol,
+ * which diverges from the wiki creature name - "common kebbit fur" is `huntingbeast_woodland_fur`.
  */
 data class TrackingCreature(
     val name: String,
@@ -18,13 +17,47 @@ data class TrackingCreature(
     val catchSeq: String,
 )
 
-/** Values from the wiki technique table; re-derived independently by `hunterVerify`. */
+/** Values derived from the wiki technique table. */
 object TrackingCreatures {
-    val polar = TrackingCreature("polar kebbit", 1, 300, "obj.huntingbeast_polar_fur", "seq.hunting_noose_polar")
-    val common = TrackingCreature("common kebbit", 3, 360, "obj.huntingbeast_woodland_fur", "seq.hunting_noose_wood")
-    val feldipWeasel = TrackingCreature("feldip weasel", 7, 480, "obj.huntingbeast_jungle_fur", "seq.hunting_noose_jungle")
-    val desertDevil = TrackingCreature("desert devil", 13, 660, "obj.huntingbeast_desert_fur", "seq.hunting_noose_desert")
-    val razorBacked = TrackingCreature("razor-backed kebbit", 49, 3480, "obj.huntingbeast_bigspike", "seq.hunting_noose_razorback")
+    val polar = TrackingCreature(
+        name = "polar kebbit",
+        level = 1,
+        xp = 300,
+        fur = "obj.huntingbeast_polar_fur",
+        catchSeq = "seq.hunting_noose_polar",
+    )
+
+    val common = TrackingCreature(
+        name = "common kebbit",
+        level = 3,
+        xp = 360,
+        fur = "obj.huntingbeast_woodland_fur",
+        catchSeq = "seq.hunting_noose_wood",
+    )
+
+    val feldipWeasel = TrackingCreature(
+        name = "feldip weasel",
+        level = 7,
+        xp = 480,
+        fur = "obj.huntingbeast_jungle_fur",
+        catchSeq = "seq.hunting_noose_jungle",
+    )
+
+    val desertDevil = TrackingCreature(
+        name = "desert devil",
+        level = 13,
+        xp = 660,
+        fur = "obj.huntingbeast_desert_fur",
+        catchSeq = "seq.hunting_noose_desert",
+    )
+
+    val razorBacked = TrackingCreature(
+        name = "razor-backed kebbit",
+        level = 49,
+        xp = 3480,
+        fur = "obj.huntingbeast_bigspike",
+        catchSeq = "seq.hunting_noose_razorback",
+    )
 
     val all: List<TrackingCreature> = listOf(polar, common, feldipWeasel, desertDevil, razorBacked)
 }
