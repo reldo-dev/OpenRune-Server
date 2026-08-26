@@ -140,8 +140,16 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
      * The cache declares this op on three of the five states, and they mean two different things:
      * - **[PitState.Set]** takes an armed pit back apart. Nothing is awarded and nothing is handed
      *   back - the log is spent. That differs from [HunterTrap]'s deadfall, which hands back the
-     *   log it was armed with; the deadfall's own KDoc records that refund as *unsourced*, and no
-     *   source says a dismantled pit returns anything either.
+     *   log it was armed with, and the difference is structural rather than a guess about the live
+     *   game: the deadfall can refund because it remembers - it stores the exact log's obj id in
+     *   its own controller (`trapDeadfallLog`), so it hands back precisely what it took. A pitfall
+     *   has no such memory. Its entire per-site state is the single 3-bit `hunt_pitfall_state<n>`
+     *   varbit [PitState] enumerates, and the cache defines no companion log varbit - all
+     *   twenty-five `hunt_pitfall_state<n>` records were checked, and there is no
+     *   `hunt_pitfall_log<n>` alongside any of them. A faithful refund would mean authoring
+     *   twenty-five new server-side varps to record state the live game does not model, and the
+     *   cheap alternative - handing back a generic `obj.logs` regardless of what was spent - would
+     *   be an item *transmute*: a player whose only logs were magic would get normal logs back.
      * - **[PitState.Full] / [PitState.FullRotated]** are the same catch facing opposite ways. Both
      *   hand over the creature's loot and its experience.
      *
@@ -426,11 +434,16 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
          * whatever is nearest the top of the backpack and this one is not.
          *
          * "Tier" is read as the log's own Firemaking requirement, which is the only ordering the
-         * packed data carries and the one every log tier list in the game is written in. The sort
-         * is stable, so rows that share a requirement keep the packed table's own order. Seven of
+         * packed data carries and the one every log tier list in the game is written in. Seven of
          * the nineteen rows are Firemaking 1 - normal, achey and the five Treasure Trails colours -
-         * and five of those seven are filtered out below, leaving `obj.logs` ahead of
-         * `obj.achey_tree_logs` exactly as the packed table has them.
+         * and five of those seven are filtered out below, leaving normal and achey tree logs tied
+         * at the bottom. `sortedWith` is stable, so a tie like that would otherwise fall back to
+         * whichever order [FiremakingLogsRow.all] happens to return rows in - the packed DB's
+         * master-index list when one exists, `dbrows.values` iteration order otherwise - and
+         * neither place promises anything about that order. The comparator below breaks the tie
+         * itself instead, explicitly preferring `obj.logs`: achey tree logs are a Big Chompy Bird
+         * Hunting quest item, and this is not a fact worth leaving to however a future repack
+         * happens to enumerate rows.
          *
          * Eligibility is [isUsableDeadfallLog], reused rather than restated. Its two halves are
          * both exactly right here: the *Pitfall* page rules out redwood and arctic pine in the same
@@ -449,8 +462,19 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
         private val logTiers: List<String> by lazy {
             FiremakingLogsRow.all()
                 .filter { isUsableDeadfallLog(it.input.internalName) }
-                // A row with no requirement at all is the lowest tier there is.
-                .sortedBy { it.statReq.firstOrNull()?.t1 ?: 0 }
+                .sortedWith(
+                    compareBy(
+                        // A row with no requirement at all is the *highest* tier, not the
+                        // lowest: an absent requirement is far likelier to describe something
+                        // exotic than something cheap, and refusing to prefer an unknown row
+                        // costs nothing.
+                        { it.statReq.firstOrNull()?.t1 ?: Int.MAX_VALUE },
+                        // The explicit tie-break `sortedWith` needs at Firemaking 1: `obj.logs`
+                        // wins over `obj.achey_tree_logs` by name, not by whatever order the
+                        // packed table happens to enumerate rows in.
+                        { it.input.internalName != "obj.logs" },
+                    )
+                )
                 .map { it.input.internalName }
         }
     }

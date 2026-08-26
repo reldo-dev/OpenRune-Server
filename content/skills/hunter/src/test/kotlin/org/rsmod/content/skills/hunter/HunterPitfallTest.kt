@@ -280,6 +280,29 @@ class HunterPitfallTest {
     }
 
     /**
+     * Normal logs and achey tree logs both require Firemaking 1, so this is the one pair the
+     * lowest-tier rule cannot settle by level alone - it is a stated tie-break, not the packed
+     * table's incidental row order, that must decide it.
+     *
+     * Achey tree logs are a Big Chompy Bird Hunting quest item; a pit free to spend either would
+     * otherwise be one packed-table repack away from quietly destroying one to arm a trap.
+     */
+    @Test
+    fun `normal logs are spent before achey tree logs, which tie at Firemaking level 1`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+        world.giveItem(player, HunterPitfallTestWorld.KNIFE)
+        world.giveItem(player, "obj.achey_tree_logs", 1)
+        world.giveItem(player, HunterPitfallTestWorld.LOGS, 1)
+
+        assertTrue(world.trap(player, site))
+
+        val normal = world.itemCount(player, HunterPitfallTestWorld.LOGS)
+        assertEquals(0, normal, "normal logs go first")
+        assertEquals(1, world.itemCount(player, "obj.achey_tree_logs"), "achey logs are kept")
+    }
+
+    /**
      * "Redwood logs and arctic pine logs cannot be used for pitfall traps." (wiki, *Pitfall*)
      *
      * Both are ordinary rows of the packed firemaking logs table - redwood at Firemaking 90, arctic
