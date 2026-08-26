@@ -9,6 +9,7 @@ import org.rsmod.api.player.protect.ProtectedAccessContextFactory
 import org.rsmod.api.player.vars.VarPlayerIntMapSetter
 import org.rsmod.api.registry.npc.NpcRegistry
 import org.rsmod.api.registry.player.PlayerRegistry
+import org.rsmod.api.registry.player.isSuccess
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.coroutine.GameCoroutine
@@ -60,17 +61,30 @@ class HunterPitfallTestWorld {
     private val npcRegistry = NpcRegistry(npcList, collision, eventBus)
     private val playerRegistry = PlayerRegistry(playerList, collision, zoneActivity, eventBus)
 
-    val pitfall: HunterPitfall = HunterPitfall(xpMods = XpModifiers(emptySet()))
+    val pitfall: HunterPitfall =
+        HunterPitfall(xpMods = XpModifiers(emptySet()), playerList = playerList)
 
     private var nextUuid: Long = 1L
 
-    fun addPlayer(hunterLvl: Int = 99): Player {
+    /**
+     * A registered player, optionally in a named [slot].
+     *
+     * [slot] exists for one test: `PlayerList.nextFreeSlot` walks forward from `lastUsedSlot + 1`
+     * and only comes back round to a freed slot after the list has wrapped, so a login that
+     * inherits a logged-out player's slot cannot be produced in two lines - it has to be asked
+     * for. Everything else takes the next free one.
+     */
+    fun addPlayer(hunterLvl: Int = 99, slot: Int? = null): Player {
         val player = Player()
         player.coords = PITFALL_TILE
-        player.slotId = playerList.nextFreeSlot() ?: error("No free player slot.")
+        player.slotId = slot ?: playerList.nextFreeSlot() ?: error("No free player slot.")
         player.uuid = nextUuid++
         player.observerUUID = player.uuid
-        playerRegistry.add(player)
+        // Checked rather than discarded. A `NoAvailableSlot` would leave the player on
+        // `PlayerUid.NULL`, and every "the creature is chasing *that* player" assertion in
+        // `HunterPitfallTest` would pass for any player at all - which is exactly the vacuity
+        // building a real `PlayerRegistry` was for.
+        check(playerRegistry.add(player).isSuccess()) { "Could not register test player." }
         player.statMap.setBaseLevel("stat.hunter", hunterLvl.toByte())
         player.statMap.setCurrentLevel("stat.hunter", hunterLvl.toByte())
         player.inv = Inventory.create("inv.inv")
@@ -158,6 +172,29 @@ class HunterPitfallTestWorld {
         npcRegistry.del(npc)
     }
 
+    /** Logs [player] out, freeing their slot for the next player to be given. */
+    fun removePlayer(player: Player) {
+        check(playerRegistry.del(player).isSuccess()) { "Could not deregister test player." }
+    }
+
+    /**
+     * Puts [npc] [tiles] tiles east of the tile it spawned on, which is the lure a hunter walks.
+     *
+     * Only the creature is moved, and that is the honest model rather than a shortcut:
+     * `NpcPlayerFollowModeProcessor` re-routes the creature towards the player every cycle and
+     * teleports it onto them past fifteen tiles, so the creature's own tile is the one that
+     * strays.
+     *
+     * A plain coordinate write, as `HunterFalconryTestWorld` moves a kebbit. `Npc.teleport` would
+     * be the engine's own call but it `check`s that the destination zone is *allocated*, and in a
+     * bare [CollisionFlagMap] only the tiles something has already been placed on are - so a lure
+     * of any length would die on the check rather than on the leash.
+     */
+    fun lureNpc(npc: Npc, tiles: Int) {
+        val spawn = npc.spawnCoords
+        npc.coords = CoordGrid(x = spawn.x + tiles, z = spawn.z, level = spawn.level)
+    }
+
     /**
      * `Tease` on [npc], driven to completion in one call.
      *
@@ -184,6 +221,17 @@ class HunterPitfallTestWorld {
 
     fun stopChasing(npc: Npc) {
         pitfall.stopChasing(npc)
+    }
+
+    /**
+     * One cycle of the hook [HunterPitfall.tickChases] needs registering on
+     * `GameLifecycle.LateCycle`.
+     *
+     * Nothing else in this world runs on a clock, so a chase ends here or it does not end at all -
+     * which is exactly the production situation the hook exists for.
+     */
+    fun tickChases() {
+        pitfall.tickChases()
     }
 
     /** Who [npc] is chasing, read exactly as `NpcPlayerFollowModeProcessor` reads it each cycle. */

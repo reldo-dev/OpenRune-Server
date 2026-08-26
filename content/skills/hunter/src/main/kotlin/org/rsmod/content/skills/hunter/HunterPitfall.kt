@@ -13,6 +13,7 @@ import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.table.FiremakingLogsRow
 import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
+import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.entity.player.PlayerUid
 
 /**
@@ -45,9 +46,16 @@ import org.rsmod.game.entity.player.PlayerUid
  * into [PitState.Full] are a later task's, as is registering any of this against a loc or npc op.
  * Nothing in this file is wired to a click.
  *
+ * **[tickChases] is the one thing here that is not an op, and it is not optional.** It needs a
+ * `GameLifecycle.LateCycle` registration - `onEvent<GameLifecycle.LateCycle> { pitfall.tickChases()
+ * }`, exactly as [ImplingSpawner] gets one - and without it a teased creature follows its hunter
+ * across the world forever. See [tickChases] for why nothing else in the engine will stop it.
+ *
  * @see PitState for what each varbit value renders as, and which ops the cache declares on it.
  */
-class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
+class HunterPitfall
+@Inject
+constructor(private val xpMods: XpModifiers, private val playerList: PlayerList) {
     /**
      * Which creature is chasing which player, keyed by npc **identity**.
      *
@@ -61,9 +69,9 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
      * right: a chase is a thing in flight, and a creature that respawns has nobody to chase.
      *
      * Entries are added by [teaseCreature] and removed by [stopChasing], which is the call the
-     * catch belongs on. A creature teased and then never caught keeps its entry, so the map is
-     * bounded by the number of pitfall creatures the map spawns - a few dozen - rather than growing
-     * without limit. Identity keying, and the reasoning behind it, is `FalconLinks`'.
+     * catch belongs on, and by [tickChases] for a chase that ended some other way. The map is in
+     * any case bounded by the number of pitfall creatures the map spawns - a few dozen - rather
+     * than growing without limit. Identity keying, and the reasoning behind it, is `FalconLinks`'.
      */
     private val chases = IdentityHashMap<Npc, PlayerUid>()
 
@@ -232,11 +240,15 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
      * per-cycle timer here.
      *
      * `PlayerFollow` was chosen over the combat chase (`opPlayer2`) that every aggressive npc in
-     * this codebase uses, for two reasons. It has no leash: `NpcInteractionProcessor` cancels an
-     * `opPlayer2` interaction once the target is further than `maxRange + attackRange` from the
-     * npc's **spawn** tile, which is eight tiles on these creatures' packed defaults - far less
-     * than the run from a creature to its pit. And `opPlayer2` is a request to *attack*, which is
-     * not what a tease is; see the retaliation note below.
+     * this codebase uses, for two reasons. Its leash is too short: `NpcInteractionProcessor`
+     * cancels an `opPlayer2` interaction once the target is further than `maxRange + attackRange`
+     * from the npc's **spawn** tile, which is eight tiles on these creatures' packed defaults -
+     * far less than the run from a creature to its pit. And `opPlayer2` is a request to *attack*,
+     * which is not what a tease is; see the retaliation note below.
+     *
+     * The price of that choice is that `PlayerFollow` has **no** leash at all, and the engine will
+     * not end this chase on its own. [tickChases] is where the leash is put back, and it is a
+     * prerequisite of this method rather than a refinement of it.
      *
      * The one thing `PlayerFollow` will not survive is a facing lock: `Npc.facePlayer` is a no-op
      * while `isFacingLocked`, which would leave the mode set with no target for the processor to
@@ -264,15 +276,26 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
      * contradicts both the *Pitfall* page and the newspost it is itself citing. Whoever measures a
      * real base tease rate should add it here, not there.
      *
-     * ## Retaliation is out of scope
+     * ## Retaliation is blocked on a chase that can end, not merely deferred
      *
      * "These creatures are able to attack the player with melee after teasing them, with a max hit
      * of 5-7 damage depending on the creature", reducible with hunter gear and negated by Protect
      * from Melee (wiki, *Pitfall*, oldid=15201220). A teased creature here follows and does not
-     * hit. That is real combat wiring - an attack mode, a max hit per creature, a damage reduction
-     * that reads worn hunter gear, and a prayer interaction - and none of it is this task's. The
-     * creatures do carry the stats it would need (`attack`, `strength`, `hitpoints`, `defence` are
-     * all packed on all five), so the data is there when somebody builds it.
+     * hit.
+     *
+     * That is not just a scoping call. **The player cannot fight back at all**: `config/npc` 2908
+     * and its four siblings declare `op1=Tease` and no `Attack` op, so there is no click that puts
+     * a teased creature into combat and no way to kill one to be rid of it. A creature that hits
+     * for 5-7 every few cycles, on top of a chase with nothing to end it, would be neither
+     * escapable nor killable - a hunter's only way out would be to log. So a **chase-termination
+     * rule is a prerequisite of retaliation, not a sibling of it**, and [tickChases] is that rule.
+     * Whoever builds the attack half inherits a bound already in place and must not widen it.
+     *
+     * The rest of that half is real combat wiring - an attack mode, a max hit per creature, a
+     * damage reduction that reads worn hunter gear, and a prayer interaction - and none of it is
+     * this task's. The creatures do carry the stats it would need (`attack`, `strength`,
+     * `hitpoints`, `defence` are all packed on all five), so the data is there when somebody
+     * builds it.
      *
      * ## No delay
      *
@@ -326,6 +349,70 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
     fun teasedBy(npc: Npc): PlayerUid? = chases[npc]
 
     /**
+     * The cycle hook that gives every chase somewhere to stop. Register it, or none of them do.
+     *
+     * ## Why this has to exist
+     *
+     * `NpcMode.PlayerFollow` is unbounded. `NpcModeProcessor` gives it no timeout, no leash and no
+     * give-up condition, and `NpcPlayerFollowModeProcessor` **teleports the creature onto the
+     * player's own tile** the moment the gap passes its `VALID_DISTANCE` of 15. Without this hook a
+     * hunter teases a larupia in Feldip Hills, walks to Varrock, and arrives with a size-2 cat
+     * standing on top of them that nothing but a logout will shake off. That is the engine's
+     * behaviour, not a bug in it - `PlayerFollow` is what a pet does - so the bound belongs here.
+     *
+     * Three things end a chase, and the two that are not [stopChasing] are both this method's:
+     * - **The teaser is gone.** The slot *and* the [PlayerUid] are checked, because a slot is
+     *   reused the moment its player logs out and the slot alone would silently hand the chase to
+     *   whoever inherited it. This is the fact [chases] exists to keep.
+     * - **The creature has strayed past [CHASE_RANGE] tiles from its spawn tile.**
+     *
+     * A creature the world has already taken away is dropped without being written to: a mode set
+     * on a slotless npc is a mode no processor will ever read again.
+     *
+     * ## Shape: a leash, not a stopwatch
+     *
+     * Spawn-anchored distance, matching the engine's own `opPlayer2` leash
+     * (`NpcInteractionProcessor` gates on `spawnCoords.chebyshevDistance(target) <= maxRange +
+     * attackRange`) rather than a cycle count. A cycle cap would punish the slow hunter and the
+     * one who stops to fight a wandering aggressor, and would end a chase that is still going
+     * exactly where it should; distance ends only the chase that has left the hunting ground. The
+     * creature's **own** tile is measured rather than the player's, which is the same thing in
+     * practice - the follow processor keeps it within 15 tiles or teleports it - and reads as what
+     * it is: how far this creature has got from home.
+     *
+     * There is deliberately no cap on a chase that never leaves the hunting ground. A hunter who
+     * keeps a creature circling its own pits is doing the technique, not abusing it.
+     */
+    fun tickChases() {
+        if (chases.isEmpty()) {
+            return
+        }
+        // Collected before anything is ended, because `stopChasing` writes to the map being read.
+        val ended = chases.entries.filterNot { (npc, teaser) -> chaseContinues(npc, teaser) }
+        for ((npc, _) in ended) {
+            if (npc.isSlotAssigned) {
+                stopChasing(npc)
+            } else {
+                chases.remove(npc)
+            }
+        }
+    }
+
+    /** Whether [npc]'s chase of [teaser] is still one this feature is willing to keep running. */
+    private fun chaseContinues(npc: Npc, teaser: PlayerUid): Boolean {
+        if (!npc.isSlotAssigned) {
+            return false
+        }
+        // Read exactly as `NpcPlayerFollowModeProcessor` reads it, then checked against the uid the
+        // tease recorded: `facingTarget` resolves a *slot*, and a slot outlives its player.
+        val target = npc.facingTarget(playerList)
+        if (target == null || target.uid != teaser) {
+            return false
+        }
+        return npc.spawnCoords.chebyshevDistance(npc.coords) <= CHASE_RANGE
+    }
+
+    /**
      * Ends [npc]'s chase and hands it back to whatever it does when nobody is teasing it.
      *
      * The call the catch belongs on: a creature that has gone into a pit must stop following, and
@@ -333,9 +420,7 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
      * `resetMode` so the creature is explicitly returned to its packed default rather than left on
      * a null mode for the processor to fill in.
      *
-     * The other way a chase ends needs nothing from us. `NpcPlayerFollowModeProcessor` resets the
-     * mode itself the first cycle its target cannot be resolved, which is what a logout leaves
-     * behind; the entry here is then stale but harmless, and [teaseCreature] overwrites it.
+     * [tickChases] is the other caller, for the two ways a chase ends that nobody clicks.
      */
     fun stopChasing(npc: Npc) {
         chases.remove(npc)
@@ -423,6 +508,43 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
         private val PITFALL_NPC_IDS: Set<Int> by lazy {
             PitfallCreatures.all.mapTo(HashSet()) { it.npc.asRSCM(RSCMType.NPC) }
         }
+
+        /**
+         * How far a teased creature will follow before [tickChases] takes it off the leash: **64
+         * tiles, Chebyshev, from the tile it spawned on**.
+         *
+         * **This number is chosen, not sourced.** No wiki page, cache field or newspost gives a
+         * give-up range for a teased pitfall creature, and none describes one giving up at all -
+         * live may well have no such rule, because live's teased creature can be fought and killed
+         * and ours cannot. So it is derived from the authored data instead: whatever bound ships
+         * must sit clear of every run a legitimate lure asks for.
+         *
+         * Two figures were measured off [PitfallSites] and the twenty-eight creature spawns in
+         * `.data/raw-cache/map/npcs/` (larupia `feldip_hills`, graahk `karamja`, kyatt
+         * `rellekka_cold_water`, sunlight `varlamore`, moonlight `hunter_guild`), as Chebyshev
+         * tiles from a spawn to a pit of that creature's **own** kind:
+         * - to the **nearest** such pit, worst case per creature: larupia 2, graahk 4, kyatt 7,
+         *   sunlight **8**, moonlight 3. That is the run the technique asks for when the hunter
+         *   sets the pit next to them, and it is tiny.
+         * - to the **farthest** such pit, worst case per creature: moonlight 9, sunlight 17, graahk
+         *   19, larupia 30, kyatt **41**. That is the run the technique asks for when it does not:
+         *   the six kyatt spawns and six kyatt pits fall into two clusters a map apart, so a hunter
+         *   whose only set pit is in the far cluster (spawn 2696,3790 to site 5 at 2737,3784)
+         *   legitimately leads one 41 tiles.
+         *
+         * 64 is that worst legitimate run plus 23 tiles - one map square, and better than half as
+         * much headroom again. Below about 45 a real lure would start breaking; a hunter would see
+         * their kyatt turn round halfway and would have no idea why. Above a few hundred the bound
+         * stops being a bound. Between those, the exact figure does not matter much, so it is the
+         * round one.
+         *
+         * Two sanity checks on the scale. It is eight times the leash `opPlayer2` would have given
+         * these creatures (`maxRange + attackRange` = 8), which is why that mode was not used. And
+         * it is four times `NpcPlayerFollowModeProcessor.VALID_DISTANCE`, so the whole legitimate
+         * range still sits inside the engine's teleport-to-target behaviour rather than changing
+         * how a chase feels.
+         */
+        private const val CHASE_RANGE: Int = 64
 
         /**
          * Every log a pit accepts, **lowest tier first**.

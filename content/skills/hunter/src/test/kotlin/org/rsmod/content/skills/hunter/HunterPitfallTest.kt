@@ -56,7 +56,10 @@ class HunterPitfallTest {
      * The chase table is an `IdentityHashMap` and is named here on purpose: teasing needed
      * somewhere to record who a creature is chasing, and the cheapest wrong answer would have been
      * an `NpcRepository` to look creatures up through. It holds nothing but npcs the caller already
-     * handed it.
+     * handed it. `PlayerList` is the engine's own player array, which is what
+     * `NpcPlayerFollowModeProcessor` resolves a follow target through and what
+     * [HunterPitfall.tickChases] resolves one through in turn; it is not a repository and cannot
+     * add, delete or move anything.
      */
     @Test
     fun `the pitfall engine has no way to reach a loc, controller or npc repository`() {
@@ -71,7 +74,7 @@ class HunterPitfallTest {
             listOf("LocRepository", "ControllerRepository", "NpcRepository", "ObjRepository")) {
             assertFalse(forbidden in collaborators, "HunterPitfall must not hold a $forbidden")
         }
-        assertEquals(setOf("XpModifiers", "IdentityHashMap"), collaborators)
+        assertEquals(setOf("XpModifiers", "PlayerList", "IdentityHashMap"), collaborators)
     }
 
     /* Build: the happy path and the varbit it writes. */
@@ -883,6 +886,168 @@ class HunterPitfallTest {
         assertEquals(NpcMode.Wander, npc.mode)
         assertNull(world.chaseTarget(npc))
         assertNull(world.teasedBy(npc))
+    }
+
+    /* The leash: the three ways a chase ends without anybody clicking anything. */
+
+    /**
+     * The longest lure the authored map actually asks for does **not** break the chase.
+     *
+     * This is the test that protects players from an over-tight bound, and 41 is measured rather
+     * than picked: the six kyatt spawns in `.data/raw-cache/map/npcs/rellekka_cold_water.toml` and
+     * the six kyatt pits in [PitfallSites] fall into two clusters a map apart, and a hunter whose
+     * only set pit is in the far cluster legitimately walks one from `0_42_59_8_14` (2696, 3790)
+     * to site 5 (2737, 3784) - 41 Chebyshev tiles. Every other creature's worst run is shorter:
+     * larupia 30, graahk 19, sunlight 17, moonlight 9.
+     *
+     * A creature is not required to be a kyatt to be lured 41 tiles, so the cheapest creature to
+     * build is used; the figure is what is under test, not the species.
+     */
+    @Test
+    fun `the longest lure the map asks for does not break the chase`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.lureNpc(npc, 41)
+        world.tickChases()
+
+        assertEquals(NpcMode.PlayerFollow, npc.mode)
+        assertSame(player, world.chaseTarget(npc))
+        assertEquals(player.uid, world.teasedBy(npc))
+    }
+
+    /**
+     * The leash reaches sixty-four tiles and stops at sixty-five.
+     *
+     * Both figures are literals rather than the constant they are testing, which is the whole
+     * point of pinning them: a bound raised or lowered by one tile has to fail here. The pair also
+     * pins the comparison itself - a `<` where the code says `<=` would fail the first half and
+     * leave the second passing.
+     */
+    @Test
+    fun `a creature sixty-four tiles from its spawn is still chasing`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.lureNpc(npc, 64)
+        world.tickChases()
+
+        assertSame(player, world.chaseTarget(npc))
+        assertEquals(player.uid, world.teasedBy(npc))
+    }
+
+    /**
+     * A creature lured off the map gives up and goes home, which is the bug this leash exists for.
+     *
+     * `NpcMode.PlayerFollow` has no timeout, no leash and no give-up condition of its own, and
+     * `NpcPlayerFollowModeProcessor` teleports the creature onto the player's exact tile past
+     * fifteen. Without [HunterPitfall.tickChases] a teased larupia follows its hunter to Varrock
+     * and stands on them there until one of them logs out.
+     */
+    @Test
+    fun `a creature lured past the leash gives up the chase`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.lureNpc(npc, 65)
+        world.tickChases()
+
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.chaseTarget(npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /** Far past the leash rather than one tile past it: the same answer, from the other side. */
+    @Test
+    fun `a creature lured a thousand tiles away gives up the chase`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.lureNpc(npc, 1000)
+        world.tickChases()
+
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * The chase ends when the player who started it leaves the world.
+     *
+     * Half of this is the engine's: `chaseTarget` reads `playerList[faceEntity.playerSlot]`, and a
+     * logged-out player is no longer in that array, so `NpcPlayerFollowModeProcessor` would reset
+     * the mode on its own next cycle. The half that is **ours** is [HunterPitfall.teasedBy] coming
+     * back null - the record of who to pay for the catch has to go with the chase, or a creature
+     * teased by somebody who has since logged out keeps pointing at them forever.
+     */
+    @Test
+    fun `a chase ends when the teaser leaves the world`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.removePlayer(player)
+        world.tickChases()
+
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.chaseTarget(npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * A chase does not pass to whoever inherits the teaser's slot.
+     *
+     * This is the case a slot check alone gets wrong, and it is why the chase is recorded as a
+     * [org.rsmod.game.entity.player.PlayerUid] rather than a slot: `PlayerRegistry` hands a freed
+     * slot straight to the next player to log in, and `facingTarget` resolves a slot. A creature
+     * left facing slot 0 would silently start chasing - and paying out to - a stranger.
+     */
+    @Test
+    fun `a chase does not transfer to the next player in the teaser's slot`() {
+        val teaser = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(teaser, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(teaser, npc))
+        val slot = teaser.slotId
+        world.removePlayer(teaser)
+
+        val stranger = world.addPlayer(slot = slot)
+        assertEquals(slot, stranger.slotId, "the test needs the freed slot to be reused")
+
+        world.tickChases()
+
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * A creature that has left the world is forgotten, and is not written to on the way out.
+     *
+     * `defaultMode` on a slotless npc would set a mode no processor will ever visit again, so the
+     * record is dropped and the npc left exactly as the despawn left it. The mode assertion is the
+     * one that says "left alone" rather than merely "not crashed".
+     */
+    @Test
+    fun `a chase is forgotten when the creature leaves the world`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.removeNpc(npc)
+        world.tickChases()
+
+        assertNull(world.teasedBy(npc))
+        assertEquals(NpcMode.PlayerFollow, npc.mode)
     }
 
     /** Two creatures teased by two players do not share a chase. */
