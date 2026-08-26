@@ -58,24 +58,14 @@ enum class PitState(val varbitValue: Int) {
  * gives the cap at five Hunter levels - 1, 20, 40, 60, 80 - each holding until the next: 1 below
  * level 20, 2 from 20, 3 from 40, 4 from 60, 5 from 80.
  *
- * This is the same ladder `HunterTrap`'s private `trapCap` runs the five tile-based trap families
- * on, but it is not called from here: `trapCap` lives in a `private companion object` inside
- * `HunterTrap`, unexported outside that file, and widening its visibility is a change to a
- * different feature's file that this task does not otherwise touch. `HunterCrabTrap.crabTrapCap`
- * sets the precedent for writing an identical-looking ladder out again rather than reaching into
- * `HunterTrap` for it, for the same underlying reason given there: a pitfall counts player-varbit
- * state on permanent scenery, not controllers laid on tiles, so it is a different table from a
- * different source that happens to share `trapCap`'s numbers rather than a reuse of it.
+ * The five tile-based trap families run on the same ladder, so the numbers live in [TrapLadder] and
+ * this is the pitfall's name for them. It stays a named entry point rather than having callers
+ * reach for [TrapLadder] directly, because a pitfall counts player-varbit state on permanent
+ * scenery where `HunterTrap` counts controllers laid on tiles: if the published tables ever part,
+ * they part here.
  *
  * Read from the effective level, so a boost raises the cap.
  */
 object PitfallLogic {
-    fun maxTraps(hunterLevel: Int): Int =
-        when {
-            hunterLevel >= 80 -> 5
-            hunterLevel >= 60 -> 4
-            hunterLevel >= 40 -> 3
-            hunterLevel >= 20 -> 2
-            else -> 1
-        }
+    fun maxTraps(hunterLevel: Int): Int = TrapLadder.cap(hunterLevel)
 }

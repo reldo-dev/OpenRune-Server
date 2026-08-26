@@ -392,11 +392,11 @@ constructor(
          *
          * "the number of simultaneous active (baited or full) traps is limited by Hunter level: 21 →
          * 2, 40 → 3, 60 → 4, 80 → 5" (wiki, *Crab trapping > Setting up*). This is the ordinary
-         * hunter trap ladder with its bottom rung removed, and it agrees with `HunterTrap`'s
-         * `trapCap` at every level this technique is reachable at, since the lowest crab is 21 and
-         * that function's `1` applies only below 20. It is written out again rather than shared
-         * because it is a different table from a different source that happens to coincide, and
-         * because `trapCap` counts controllers on tiles, which a crab trap has none of.
+         * hunter trap ladder with its bottom rung removed, and it agrees with [TrapLadder] at every
+         * level this technique is reachable at, since the lowest crab is 21 and that ladder's `1`
+         * applies only below 20. It is written out again rather than shared because it is a
+         * different table from a different source that happens to coincide, and because delegating
+         * would hand crab trapping a below-20 rung its own source does not have.
          *
          * Read from the effective level, so a boost raises the cap.
          */

@@ -817,7 +817,8 @@ constructor(
         // Sweep before the cap check: a trap that died while the player was elsewhere must not
         // still be occupying a slot.
         val laid = player.sweepTrapCoords()
-        val cap = trapCap(player.hunterLvl)
+        // Read from the effective level, so temporary boosts raise the cap.
+        val cap = TrapLadder.cap(player.hunterLvl)
         if (laid.size >= cap) {
             val plural = if (cap == 1) "trap" else "traps"
             mes("You can only lay $cap $plural at your Hunter level.")
@@ -1098,16 +1099,6 @@ constructor(
                 HunterTrapStates.DEADFALL_SETTING.asRSCM(RSCMType.LOC),
             )
         }
-
-        /** Read from the effective level, so temporary boosts raise the cap. */
-        private fun trapCap(level: Int): Int =
-            when {
-                level >= 80 -> 5
-                level >= 60 -> 4
-                level >= 40 -> 3
-                level >= 20 -> 2
-                else -> 1
-            }
 
         /**
          * The single inventory item a portable trap is laid from.
