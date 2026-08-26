@@ -23,6 +23,7 @@ import org.rsmod.api.registry.loc.LocRegistry
 import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.player.PlayerRegistryResult
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.route.StepFactory
 import org.rsmod.events.EventBus
 import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
@@ -32,6 +33,7 @@ import org.rsmod.game.interact.InteractionOp
 import org.rsmod.game.loc.BoundLocInfo
 import org.rsmod.map.CoordGrid
 import org.rsmod.map.zone.ZoneKey
+import org.rsmod.routefinder.RouteFinding
 import org.rsmod.routefinder.collision.CollisionFlagMap
 
 /**
@@ -185,6 +187,16 @@ class PitfallLoopTest {
      * and **teleports it onto the player** instead. [aTeasedGraahkIsTakenOffTheLeash] is where that
      * teleport is exercised on purpose; here the per-cycle step is asserted to be a step, so a
      * chase that only ever "works" by teleporting cannot pass.
+     *
+     * The pit is picked by [reachablePit], and it is picked carefully, because a following npc does
+     * **not** route-find. `NpcPlayerFollowModeProcessor` hands `NpcMovementProcessor` a
+     * `RouteRequestPathingEntity`, which resolves to a single naive destination and one
+     * [StepFactory.validated] step per cycle: diagonal, else horizontal, else vertical, else
+     * nothing. There is no going around. A creature whose straight line to the hunter runs into a
+     * wall stops against it and stays there for as many cycles as it is given - which is what made
+     * this test flake, stalling eight tiles out for the whole budget. [reachablePit] therefore
+     * walks the engine's own stepper over the map first and only offers a pit the creature can
+     * really reach, so a stall here is the mechanic failing rather than the terrain.
      */
     @Test
     fun aTeasedLarupiaWalksTowardsItsHunter() {
@@ -194,18 +206,34 @@ class PitfallLoopTest {
         try {
             world.give(player, TEASING_STICK)
 
-            val (npc, pit) =
-                world.chaseSetup(PitfallCreatures.larupia)
-                    ?: error("no larupia within $CHASE_WINDOW tiles of one of its own pits")
+            val creature = PitfallCreatures.larupia
+            val npc =
+                world.chaseCandidate(creature)
+                    ?: error("no larupia within $CHASE_WINDOW tiles of a pit it can walk to")
 
             world.clickNpc(player, npc, InteractionOp.Op1)
             assertEquals(player.uid, world.pitfall.teasedBy(npc), "the Tease did not start a chase")
             assertEquals(NpcMode.PlayerFollow, npc.mode, "the Tease did not set the follow mode")
 
+            // Picked after the Tease rather than before it. Dispatching the click runs cycles, and
+            // a larupia wanders a tile while they run; the pit has to be reachable from where the
+            // chase actually begins, not from where the creature stood when it was found.
+            val pit =
+                world.reachablePit(npc, creature)
+                    ?: error("no larupia pit ${npc.coords} can walk to within $CHASE_WINDOW tiles")
+
             PathingEntityCommon.telejump(player, world.collision, pit.coords)
             val start = npc.coords
             val startGap = start.chebyshevDistance(player.coords)
             assertTrue(startGap >= 4, "the hunter should start clear, was $startGap tiles")
+            // The other end of the same window, and it is a setup check rather than a claim about
+            // the mechanic: past `VALID_DISTANCE` the engine teleports instead of walking, and a
+            // creature that drifted out of range while the Tease was being dispatched would make
+            // the step assertion below fail for a reason that has nothing to do with the chase.
+            assertTrue(
+                startGap <= FOLLOW_VALID_DISTANCE,
+                "the hunter started $startGap tiles out, past the follow teleport threshold",
+            )
 
             var longestStep = 0
             var previous = start
@@ -228,9 +256,13 @@ class PitfallLoopTest {
             // adjacent, so the south-west tile `coords` reports comes to rest a couple of tiles
             // out. `HunterPitfall.crossingCreature` measures the same way, so "close enough to be
             // crossing the pit" is exactly the right bar for "the chase brought it here".
+            // The coordinates are in the message on purpose: a stall is reproducible from them, by
+            // walking `walkableApproach` from the reported start tile to the reported pit by hand.
             assertTrue(
                 endGap <= CATCH_RANGE,
-                "the larupia stopped $endGap tiles short of its hunter (size ${npc.size})",
+                "the larupia stopped $endGap tiles short of its hunter after $cycles cycles " +
+                    "(size ${npc.size}, $start -> ${npc.coords}, pit ${pit.baseLoc} @ " +
+                    "${pit.coords})",
             )
             // A walked step is one tile, or two for a creature the cache runs. Anything larger is
             // the follow processor's teleport, which would make "it closed the gap" meaningless.
@@ -250,6 +282,10 @@ class PitfallLoopTest {
      * kyatt pit - dismantling the refused one first, so the trap cap is never the reason a later
      * attempt fails. See [catchOne] for why that is honest rather than a way of hiding a failure.
      *
+     * Which is also why this one does not claim a single log was spent: it claims one log per pit
+     * armed, however many that turned out to be. The claim that exactly one pit is enough belongs
+     * to [aSunlightAntelopeIsCaughtAndCollectedOnTheRealLoop], where it is actually true.
+     *
      * The loot and the experience are pinned as literals off the wiki rather than read back out of
      * [PitfallCreatures], so this compares the code against a source outside it.
      */
@@ -265,6 +301,7 @@ class PitfallLoopTest {
                     "obj.hunting_kyatt_meat",
                     "obj.hunting_fur_tiger_perfect",
                 ),
+            neverRefuses = false,
         )
     }
 
@@ -275,6 +312,10 @@ class PitfallLoopTest {
      * returns before it draws - which makes this the deterministic half of the pair and the one
      * that would fail outright if the roll were reached anyway. Its loot is four lines rather than
      * three, so it also exercises the inventory-room check against a wider catch.
+     *
+     * It is also where "one pit, one log" is pinned. `neverRefuses` says the first jump has to
+     * land, so an antelope that ever needed a second pit fails here - which is the same thing as
+     * saying its catch stopped being certain, and no amount of retrying would hide it.
      */
     @Test
     fun aSunlightAntelopeIsCaughtAndCollectedOnTheRealLoop() {
@@ -289,6 +330,7 @@ class PitfallLoopTest {
                     "obj.hunting_antelopesun_fur",
                     "obj.hunting_antelopesun_horn",
                 ),
+            neverRefuses = true,
         )
     }
 
@@ -357,12 +399,20 @@ class PitfallLoopTest {
      * is called by name, and the collapse lands only because `PitfallEvents` put
      * `HunterPitfall.tick` on `GameLifecycle.LateCycle` - the one registration in that file whose
      * absence every unit test in the module survives.
+     *
+     * The log count is asserted against what [catchOne] actually armed rather than against one,
+     * because a creature that rolls may refuse and be led to the next pit. One log per armed pit
+     * is the invariant that holds either way, and it is the one worth asserting: a Trap that
+     * charged twice, or nothing, fails here on the first attempt as readily as on the third. Pass
+     * [neverRefuses] for a creature the wiki documents as a hundred-percent catch, and the count
+     * is pinned at one as well.
      */
     private fun catchAndCollect(
         creature: PitfallCreature,
         username: String,
         expectedFineXp: Int,
         expectedLoot: List<String>,
+        neverRefuses: Boolean,
     ) {
         val world = world()
         val player = world.newPlayer(username)
@@ -377,12 +427,20 @@ class PitfallLoopTest {
             val lootBefore = expectedLoot.associateWith { player.inv.count(it) }
             val xpBefore = player.statMap.getFineXP(HUNTER_STAT)
 
-            val site = world.catchOne(player, creature)
+            val caught = world.catchOne(player, creature)
+            val site = caught.site
 
+            if (neverRefuses) {
+                assertEquals(
+                    1,
+                    caught.armed,
+                    "a ${creature.npc} is a hundred-percent catch, so one pit should have sufficed",
+                )
+            }
             assertEquals(
-                logsBefore - 1,
+                logsBefore - caught.armed,
                 player.inv.count("obj.logs"),
-                "arming ${site.baseLoc} should have spent exactly one log",
+                "arming ${caught.armed} pit(s) should have spent one log each",
             )
 
             // The collapse is a cycle count in `HunterPitfall`, not a player queue, so it lands on
@@ -420,6 +478,9 @@ class PitfallLoopTest {
         }
     }
 
+    /** The site a catch went into, and how many pits were armed getting there. */
+    private data class PitfallCatch(val site: PitfallSite, val armed: Int)
+
     /**
      * Arms a pit, leads a creature over it, and returns the site the catch went into.
      *
@@ -430,12 +491,22 @@ class PitfallLoopTest {
      * first so the trap cap can never become the reason a later attempt fails, and the same chaser
      * is kept: it is already following, and it follows the hunter to the next pit.
      *
+     * The armed count comes back with the site so the caller can hold the retry to account rather
+     * than assume it away: every armed pit spends a log, and a caller that assumed exactly one had
+     * been spent flaked whenever the roll refused. See [catchAndCollect].
+     *
+     * A pit the chaser cannot physically walk to is passed over before it is armed rather than
+     * counted as a refusal of the mechanic - see [walkableApproach] - and it still shows up in the
+     * list the failure prints, so "every pit was out of reach" reads differently from "it leapt
+     * clear of every pit".
+     *
      * Fails loudly, listing what happened at each site, if the creature refuses every one of them.
      */
-    private fun BootedWorld.catchOne(player: Player, creature: PitfallCreature): PitfallSite {
+    private fun BootedWorld.catchOne(player: Player, creature: PitfallCreature): PitfallCatch {
         val sites = PitfallSites.all.filter { it.creature === creature }
         val refusals = mutableListOf<String>()
         var chaser: Npc? = null
+        var armed = 0
 
         for (site in sites) {
             val npc =
@@ -451,10 +522,22 @@ class PitfallLoopTest {
                 }
             }
 
+            // Checked before the pit is armed, and for the same reason
+            // [aTeasedLarupiaWalksTowardsItsHunter] checks it: a follower takes one naive step a
+            // cycle and never routes around anything, so a pit behind a wall is a pit this
+            // creature will stand and stare at until the budget runs out. Skipping it costs
+            // nothing - the loop was already going to try the next one - and the alternative is a
+            // stall reported as if the mechanic had failed.
+            if (!walkableApproach(npc, site.coords)) {
+                refusals += "${site.baseLoc} (${npc.coords} cannot walk there)"
+                continue
+            }
+
             click(player, site.coords, site.baseLoc, InteractionOp.Op3)
             check(pitfall.pitState(player, site) == PitState.Set) {
                 "${site.baseLoc}: Trap left the pit ${pitfall.pitState(player, site)}"
             }
+            armed++
 
             // The hunter waits on the pit and lets the chase bring the creature over it, which is
             // the technique. `CATCH_RANGE` is `HunterPitfall`'s own "passes the trap" window.
@@ -467,7 +550,7 @@ class PitfallLoopTest {
 
             click(player, site.coords, site.baseLoc, InteractionOp.Op1)
             if (pitfall.pitState(player, site) != PitState.Set) {
-                return site
+                return PitfallCatch(site, armed)
             }
 
             refusals += "${site.baseLoc} (it leapt clear)"
@@ -496,24 +579,98 @@ class PitfallLoopTest {
     }
 
     /**
-     * A creature of [creature]'s kind and one of its own pits between four and fifteen tiles away.
+     * A live creature of [creature]'s kind that has somewhere to be chased to.
      *
-     * Both bounds are the chase test's, and both are read off live coordinates rather than off the
-     * spawn table, so a wandering creature narrows or widens the window as it moves.
+     * Every site is tried, not just the first with a creature near it: the creature standing by one
+     * pit may be wedged in a corner the others cannot be reached from, and the next one along will
+     * do just as well.
      */
-    private fun BootedWorld.chaseSetup(creature: PitfallCreature): Pair<Npc, PitfallSite>? {
-        val sites = PitfallSites.all.filter { it.creature === creature }
-        for (anchor in sites) {
-            val npc = liveCreature(anchor) ?: continue
-            val target =
-                sites
-                    .filter { npc.coords.chebyshevDistance(it.coords) in CHASE_WINDOW }
-                    .maxByOrNull { npc.coords.chebyshevDistance(it.coords) }
-            if (target != null) {
-                return npc to target
+    private fun BootedWorld.chaseCandidate(creature: PitfallCreature): Npc? =
+        PitfallSites.all
+            .filter { it.creature === creature }
+            .mapNotNull { liveCreature(it) }
+            .firstOrNull { reachablePit(it, creature) != null }
+
+    /**
+     * The pit [npc] should be lured onto: one of its own, in the window, and one it can reach.
+     *
+     * The four-to-fifteen window is the chase test's, and it is measured off live coordinates
+     * rather than off the spawn table, so a wandering creature narrows or widens it as it moves.
+     * The window alone is not enough, though: a pit twelve tiles away in a straight line is not
+     * twelve tiles away to a creature that cannot route around anything, so every candidate goes
+     * through [walkableApproach] and only the survivors are offered. The farthest of those wins - a
+     * longer walk is a stronger demonstration, and the reachability check is what makes the length
+     * safe to ask for.
+     */
+    private fun BootedWorld.reachablePit(npc: Npc, creature: PitfallCreature): PitfallSite? =
+        PitfallSites.all
+            .filter { it.creature === creature }
+            .filter { npc.coords.chebyshevDistance(it.coords) in CHASE_WINDOW }
+            .filter { walkableApproach(npc, it.coords) }
+            .maxByOrNull { npc.coords.chebyshevDistance(it.coords) }
+
+    /**
+     * Whether [npc] could walk from where it stands to within [CATCH_RANGE] of [target].
+     *
+     * A following npc never route-finds. `NpcMovementProcessor` turns the follow request into one
+     * `StepFactory.validated` step per cycle - diagonal, else horizontal, else vertical, else
+     * `CoordGrid.NULL` and the creature simply does not move - so its reachable set is whatever a
+     * straight naive walk happens to cross.
+     *
+     * So this is that walk, run over the map before the chase starts: the same
+     * `RouteFinding.naiveDestination` the movement processor recomputes every cycle, and the same
+     * [StepFactory.validated] step it takes towards it, stopping on the same `CATCH_RANGE` the test
+     * stops on. Reproducing the engine rather than approximating it is the point - an earlier
+     * version aimed straight at the pit tile instead of at the destination a size-two creature
+     * actually aims for, and let through a site the chase then stalled four tiles short of.
+     *
+     * This is setup, not an assertion: it decides which pit the test uses and claims nothing about
+     * the mechanic. `extraFlag = 0` drops `BLOCK_NPCS` for two reasons - a size-two creature's next
+     * footprint overlaps its current one, so its own block flag would reject every candidate, and
+     * other creatures wander, so a body in the line is a transient the sixty-cycle budget absorbs.
+     * Static terrain is the part that never clears on its own, and it is the part this rules out.
+     */
+    private fun BootedWorld.walkableApproach(npc: Npc, target: CoordGrid): Boolean {
+        val strategy = npc.collisionStrategy ?: return false
+        var current = npc.coords
+        repeat(CHASE_CYCLES) {
+            if (current.chebyshevDistance(target) <= CATCH_RANGE) {
+                return true
             }
+            val dest = naiveDestination(current, npc.size, target)
+            if (current == dest) {
+                return true
+            }
+            val step =
+                stepFactory.validated(
+                    source = current,
+                    dest = dest,
+                    size = npc.size,
+                    extraFlag = 0,
+                    collision = strategy,
+                )
+            if (step == CoordGrid.NULL) {
+                return false
+            }
+            current = step
         }
-        return null
+        return current.chebyshevDistance(target) <= CATCH_RANGE
+    }
+
+    /** The tile a size-[size] follower aims for when the hunter it chases stands on [target]. */
+    private fun naiveDestination(source: CoordGrid, size: Int, target: CoordGrid): CoordGrid {
+        val dest =
+            RouteFinding.naiveDestination(
+                sourceX = source.x,
+                sourceZ = source.z,
+                sourceWidth = size,
+                sourceLength = size,
+                targetX = target.x,
+                targetZ = target.z,
+                targetWidth = 1,
+                targetLength = 1,
+            )
+        return CoordGrid(dest.x, dest.z, source.level)
     }
 
     /**
@@ -565,6 +722,9 @@ class PitfallLoopTest {
         val locInteractions: LocInteractions = injector.getInstance(LocInteractions::class.java)
         val npcInteractions: NpcInteractions = injector.getInstance(NpcInteractions::class.java)
         val npcs: NpcRepository = injector.getInstance(NpcRepository::class.java)
+
+        /** The stepper `NpcMovementProcessor` walks a follower with; see [walkableApproach]. */
+        val stepFactory: StepFactory = injector.getInstance(StepFactory::class.java)
 
         /**
          * The same instance `PitfallEvents` holds: `HunterModule` binds it with `bindInstance`, so

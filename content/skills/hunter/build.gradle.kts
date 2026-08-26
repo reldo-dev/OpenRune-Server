@@ -63,6 +63,11 @@ testing.suites {
                 implementation(projects.engine.map)
                 implementation(projects.engine.objtx)
                 implementation(projects.engine.routefinder)
+                // `StepFactory` is the stepper `NpcMovementProcessor` walks a following npc with,
+                // and the chase test uses it to pick a stand-tile the creature can actually reach -
+                // see `walkableApproach`. `api:game-process` depends on it with `implementation`,
+                // so it is not on this source set's compile classpath without saying so.
+                implementation(projects.api.route)
                 implementation(libs.clikt)
                 implementation(libs.guice)
                 implementation(projects.orCache)
