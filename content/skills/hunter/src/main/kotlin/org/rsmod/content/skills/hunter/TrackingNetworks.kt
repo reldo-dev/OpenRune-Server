@@ -5,8 +5,9 @@ import org.rsmod.map.CoordGrid
 /**
  * The authored trail geometry, one entry per AREA, transcribed from the packed-map sweep
  * (`.data/cache/wiki-hunter/tracking-network-sweep.md`). This file is the only place that knows a
- * coordinate; `hunterVerify` re-checks every loc coordinate against the packed map, so a typo here
- * is a build-time finding rather than a dead trail.
+ * coordinate. A later task is expected to add `hunterVerify`, re-checking every loc coordinate
+ * against the packed map so a typo here becomes a build-time finding; that check is not written
+ * yet, so today a wrong coordinate here is a dead trail rather than a build failure.
  *
  * **Not one entry per varp.** Four of the five creatures span two or three varp blocks, and varps
  * 922 and 924 are each split between two creatures - grouping by varp would merge the common kebbit
@@ -24,7 +25,9 @@ import org.rsmod.map.CoordGrid
  * applied uniformly:
  * 1. each end takes the **nearest bush or burrow within Chebyshev 4**, the sweep's own
  *    endpoint-to-node matching radius (a bush beats a burrow at equal distance);
- * 2. if both ends land on the same node, the far end takes the **next** bush or burrow out;
+ * 2. if both ends land on the same node, `endB` - never `endA` - recomputes to the next node out
+ *    beyond that shared one: the next-nearest bush or burrow, or, when neither is closer, a clue
+ *    placement (`state6_8` in feldip lands this way, on `clue6_6` rather than a bush);
  * 3. if an end has no bush or burrow inside that radius, it takes the nearest **clue** placement -
  *    which is how two runs that meet away from a bush share a junction.
  *

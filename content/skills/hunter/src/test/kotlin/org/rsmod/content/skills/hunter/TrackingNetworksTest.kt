@@ -76,6 +76,35 @@ class TrackingNetworksTest {
     }
 
     @Test
+    fun `razor-backed and common kebbit geometry sits in the map square that settles the anchor`() {
+        /* The varbit-prefix assertion above works, but a varbit rename would leave it green for
+         * the wrong reason - it is not the actual basis of the correction. The wiki's burrow pins
+         * and RuneLite's tile markers place common kebbit in map square 36,55 and razor-backed in
+         * 36,56; that placement, not the varbit name, is what settles which creature owns which
+         * graph. Map square is x/64, z/64 (CoordGrid.mx / CoordGrid.mz). */
+        val razor = TrackingNetworks.all.single { it.creature == TrackingCreatures.razorBacked }
+        val common = TrackingNetworks.all.single { it.creature == TrackingCreatures.common }
+
+        val razorCoords =
+            razor.segments.flatMap { listOf(it.endA, it.endB, it.clueCoords) } +
+                razor.burrows.flatMap { listOf(it.coords, it.origin) } +
+                razor.catchSpots.map { it.coords }
+        val commonCoords =
+            common.segments.flatMap { listOf(it.endA, it.endB, it.clueCoords) } +
+                common.burrows.flatMap { listOf(it.coords, it.origin) } +
+                common.catchSpots.map { it.coords }
+
+        assertTrue(
+            razorCoords.all { it.mx == 36 && it.mz == 56 },
+            "razor-backed geometry is not entirely in map square 36,56",
+        )
+        assertTrue(
+            commonCoords.all { it.mx == 36 && it.mz == 55 },
+            "common kebbit geometry is not entirely in map square 36,55",
+        )
+    }
+
+    @Test
     fun `no loc gameval serves two roles or two networks`() {
         val burrows = TrackingNetworks.burrowLocs.keys
         val clues = TrackingNetworks.clueLocs.keys
