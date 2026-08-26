@@ -156,6 +156,15 @@ hunter_birdhouse_fill = 61
 # above hunter_birdhouse_fill.
 hunter_tracking_reset = 62
 
+# Login-time pit rebuild. A pit stranded mid-collapse by a logout is a varbit sitting at
+# `PitState.Catching` with nothing left to finish it - the collapse ledger is transient and the
+# varbit is not - and resolving it means writing that varbit, which the login event itself cannot
+# do: `VarPlayerIntMapSetter` short-circuits while `processedMapClock == 0`, so the write would
+# update the server and leave the client drawing the collapsing frame. The rebuild therefore rides
+# a soft queue exactly as `hunter_tracking_reset` and `hunter_birdhouse_fill` do. 63 is the next
+# free queue id above `hunter_tracking_reset`.
+hunter_pitfall_rebuild = 63
+
 # The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
 # lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom
 # varp ids grow downward from the low-water mark of the server-authored block (65502); the block
