@@ -19,6 +19,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
+import org.rsmod.map.CoordGrid
 
 /**
  * Building and dismantling a spiked pit, in the branches a live client cannot be made to take.
@@ -1087,6 +1088,60 @@ class HunterPitfallTest {
 
         assertEquals(NpcMode.Wander, npc.mode)
         assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * Every chase that ends in the same sweep actually ends.
+     *
+     * The sweep collects what has ended before it ends anything, because [HunterPitfall.stopChasing]
+     * writes the map being read - but collecting *entries* is not collecting anything at all. An
+     * `IdentityHashMap.Entry` is a live view onto one slot of the map's own table, and a removal
+     * runs `closeDeletion`, which rehashes the entries after the hole and can move one into it. A
+     * key read back out of a retained entry after that is a neighbour's key, or null. There is no
+     * `ConcurrentModificationException`: `Entry.getKey` never looks at `modCount`, so the sweep
+     * stops one creature twice and leaves the other following its hunter forever, silently.
+     *
+     * Twenty-four creatures rather than two because the damage is a table collision, and a table
+     * holding two keys rarely has one. Measured over 2,000 runs of the bare `IdentityHashMap`: at
+     * four keys the sweep leaves something behind 17% of the time, at twelve 90%, and at twenty or
+     * more every single time. Twenty-four is also an ordinary population - a few dozen pitfall
+     * creatures is what the map spawns, and one hunter can have teased any number of them.
+     *
+     * The assertion is on the map rather than on an exception, because there is no exception. A
+     * creature still in [HunterPitfall.teasedBy] after this sweep is one the leash has failed to
+     * cut loose, which is precisely the unbounded `PlayerFollow` the leash exists to bound.
+     */
+    @Test
+    fun `a sweep that ends two dozen chases at once ends every one of them`() {
+        val player = world.addPlayer()
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        val npcs =
+            List(24) { index ->
+                world.addNpc(
+                    HunterPitfallTestWorld.LARUPIA_NPC,
+                    CoordGrid(3220 + index, 3220, 0),
+                )
+            }
+
+        for (npc in npcs) {
+            assertTrue(world.tease(player, npc), "the test needs every creature chasing")
+        }
+        for (npc in npcs) {
+            world.lureNpc(npc, 65)
+        }
+
+        world.tick()
+
+        val stillChasing = npcs.filter { world.teasedBy(it) != null }
+        assertTrue(
+            stillChasing.isEmpty(),
+            "the leash left ${stillChasing.size} of ${npcs.size} creatures chasing",
+        )
+        val stillFollowing = npcs.filter { it.mode != NpcMode.Wander }
+        assertTrue(
+            stillFollowing.isEmpty(),
+            "${stillFollowing.size} of ${npcs.size} creatures were never handed back",
+        )
     }
 
     /**

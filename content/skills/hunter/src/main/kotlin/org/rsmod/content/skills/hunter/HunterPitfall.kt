@@ -765,9 +765,15 @@ constructor(
      */
     fun tick() {
         if (chases.isNotEmpty()) {
-            // Collected before anything is ended, because `stopChasing` writes the map being read.
-            val ended = chases.entries.filterNot { (npc, teaser) -> chaseContinues(npc, teaser) }
-            for ((npc, _) in ended) {
+            // Copied out before anything is ended, because `stopChasing` writes the map being
+            // read - and copied as *creatures*, not as entries. An `IdentityHashMap.Entry` is a
+            // live view onto one table slot, and a removal runs `closeDeletion`, which rehashes
+            // everything after the hole and can move a later entry into it; a key read back out
+            // of a retained entry after that is a neighbour's key, or null. `Entry.getKey` never
+            // looks at `modCount`, so there is no `ConcurrentModificationException` to notice it
+            // by - the sweep would simply end one chase twice and leave another running forever.
+            val ended = chases.filterNot { (npc, teaser) -> chaseContinues(npc, teaser) }.keys
+            for (npc in ended) {
                 if (npc.isSlotAssigned) {
                     stopChasing(npc)
                 } else {
