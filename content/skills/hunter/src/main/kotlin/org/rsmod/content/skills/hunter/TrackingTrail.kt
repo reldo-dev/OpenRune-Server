@@ -79,6 +79,19 @@ object TrailLogic {
     const val MAX_SEGMENTS = 3
 
     /**
+     * The values the footprint multilocs key on, measured off `hunting_trail3_0l`:
+     * 3 renders the 180-degree variant, 4 the forward one, 5/6 their fading twins, 0 hidden.
+     * Which of 3/4 reads as "toward the catch" on screen is settled in-client by the driver
+     * scenario - 2009scape's own write (4-or-5) contradicts this table, so prior art is not
+     * trusted here. If the driver run proves the mapping inverted, swap these two constants;
+     * nothing else changes.
+     */
+    const val VISIBLE_FORWARD = 4
+    const val VISIBLE_REVERSED = 3
+    const val FADE_FORWARD = 6
+    const val FADE_REVERSED = 5
+
+    /**
      * All simple paths from [origin] to any catch spot with length in
      * [MIN_SEGMENTS]..[MAX_SEGMENTS], never reusing a segment. Segments are undirected:
      * a path may enter one at either endpoint, recorded as [TrailStep.reversed].
@@ -110,4 +123,14 @@ object TrailLogic {
         walk(origin, emptyList())
         return results
     }
+
+    fun revealValue(step: TrailStep): Int =
+        if (step.reversed) VISIBLE_REVERSED else VISIBLE_FORWARD
+
+    /**
+     * The writes that render a trail with [revealed] steps showing: one per segment, keyed by
+     * varbit gameval. Never a varp value - see the class amendment note.
+     */
+    fun revealWrites(steps: List<TrailStep>, revealed: Int): List<Pair<String, Int>> =
+        steps.take(revealed).map { it.segment.varbit to revealValue(it) }
 }

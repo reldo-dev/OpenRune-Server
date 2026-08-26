@@ -68,4 +68,35 @@ class TrackingTrailTest {
         assertTrue(state.complete)
         assertEquals(end, state.catchCoords)
     }
+
+    @Test
+    fun `a forward step renders 4 and a reversed step renders 3`() {
+        // Multiloc table measured on hunting_trail3_0l: 3 = visible-180, 4 = visible-forward.
+        assertEquals(4, TrailLogic.revealValue(TrailStep(seg(0, o, a), reversed = false)))
+        assertEquals(3, TrailLogic.revealValue(TrailStep(seg(0, o, a), reversed = true)))
+    }
+
+    @Test
+    fun `reveal writes name one varbit per revealed step, in order`() {
+        val steps =
+            listOf(
+                TrailStep(seg(0, o, a), reversed = false),
+                TrailStep(seg(4, a, b), reversed = true),
+                TrailStep(seg(3, b, end), reversed = false),
+            )
+        assertEquals(listOf("varbit.s0" to 4), TrailLogic.revealWrites(steps, revealed = 1))
+        assertEquals(
+            listOf("varbit.s0" to 4, "varbit.s4" to 3),
+            TrailLogic.revealWrites(steps, revealed = 2),
+        )
+        assertEquals(3, TrailLogic.revealWrites(steps, revealed = 3).size)
+    }
+
+    @Test
+    fun `no render value is ever a bare varp write`() {
+        // Guards the amendment: every write this type produces is keyed by a varbit gameval,
+        // because zeroing a trail varp would also reset lumbridge_alchemy_high (varp 925).
+        val steps = listOf(TrailStep(seg(0, o, a), reversed = false))
+        assertTrue(TrailLogic.revealWrites(steps, revealed = 1).all { it.first.startsWith("varbit.") })
+    }
 }
