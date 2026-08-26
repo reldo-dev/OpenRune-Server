@@ -326,10 +326,6 @@ class FalconryTest {
 
         val controller = checkNotNull(world.falconControllerAt(kebbitTile))
         assertEquals(player.uid.packed, controller.falconOwner)
-        assertEquals(
-            FalconryCreatures.all.indexOfFirst { it.npc == "npc.huntingbeast_speedy" },
-            controller.falconCreature,
-        )
     }
 
     /** No xp at the catch - every shipped technique awards on collect, and falconry matches. */

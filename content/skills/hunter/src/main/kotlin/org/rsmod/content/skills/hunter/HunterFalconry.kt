@@ -85,9 +85,6 @@ private const val COINS: String = "obj.coins"
 /** Packed [PlayerUid] of whoever sent the falcon. */
 var Controller.falconOwner: Int by intVarCon("varcon.hunter_falcon_owner")
 
-/** Index into [FalconryCreatures.all] - which kebbit the falcon is sitting on. */
-var Controller.falconCreature: Int by intVarCon("varcon.hunter_falcon_creature")
-
 /**
  * Rent, catch, retrieve and time out - the whole of falconry.
  *
@@ -239,23 +236,27 @@ constructor(
 
         val falcon = spawnFalcon(creature, tile)
         check(falcon.coords == tile) { "Falcon spawned off its prey's tile." }
-        anchorFalcon(falcon, creature, player.uid.packed)
+        anchorFalcon(falcon, player.uid.packed)
         return true
     }
 
     /**
      * Gives [falcon] the controller that owns its timeout, and pairs the two by identity.
      *
+     * The controller carries the owner and nothing else. **Which kebbit is under the falcon is not
+     * recorded here and must not be**, because the falcon npc already says it: OSRS ships one falcon
+     * npc per kebbit, [retrieveFalcon] resolves the reward from that npc, and a second copy of the
+     * same fact could only ever disagree with it.
+     *
      * `internal` because the falconry test world builds a caught falcon directly - most of the
      * cases that matter start from a catch that has already happened - and a harness that
      * reimplemented this would be free to disagree with it. It is not a second way in: [catchKebbit]
      * is the only caller in the running server.
      */
-    internal fun anchorFalcon(falcon: Npc, creature: FalconryCreature, ownerUid: Int): Controller {
+    internal fun anchorFalcon(falcon: Npc, ownerUid: Int): Controller {
         val controller = Controller(FALCON_CONTROLLER, falcon.coords)
         conRepo.add(controller, FALCON_TIMEOUT_CYCLES)
         controller.falconOwner = ownerUid
-        controller.falconCreature = FalconryCreatures.all.indexOf(creature)
         controller.aiTimer(1)
         falcons.link(controller, falcon)
         return controller

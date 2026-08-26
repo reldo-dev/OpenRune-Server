@@ -241,7 +241,7 @@ class HunterFalconryTestWorld(hunterXpBonus: Double = 0.0) {
 
     /**
      * Puts a falcon-with-prey on [coords] the way a successful [HunterFalconry.catchKebbit] does:
-     * the matching npc plus a controller carrying the owner and the creature index.
+     * the creature's own falcon npc, plus a controller carrying the owner.
      *
      * Split out because `catchKebbit` needs a live kebbit and a rented bird, and most of the cases
      * that matter here - timeout, a stranger's retrieve, a full inventory - start from a catch that
@@ -253,7 +253,7 @@ class HunterFalconryTestWorld(hunterXpBonus: Double = 0.0) {
         creature: FalconryCreature,
     ): Npc {
         val falcon = addNpc(creature.falconNpc, coords)
-        falconry.anchorFalcon(falcon, creature, owner.uid.packed)
+        falconry.anchorFalcon(falcon, owner.uid.packed)
         return falcon
     }
 

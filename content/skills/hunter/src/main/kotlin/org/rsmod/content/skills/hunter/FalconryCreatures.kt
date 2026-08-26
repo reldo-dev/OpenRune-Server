@@ -39,18 +39,13 @@ data class FalconryCreature(
  * The values and their provenance live in `HunterTables.kt` in the `hunter-pack` module; this is
  * only the adapter, exactly as [HunterCreatures] is for the five trap tables.
  *
- * Sorted by dbrow id like [HunterCreatures.all], and for a weaker reason: a live falcon persists its
- * creature as an index into [all], so the order has to be stable across a restart. It does **not**
- * have to be stable against the trap tables - this is a separate list indexed by a separate varcon
- * on a separate controller type - so appending a falconry creature later cannot disturb a caught
- * chinchompa, and vice versa.
+ * Sorted by dbrow id like [HunterCreatures.all], but **not** for that list's reason. Nothing indexes
+ * into this one. A caught kebbit is identified by the falcon npc standing on it - OSRS ships one per
+ * kebbit and [HunterFalconry.retrieveFalcon] resolves the reward from it - so the order here buys
+ * only a deterministic iteration for the tests and the wiring checks, and a row may be inserted
+ * anywhere without consequence.
  */
 object FalconryCreatures {
-    /**
-     * **Append only**, for the same reason [HunterCreatures.all] is: an unretrieved falcon standing
-     * in the world holds an index into this list, and inserting a row ahead of it would hand its
-     * owner a different kebbit's loot after a restart.
-     */
     val all: List<FalconryCreature> by lazy {
         HunterFalconryCreaturesRow.all()
             .sortedBy(HunterFalconryCreaturesRow::rowId)
