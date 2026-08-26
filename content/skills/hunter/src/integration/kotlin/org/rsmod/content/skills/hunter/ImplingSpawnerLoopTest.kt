@@ -9,7 +9,6 @@ import org.rsmod.api.game.process.GameCycle
 import org.rsmod.api.repo.npc.NpcRepository
 import org.rsmod.map.CoordGrid
 import org.rsmod.map.zone.ZoneKey
-import org.rsmod.server.app.GameServer
 
 /**
  * The spawner, driven by the **real** game loop instead of a fake world.
@@ -74,15 +73,14 @@ class ImplingSpawnerLoopTest {
      * The booted world, built once per JVM.
      *
      * A second `createInjector` in the same JVM dies on `Key already registered`, so this is shared
-     * rather than per-test. Both tests only read and advance, and the first is ordered to run before
-     * the impling one purely by name.
+     * rather than per-test - and, via [BootedGame], across every class in this source set. Both
+     * tests only read and advance, and the first is ordered to run before the impling one purely by
+     * name.
      */
     private fun world(): BootedWorld = shared ?: bootedWorld().also { shared = it }
 
     private fun bootedWorld(): BootedWorld {
-        val server = GameServer()
-        val injector = server.createInjector()
-        server.prepareGame(injector)
+        val injector = BootedGame.injector
         return BootedWorld(
             cycle = injector.getInstance(GameCycle::class.java),
             spawner = injector.getInstance(ImplingSpawner::class.java),

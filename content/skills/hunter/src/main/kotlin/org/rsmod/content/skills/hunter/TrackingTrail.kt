@@ -79,12 +79,29 @@ object TrailLogic {
     const val MAX_SEGMENTS = 3
 
     /**
-     * The values the footprint multilocs key on, measured off `hunting_trail3_0l`:
-     * 3 renders the 180-degree variant, 4 the forward one, 5/6 their fading twins, 0 hidden.
-     * Which of 3/4 reads as "toward the catch" on screen is settled in-client by the driver
-     * scenario - 2009scape's own write (4-or-5) contradicts this table, so prior art is not
-     * trusted here. If the driver run proves the mapping inverted, swap these two constants;
-     * nothing else changes.
+     * The values the footprint multilocs key on: 3 and 4 are the two visible variants of a
+     * run, 5/6 their fading twins, 0 hidden. Both draw the same footprints; they differ by
+     * a 180-degree flip.
+     *
+     * **Which of the two points toward the catch is not a constant, and swapping these will
+     * not fix it.** Measured off the packed map, 2026-08-25. Two findings:
+     * - The exemplar this was first read off, `hunting_trail3_0l`, is the mirrored variant.
+     *   Every run is tiled from a straight loc, a right corner (`..r`) and a left corner
+     *   (`..l`), and the `l` type maps 3/4 to the *opposite* pair of the other two - the
+     *   swap exists so one varbit value renders a whole mixed run flowing one way. So "4 is
+     *   the forward one" holds for `l` tiles and is backwards on the other two.
+     * - Each run has a drawn direction baked into its tiles' placement angles (angle is the
+     *   travel direction turned 90 degrees, consistently across every run sampled), and that
+     *   direction has no relation to [TrailSegment.endA]/[TrailSegment.endB] ordering, which
+     *   was derived from the sweep's diameter endpoints. `hunting_trail_state8_1` is drawn
+     *   endA to endB; `hunting_trail_state6_5` and `hunting_trail_state8_2` are drawn endB to
+     *   endA. So [revealValue] - keyed on [TrailStep.reversed], which is relative to that
+     *   ordering - points the right way on roughly half of them whichever value it picks.
+     *
+     * Fixing it properly means recording each segment's drawn direction alongside its
+     * endpoints and choosing the value against that. Cosmetic either way: footprints point
+     * the wrong way down some runs; nothing about following a trail or catching depends on
+     * it. Left alone deliberately rather than swapped on a guess.
      */
     const val VISIBLE_FORWARD = 4
     const val VISIBLE_REVERSED = 3
