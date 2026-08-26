@@ -1,13 +1,19 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.rscm.RSCM.asRSCM
+import dev.openrune.rscm.RSCMType
+import dev.openrune.types.NpcMode
 import jakarta.inject.Inject
+import java.util.IdentityHashMap
 import org.rsmod.api.player.output.mes
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.stat.hunterLvl
 import org.rsmod.api.player.vars.VarPlayerIntMapSetter
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.table.FiremakingLogsRow
+import org.rsmod.game.entity.Npc
 import org.rsmod.game.entity.Player
+import org.rsmod.game.entity.player.PlayerUid
 
 /**
  * Pitfall trapping: the two halves a player performs by hand - setting a pit, and taking one apart.
@@ -35,14 +41,32 @@ import org.rsmod.game.entity.Player
  *
  * ## What this class is not, yet
  *
- * Only the player-driven halves live here. Teasing a creature, jumping the pit, the roll that
- * decides a catch, the [PitState.Catching] frame and the transition into [PitState.Full] are a
- * later task's, as is registering any of this against a loc op. Nothing in this file is wired to a
- * click.
+ * Jumping the pit, the roll that decides a catch, the [PitState.Catching] frame and the transition
+ * into [PitState.Full] are a later task's, as is registering any of this against a loc or npc op.
+ * Nothing in this file is wired to a click.
  *
  * @see PitState for what each varbit value renders as, and which ops the cache declares on it.
  */
 class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
+    /**
+     * Which creature is chasing which player, keyed by npc **identity**.
+     *
+     * The engine already knows *that* a creature is following someone - `NpcMode.PlayerFollow` plus
+     * the npc's `faceEntity` is the whole of it - so this map exists for the one fact the engine
+     * does not keep: which player's tease started the chase, as a [PlayerUid] rather than a slot.
+     * A slot is reused the moment its player logs out, and the catch this chase is heading towards
+     * has to pay the hunter who teased the creature rather than whoever inherited their slot.
+     *
+     * Not a repository, not persisted, and not on the npc. A restart takes it with it, which is
+     * right: a chase is a thing in flight, and a creature that respawns has nobody to chase.
+     *
+     * Entries are added by [teaseCreature] and removed by [stopChasing], which is the call the
+     * catch belongs on. A creature teased and then never caught keeps its entry, so the map is
+     * bounded by the number of pitfall creatures the map spawns - a few dozen - rather than growing
+     * without limit. Identity keying, and the reasoning behind it, is `FalconLinks`'.
+     */
+    private val chases = IdentityHashMap<Npc, PlayerUid>()
+
     /**
      * `Trap` on an empty pit: one log, and the pit becomes a spiked pit.
      *
@@ -182,6 +206,134 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
         return true
     }
 
+    /**
+     * `Tease` on a pitfall creature: the only thing that makes one hostile, and the whole of the
+     * setup for a catch.
+     *
+     * "With a teasing stick in the inventory or a hunter's spear equipped, the player has to tease
+     * the creature and then jump over the spiked pit." (wiki, *Pitfall*, oldid=15201220). None of
+     * the five creatures carries an `Attack` op in the cache - `op1=Tease` is the only op any of
+     * them declares - so there is no other way to get one to follow you.
+     *
+     * ## The chase is the engine's own, not a follow loop
+     *
+     * Three lines, in the order [org.rsmod.game.entity.Npc.playerFace] and its two siblings write
+     * them, because `NpcMode.PlayerFollow` is exactly this mechanic and needs nothing else:
+     * `NpcPlayerFollowModeProcessor` runs every cycle, reads the target back out of the npc's own
+     * `faceEntity`, and re-issues a route towards it. There is deliberately no `walkTo` and no
+     * per-cycle timer here.
+     *
+     * `PlayerFollow` was chosen over the combat chase (`opPlayer2`) that every aggressive npc in
+     * this codebase uses, for two reasons. It has no leash: `NpcInteractionProcessor` cancels an
+     * `opPlayer2` interaction once the target is further than `maxRange + attackRange` from the
+     * npc's **spawn** tile, which is eight tiles on these creatures' packed defaults - far less
+     * than the run from a creature to its pit. And `opPlayer2` is a request to *attack*, which is
+     * not what a tease is; see the retaliation note below.
+     *
+     * The one thing `PlayerFollow` will not survive is a facing lock: `Npc.facePlayer` is a no-op
+     * while `isFacingLocked`, which would leave the mode set with no target for the processor to
+     * find and reset on the next cycle. That is true of `playerFace`, `playerFaceClose` and
+     * `playerEscape` too, and nothing in this feature locks a creature's facing.
+     *
+     * ## The hunter's spear's +5% is deliberately not implemented
+     *
+     * "When using hunter's spears, they give a 5% increased chance to successfully tease creatures;
+     * this does not use up the spear." (wiki, *Pitfall*, oldid=15201220), and the Jagex newspost
+     * that page's sibling cites agrees it is the tease: "they'll give you an increased chance to
+     * successfully tease creatures like Kyatt, Ghaark and Larupia by 5%" (*Varlamore: Part One -
+     * Overview*, 20 January 2024, quoted at wiki, *Hunter's spear*, oldid=15264550).
+     *
+     * That is a **relative** modifier on a base tease rate that is published nowhere, and no source
+     * describes a failed tease at all - the only failure the *Pitfall* page documents is the
+     * creature jumping the pit afterwards, which is the catch and not the tease. So the tease is
+     * modelled as certain, and a 5% increase on a certainty has nothing to modify. Shipping any
+     * other base rate would mean inventing the number the bonus is a percentage of.
+     *
+     * Two consequences, both intentional. The spear is accepted as a tool and confers no mechanical
+     * advantage, which `HunterPitfallTest` pins so it cannot drift into a silent difference. And
+     * the bonus must **not** be moved onto the catch instead: the *Hunter's spear* page's own prose
+     * reads it as "increased chance for teased creatures to walk into a pitfall trap", which
+     * contradicts both the *Pitfall* page and the newspost it is itself citing. Whoever measures a
+     * real base tease rate should add it here, not there.
+     *
+     * ## Retaliation is out of scope
+     *
+     * "These creatures are able to attack the player with melee after teasing them, with a max hit
+     * of 5-7 damage depending on the creature", reducible with hunter gear and negated by Protect
+     * from Melee (wiki, *Pitfall*, oldid=15201220). A teased creature here follows and does not
+     * hit. That is real combat wiring - an attack mode, a max hit per creature, a damage reduction
+     * that reads worn hunter gear, and a prayer interaction - and none of it is this task's. The
+     * creatures do carry the stats it would need (`attack`, `strength`, `hitpoints`, `defence` are
+     * all packed on all five), so the data is there when somebody builds it.
+     *
+     * ## No delay
+     *
+     * `suspend` so this composes with the suspending op handler a later task registers it in, but
+     * there is no suspension point: the tease animation is fired and the player is free the same
+     * cycle. A lock of even one cycle would break the *Pitfall* page's own "quickly tease nearby
+     * creature B ... while creature A is still walking over it" procedure.
+     *
+     * @return false, with a message already sent where the player could have done something about
+     *   it, if nothing was teased.
+     */
+    suspend fun ProtectedAccess.teaseCreature(npc: Npc): Boolean {
+        // Silent on both: a click that lands on a creature which left the world between the click
+        // and this call, or on an npc with no pit to lead it into, is not something to tell the
+        // player about. Liveness first, so nothing is read off an npc the registry has torn down.
+        if (!npc.isSlotAssigned || !npc.isVisible) {
+            return false
+        }
+        if (npc.visType.id !in PITFALL_NPC_IDS) {
+            return false
+        }
+
+        // The stick counts held *or* worn, for the reason `trapPit` accepts a worn knife: it is
+        // `wearpos=righthand`, so the ordinary way to carry one is on the hand. The spear counts
+        // only worn, and that half is sourced rather than inferred - "The spear must be equipped
+        // before being able to tease creatures." (wiki, *Hunter's spear*, oldid=15264550).
+        val hasTool =
+            inv.contains(TEASING_STICK) ||
+                worn.contains(TEASING_STICK) ||
+                worn.contains(HUNTERS_SPEAR)
+        if (!hasTool) {
+            mes("You need a teasing stick or a hunter's spear to tease this creature.")
+            return false
+        }
+
+        // No Hunter level check: the *Pitfall* page gates the trap and says nothing about a level
+        // to tease. A player below the creature's level can make it chase them and simply has no
+        // pit to lead it into.
+
+        anim(TEASE_SEQ)
+
+        npc.resetMovement()
+        npc.mode = NpcMode.PlayerFollow
+        npc.facePlayer(player)
+
+        chases[npc] = player.uid
+        return true
+    }
+
+    /** Who teased [npc] into its current chase, or null if nobody has. */
+    fun teasedBy(npc: Npc): PlayerUid? = chases[npc]
+
+    /**
+     * Ends [npc]'s chase and hands it back to whatever it does when nobody is teasing it.
+     *
+     * The call the catch belongs on: a creature that has gone into a pit must stop following, and
+     * the record of who teased it is what says whose catch it is. `defaultMode` rather than
+     * `resetMode` so the creature is explicitly returned to its packed default rather than left on
+     * a null mode for the processor to fill in.
+     *
+     * The other way a chase ends needs nothing from us. `NpcPlayerFollowModeProcessor` resets the
+     * mode itself the first cycle its target cannot be resolved, which is what a logout leaves
+     * behind; the entry here is then stale but harmless, and [teaseCreature] overwrites it.
+     */
+    fun stopChasing(npc: Npc) {
+        chases.remove(npc)
+        npc.defaultMode()
+    }
+
     /** The state this player's own copy of [site] is currently in. */
     fun pitState(player: Player, site: PitfallSite): PitState =
         PitState.of(player.vars[site.varbit])
@@ -228,6 +380,41 @@ class HunterPitfall @Inject constructor(private val xpMods: XpModifiers) {
          * `wearpos=lefthand`, which is the whole reason the equipment half of the check exists.
          */
         private val KNIVES: List<String> = listOf("obj.knife", "obj.fletching_knife")
+
+        /**
+         * The teasing stick, `obj.hunting_teasing_stick` (10029).
+         *
+         * `wearpos=righthand` in the cache, which is why [teaseCreature] accepts it held or worn.
+         */
+        private const val TEASING_STICK: String = "obj.hunting_teasing_stick"
+
+        /**
+         * The hunter's spear, `obj.hg_hunter_spear` (29305).
+         *
+         * A thrown weapon that doubles as a teasing stick, and accepted only when equipped. Never
+         * consumed by a tease, which needs no code: nothing in [teaseCreature] deletes it.
+         */
+        private const val HUNTERS_SPEAR: String = "obj.hg_hunter_spear"
+
+        /**
+         * The player's tease animation, `seq.hunting_teasing_animal` (5236).
+         *
+         * The cache's own: it carries `replaceheldright=hunting_teasing_stick`, so the client puts
+         * the stick in the player's hand for the duration whatever they are actually holding.
+         */
+        private const val TEASE_SEQ: String = "seq.hunting_teasing_animal"
+
+        /**
+         * The five npcs a `Tease` op may land on.
+         *
+         * A set rather than a lookup back to the [PitfallCreature] row, because nothing about the
+         * tease varies by creature - the level, the loot and the catch rate all belong to the pit
+         * the creature is being led into, not to the tease. Resolved once and memoised, since
+         * `RSCM.getReverseMapping` scans the whole npc table and memoises nothing.
+         */
+        private val PITFALL_NPC_IDS: Set<Int> by lazy {
+            PitfallCreatures.all.mapTo(HashSet()) { it.npc.asRSCM(RSCMType.NPC) }
+        }
 
         /**
          * Every log a pit accepts, **lowest tier first**.

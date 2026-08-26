@@ -1,8 +1,12 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.types.NpcMode
 import java.lang.reflect.Modifier
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -48,6 +52,11 @@ class HunterPitfallTest {
      * restart, which is the single worst thing this feature could do. Asserting on the constructor
      * is the only way to say the failure is unrepresentable rather than merely unexercised - a test
      * that watched a repository stay untouched would keep passing the day somebody injected one.
+     *
+     * The chase table is an `IdentityHashMap` and is named here on purpose: teasing needed
+     * somewhere to record who a creature is chasing, and the cheapest wrong answer would have been
+     * an `NpcRepository` to look creatures up through. It holds nothing but npcs the caller already
+     * handed it.
      */
     @Test
     fun `the pitfall engine has no way to reach a loc, controller or npc repository`() {
@@ -62,7 +71,7 @@ class HunterPitfallTest {
             listOf("LocRepository", "ControllerRepository", "NpcRepository", "ObjRepository")) {
             assertFalse(forbidden in collaborators, "HunterPitfall must not hold a $forbidden")
         }
-        assertEquals(setOf("XpModifiers"), collaborators)
+        assertEquals(setOf("XpModifiers", "IdentityHashMap"), collaborators)
     }
 
     /* Build: the happy path and the varbit it writes. */
@@ -590,5 +599,289 @@ class HunterPitfallTest {
                 )
             }
         }
+    }
+
+    /* Teasing: the tool, the chase, and who owns it. */
+
+    /**
+     * A teased creature chases the teaser, in the two pieces the engine actually reads.
+     *
+     * `NpcPlayerFollowModeProcessor.process` does exactly two lookups each cycle -
+     * `npc.mode == PlayerFollow` to get there at all, and `npc.facingTarget(playerList)` for the
+     * target - so both are asserted rather than only the engine's own record of who teased it. A
+     * test that checked the record alone would keep passing the day the mode stopped being set and
+     * the creature stopped moving.
+     */
+    @Test
+    fun `teasing with a teasing stick sets the creature chasing the teaser`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        assertEquals(NpcMode.PlayerFollow, npc.mode)
+        assertSame(player, world.chaseTarget(npc))
+        assertEquals(player.uid, world.teasedBy(npc))
+    }
+
+    /**
+     * A worn teasing stick works, for the reason a worn knife sets a pit.
+     *
+     * The wiki names only the inventory, but `obj.hunting_teasing_stick` is `wearpos=righthand`, so
+     * the ordinary way to carry one is on the hand. Refusing a player who is visibly holding the
+     * stick is the reading that tells them to go and fetch what they already have.
+     */
+    @Test
+    fun `a worn teasing stick teases just as a held one does`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.wearItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        assertSame(player, world.chaseTarget(npc))
+    }
+
+    @Test
+    fun `an equipped hunter's spear teases`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.wearItem(player, HunterPitfallTestWorld.HUNTERS_SPEAR)
+
+        assertTrue(world.tease(player, npc))
+        assertSame(player, world.chaseTarget(npc))
+    }
+
+    /**
+     * A hunter's spear in the backpack is not enough, and this one is sourced rather than inferred.
+     *
+     * "The spear must be equipped before being able to tease creatures." (wiki, *Hunter's spear*,
+     * oldid=15264550). That is the asymmetry with the teasing stick above: the stick counts held or
+     * worn, the spear counts only worn.
+     */
+    @Test
+    fun `a hunter's spear in the inventory does not tease`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.HUNTERS_SPEAR)
+
+        assertFalse(world.tease(player, npc))
+        assertNull(world.chaseTarget(npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * With neither tool the creature is left exactly as the world spawned it.
+     *
+     * `NpcMode.Wander` is the packed default: neither `npc.hunting_jaguar` nor any other pitfall
+     * creature declares `defaultmode` in the cache, and none is overridden in
+     * `.data/raw-cache/server/npcs.toml`, so `NpcServerType`'s own default stands.
+     */
+    @Test
+    fun `teasing with neither tool is refused and leaves the creature alone`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+
+        assertFalse(world.tease(player, npc))
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.chaseTarget(npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /** "Teasing creatures does not consume the spear." (wiki, *Hunter's spear*, oldid=15264550). */
+    @Test
+    fun `neither the spear nor the teasing stick is consumed by teasing`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        world.wearItem(player, HunterPitfallTestWorld.HUNTERS_SPEAR)
+
+        repeat(3) { assertTrue(world.tease(player, npc)) }
+
+        assertEquals(1, world.itemCount(player, HunterPitfallTestWorld.TEASING_STICK))
+        assertEquals(1, world.wornCount(player, HunterPitfallTestWorld.HUNTERS_SPEAR))
+    }
+
+    /**
+     * The spear and the stick tease **identically**, which is this branch's decision, not an
+     * oversight.
+     *
+     * The hunter's spear's published +5% is a *relative* modifier on a base tease rate that is
+     * published nowhere, and no source describes a failed tease at all. This server therefore
+     * models the tease as certain, which leaves the +5% nothing to modify. See
+     * [HunterPitfall.teaseCreature] for the whole argument; this test is here so the decision
+     * cannot drift into a silent difference between the two tools.
+     */
+    @Test
+    fun `the hunter's spear teases no better than the teasing stick`() {
+        val stickUser = world.addPlayer()
+        val spearUser = world.addPlayer()
+        world.giveItem(stickUser, HunterPitfallTestWorld.TEASING_STICK)
+        world.wearItem(spearUser, HunterPitfallTestWorld.HUNTERS_SPEAR)
+
+        repeat(20) {
+            val stickTarget = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+            val spearTarget =
+                world.addNpc(
+                    HunterPitfallTestWorld.LARUPIA_NPC,
+                    HunterPitfallTestWorld.SECOND_CREATURE_TILE,
+                )
+            assertTrue(world.tease(stickUser, stickTarget))
+            assertTrue(world.tease(spearUser, spearTarget))
+            world.removeNpc(stickTarget)
+            world.removeNpc(spearTarget)
+        }
+    }
+
+    /**
+     * Teasing carries no Hunter requirement of its own.
+     *
+     * The *Pitfall* page gates only the trap - "With the required Hunter level, a knife or fletching
+     * knife and logs in the inventory, clicking on a pit will set the trap" - and says nothing about
+     * a level to tease. A level 1 player can therefore make a moonlight antelope, whose pit needs
+     * 91, chase them; they simply cannot build the pit to catch it in.
+     */
+    @Test
+    fun `teasing needs no Hunter level`() {
+        val player = world.addPlayer(hunterLvl = 1)
+        val npc = world.addNpc(HunterPitfallTestWorld.MOONLIGHT_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        assertSame(player, world.chaseTarget(npc))
+    }
+
+    @Test
+    fun `every pitfall creature can be teased`() {
+        val player = world.addPlayer()
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertEquals(5, HunterPitfallTestWorld.CREATURE_NPCS.size)
+        for (internal in HunterPitfallTestWorld.CREATURE_NPCS) {
+            val npc = world.addNpc(internal)
+            assertTrue(world.tease(player, npc), "$internal refused a tease")
+            assertSame(player, world.chaseTarget(npc), "$internal did not chase")
+            world.removeNpc(npc)
+        }
+    }
+
+    /**
+     * A second teaser takes the creature over, rather than being refused.
+     *
+     * This is the branch's call, and the reasoning is worth stating because no source describes it.
+     * These npcs carry no `Attack` op and no combat target of their own, so there is nothing in the
+     * packed data that reserves one to a player. Refusing the second tease would let anyone park a
+     * creature on themselves indefinitely and lock every other hunter out of it, and it would break
+     * the wiki's own two-creatures-one-trap procedure, which depends on teasing being cheap and
+     * repeatable. The newest teaser therefore wins, and the previous one simply loses the chase.
+     */
+    @Test
+    fun `a creature already chasing someone switches to whoever teases it next`() {
+        val first = world.addPlayer()
+        val second = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(first, HunterPitfallTestWorld.TEASING_STICK)
+        world.giveItem(second, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(first, npc))
+        assertTrue(world.tease(second, npc))
+
+        assertSame(second, world.chaseTarget(npc))
+        assertEquals(second.uid, world.teasedBy(npc))
+        assertNotEquals(first.uid, world.teasedBy(npc))
+    }
+
+    @Test
+    fun `re-teasing a creature already chasing you keeps it on you`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        assertTrue(world.tease(player, npc))
+
+        assertSame(player, world.chaseTarget(npc))
+        assertEquals(player.uid, world.teasedBy(npc))
+    }
+
+    /**
+     * A creature with no pitfall in it is not teasable, whatever the player is carrying.
+     *
+     * The op is declared on five npcs and the table holds five rows, but nothing stops a later op
+     * registration from being pointed at the wrong npc set. `npc.hunting_chinchompa` is a hunter
+     * creature caught by an entirely different technique, and it must come out of this unchanged.
+     */
+    @Test
+    fun `a creature that is not a pitfall creature cannot be teased`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.CHINCHOMPA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertFalse(world.tease(player, npc))
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.chaseTarget(npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * A creature that has left the world cannot be teased.
+     *
+     * Nothing in this feature deletes a pitfall creature, but the op layer resolves a click to an
+     * npc and the click can land a cycle after the creature went. Setting `PlayerFollow` on a
+     * slotless npc would leave the mode written on an object no processor will ever visit again.
+     */
+    @Test
+    fun `a creature that has left the world cannot be teased`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+        world.removeNpc(npc)
+
+        assertFalse(world.tease(player, npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /**
+     * Ending a chase puts the creature back to wandering and forgets who teased it.
+     *
+     * This is the hook the catch belongs on: a creature that has fallen into a pit must stop
+     * following, and the record of who teased it is what says whose catch it is. The player-left
+     * half needs no code of ours - `NpcPlayerFollowModeProcessor` resets the mode itself the first
+     * cycle `facingTarget` comes back null, which is what a logout leaves behind.
+     */
+    @Test
+    fun `ending a chase returns the creature to its default mode`() {
+        val player = world.addPlayer()
+        val npc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        world.giveItem(player, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(player, npc))
+        world.stopChasing(npc)
+
+        assertEquals(NpcMode.Wander, npc.mode)
+        assertNull(world.chaseTarget(npc))
+        assertNull(world.teasedBy(npc))
+    }
+
+    /** Two creatures teased by two players do not share a chase. */
+    @Test
+    fun `each teased creature remembers its own teaser`() {
+        val first = world.addPlayer()
+        val second = world.addPlayer()
+        val firstNpc = world.addNpc(HunterPitfallTestWorld.LARUPIA_NPC)
+        val secondNpc =
+            world.addNpc(
+                HunterPitfallTestWorld.GRAAHK_NPC,
+                HunterPitfallTestWorld.SECOND_CREATURE_TILE,
+            )
+        world.giveItem(first, HunterPitfallTestWorld.TEASING_STICK)
+        world.giveItem(second, HunterPitfallTestWorld.TEASING_STICK)
+
+        assertTrue(world.tease(first, firstNpc))
+        assertTrue(world.tease(second, secondNpc))
+
+        assertSame(first, world.chaseTarget(firstNpc))
+        assertSame(second, world.chaseTarget(secondNpc))
+        assertEquals(first.uid, world.teasedBy(firstNpc))
+        assertEquals(second.uid, world.teasedBy(secondNpc))
     }
 }
