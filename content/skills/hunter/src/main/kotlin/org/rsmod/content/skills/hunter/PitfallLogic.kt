@@ -1,0 +1,81 @@
+package org.rsmod.content.skills.hunter
+
+/**
+ * The five values a pitfall's `hunt_pitfall_state<n>` varbit can hold, read off the cache's own
+ * `loc.hunting_pitfall_<n>` multiloc children - these are facts about the packed data, not a design
+ * choice:
+ *
+ * | value | rendered as | ops the cache declares |
+ * |---:|---|---|
+ * | 0 ([Empty]) | `hunting_pitfall_invis_empty` "Pit" | `op3=Trap` |
+ * | 1 ([Set]) | `hunting_pitfall_invis_set` "Spiked pit" | `op1=Jump`, `op2=Dismantle` |
+ * | 2 ([Catching]) | `hunting_pitfall_invis_catching` "Collapsed trap" | *(none)* |
+ * | 3 ([Full]) | `hunter_pitfall_full_<creature>` | `op2=Dismantle` |
+ * | 4 ([FullRotated]) | same, rotated 180 degrees | `op2=Dismantle` |
+ *
+ * [Catching] is transient - the cache gives it no ops at all, so nothing can ever land on it as a
+ * player action; it exists only as a frame the client can show mid-collapse. Which ops fire off
+ * which state is a later task's concern - this models the values only, not what a handler does with
+ * them.
+ *
+ * A pitfall is per-player varbit state on permanent map scenery, never a `locRepo`-owned world
+ * object: the client picks which multiloc child to draw from the *viewing player's own* varbit, so
+ * this whole enum is the server's model of one player's view of one pit.
+ */
+enum class PitState(val varbitValue: Int) {
+    Empty(0),
+    Set(1),
+    Catching(2),
+    Full(3),
+    FullRotated(4);
+
+    companion object {
+        /**
+         * The state a varbit value renders as.
+         *
+         * The varbit is three bits wide, so 5, 6 and 7 are representable even though the cache
+         * defines no multiloc child for any of them - there is nothing for the client to draw from
+         * a `hunting_pitfall_<n>` loc holding one of those values. This throws rather than mapping
+         * them to [Empty] defensively: every write to this varbit is ours, so a value outside 0..4
+         * reaching here means the server itself is confused about what state a pit is in. Coercing
+         * that silently to [Empty] would make the corruption invisible at the one place positioned
+         * to catch it, and it would resurface later as a pit that renders as something the server's
+         * own state disagrees with, with nothing in any log to say why. A thrown exception is loud
+         * and traceable to the write that caused it; a silently "corrected" state is neither.
+         */
+        fun of(varbitValue: Int): PitState =
+            entries.find { it.varbitValue == varbitValue }
+                ?: throw IllegalArgumentException(
+                    "Not a pitfall state: $varbitValue (must be one of 0..4)"
+                )
+    }
+}
+
+/**
+ * How many pitfalls a player may have baited or full at once.
+ *
+ * Transcribed from the "Multiple traps" table on the *Pitfall* page (wiki, oldid=15201220), which
+ * gives the cap at five Hunter levels - 1, 20, 40, 60, 80 - each holding until the next: 1 below
+ * level 20, 2 from 20, 3 from 40, 4 from 60, 5 from 80.
+ *
+ * This is the same ladder `HunterTrap`'s private `trapCap` runs the five tile-based trap families
+ * on, but it is not called from here: `trapCap` lives in a `private companion object` inside
+ * `HunterTrap`, unexported outside that file, and widening its visibility is a change to a
+ * different feature's file that this task does not otherwise touch. `HunterCrabTrap.crabTrapCap`
+ * sets the precedent for writing an identical-looking ladder out again rather than reaching into
+ * `HunterTrap` for it, for the same underlying reason given there: a pitfall counts player-varbit
+ * state on permanent scenery, not controllers laid on tiles, so it is a different table from a
+ * different source that happens to share `trapCap`'s numbers rather than a reuse of it.
+ *
+ * Read from the effective level, so a boost raises the cap.
+ */
+object PitfallLogic {
+    fun maxTraps(hunterLevel: Int): Int =
+        when {
+            hunterLevel >= 80 -> 5
+            hunterLevel >= 60 -> 4
+            hunterLevel >= 40 -> 3
+            hunterLevel >= 20 -> 2
+            else -> 1
+        }
+}
