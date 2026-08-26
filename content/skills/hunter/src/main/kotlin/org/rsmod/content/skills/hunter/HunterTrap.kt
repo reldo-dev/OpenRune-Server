@@ -216,7 +216,7 @@ constructor(
      * state.
      *
      * That the log comes back is **unsourced**. No source says what dismantling an armed deadfall
-     * gives you; the two portable families hand their trap item back, and the log is the deadfall's
+     * gives you; the portable families hand their trap item back, and the log is the deadfall's
      * only equivalent, so it is returned rather than destroyed. The alternative - silently
      * consuming it - would make an accidental Dismantle cost the player an item with no notice.
      *
@@ -538,8 +538,8 @@ constructor(
         // The deadfall is explicitly exempt: "Deadfall traps are not prone to failure by standing
         // where they are set." (wiki, Deadfall). It is the one family the wiki says so of, and the
         // one whose trap is a boulder rather than something underfoot. Every other family applies
-        // it, including the two added since - see [TrapFamily.suppressedByPlayerOnTile], which is
-        // deliberately *not* [TrapFamily.portable]: the net trap is not portable and is not exempt.
+        // it - see [TrapFamily.suppressedByPlayerOnTile], which is deliberately *not*
+        // [TrapFamily.portable]: the net trap is not portable and is not exempt either.
         //
         // `loc.coords`, not `coords`: the tile that matters is the one the trap's business end is
         // on, which for the net trap is its net rather than the tree the controller sits on ("only
@@ -619,8 +619,6 @@ constructor(
         // `this@HunterTrap.random`, not `random`: this is a `ProtectedAccess` extension, and that
         // receiver has a `random` of its own which would silently win over the injected field - the
         // shadowing trap [HunterFalconry] and [HunterButterfly] avoid by naming theirs `gameRandom`.
-        // The bare name was safe while this roll lived inside a non-extension helper; it is not
-        // safe here.
         val awards =
             creature?.caught.orEmpty().map {
                 it.obj to rollQuantity(this@HunterTrap.random, it.quantity)
@@ -631,10 +629,8 @@ constructor(
         // with the catch. A net trap contributes two things, not one.
         val returned = trapComponents(family)
 
-        // A stackable award only costs a slot when the player isn't already carrying it - counting
-        // it unconditionally over-rejects a legitimate collect (e.g. a chinchompa catch when the
-        // player already holds that chinchompa type, or a feather catch when they already hold that
-        // feather colour).
+        // A stackable award the player already holds costs no slot; counting one unconditionally
+        // over-rejects a legitimate collect. See [hunterInvSlotsNeeded].
         val slotsNeeded =
             awards.sumOf { (obj, count) -> hunterInvSlotsNeeded(inv, obj, count) } +
                 returned.sumOf { hunterInvSlotsNeeded(inv, it, 1) }

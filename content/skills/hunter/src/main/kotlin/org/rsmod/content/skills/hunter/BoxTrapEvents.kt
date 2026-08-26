@@ -20,15 +20,14 @@ import org.rsmod.plugin.scripts.ScriptContext
  * `op1=Dismantle` / `op2=Investigate` on `hunting_boxtrap_empty` (9380), `op1=Check` on each
  * `_full_<creature>`, and `op1=Dismantle` on `hunting_boxtrap_failed` (9385). As with
  * [BirdSnareEvents], nothing here invents an option; it routes the ones the client already draws.
- * `hunting_boxtrap_failed` was missing its `content.hunter_box_trap` group entirely - added to
- * `loc.toml` alongside this class, the same gap Task 7 closed for `hunting_ojibway_trap_broken`
- * - so a collapsed box trap was previously unclearable. [HunterTrap.takeTrap] already handles that
- *   branch; it is reused here, not reimplemented.
+ * The `content.hunter_box_trap` group each of those states is matched by is server-authored in
+ * `loc.toml` - `hunting_boxtrap_failed` included, without which a collapsed box trap could not be
+ * cleared at all. [HunterTrap.takeTrap] handles that branch.
  *
  * Unlike the bird snare, the box trap's `_full_<creature>` and `_failed` states carry a real op2 of
- * their own - `Reset`, which re-arms a collapsed trap in place. That is explicitly out of scope for
- * v1 (design decision, not a cache gap). Because [onOpContentLoc2] dispatches on the content group
- * and op slot, not on the op's label, the single op2 registration below would otherwise run
+ * their own - `Reset`, which re-arms a collapsed trap in place. That is out of scope here (a design
+ * decision, not a cache gap). Because [onOpContentLoc2] dispatches on the content group and op
+ * slot, not on the op's label, the single op2 registration below would otherwise run
  * `investigate()`'s text against a Reset click too; [investigate] guards on the loc id for exactly
  * that reason.
  *
@@ -72,8 +71,8 @@ constructor(private val traps: HunterTrap, private val conRepo: ControllerReposi
 
     /**
      * `Investigate` exists only on the armed (`hunting_boxtrap_empty`) state; every other state
-     * under this content group reaches op2 via `Reset`, which v1 does not implement. See the class
-     * doc for why that guard has to live here rather than in the loc data.
+     * under this content group reaches op2 via `Reset`, which is not implemented. See the class doc
+     * for why that guard has to live here rather than in the loc data.
      */
     private suspend fun ProtectedAccess.investigate(loc: BoundLocInfo) =
         investigateTrap(loc, noun = "box trap", armed = { it.id == SET_LOC }) {

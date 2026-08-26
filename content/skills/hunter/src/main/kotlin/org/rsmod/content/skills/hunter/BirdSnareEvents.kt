@@ -12,7 +12,7 @@ import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
 
 /**
- * The bird snare's player-facing ops, and the trap tick both families share.
+ * The bird snare's player-facing ops, and the trap tick every family shares.
  *
  * Every op here already exists on the cache type - `iop1=Lay` on obj 10006, `op1=Dismantle` /
  * `op2=Investigate` on `hunting_ojibway_trap` (9345), `op1=Dismantle` on
@@ -32,8 +32,8 @@ constructor(private val traps: HunterTrap, private val conRepo: ControllerReposi
         onOpContentLoc2("content.hunter_bird_snare") { investigate(it.loc) }
 
         // Registered exactly once in the codebase. The handler keys on the controller type, which
-        // is shared by both families, so Task 8's box trap deliberately does not repeat it - a
-        // second registration would run every laid trap's tick twice per cycle.
+        // every family shares, so the other four scripts deliberately do not repeat it - a second
+        // registration would run every laid trap's tick twice per cycle.
         onAiConTimer(TRAP_CONTROLLER) { with(traps) { controller.hunterTrapTick() } }
     }
 

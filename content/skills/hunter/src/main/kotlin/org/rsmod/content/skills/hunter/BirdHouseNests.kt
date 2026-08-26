@@ -12,8 +12,8 @@ import org.rsmod.game.entity.Player
 /**
  * What a harvested bird house pays out, and where every number in it came from.
  *
- * The roadmap called this technique "deterministic". It is not: there are **two** rolls, on two
- * different curves, and only one of them is an ordinary skilling rate.
+ * A harvest is not deterministic: there are **two** rolls, on two different curves, and only one
+ * of them is an ordinary skilling rate.
  *
  * ## Roll one: the seed nest
  *
@@ -46,7 +46,7 @@ import org.rsmod.game.entity.Player
  *
  * **Say which half is sourced.** The endpoints and the halving are Jagex's. The linear 50-to-99
  * ramp is the **wiki's own model**, with no Jagex statement behind it - it is the single largest
- * piece of unsourced arithmetic in this slice. Extrapolating past 99 is likewise unmodelled shape,
+ * piece of unsourced arithmetic in this file. Extrapolating past 99 is likewise unmodelled shape,
  * though that boosting above 99 keeps helping *is* published.
  *
  * ## What a successful roll gives
@@ -188,7 +188,12 @@ internal object BirdHouseNests {
 
     /** The chance of this house's single seed nest, at [hunterLevel]. */
     fun seedNestChance(hunterLevel: Int): Double =
-        SkillingSuccessRate.successRate(SEED_NEST_LOW, SEED_NEST_HIGH, hunterLevel, MAX_HUNTER_LEVEL)
+        SkillingSuccessRate.successRate(
+            SEED_NEST_LOW,
+            SEED_NEST_HIGH,
+            hunterLevel,
+            MAX_HUNTER_LEVEL,
+        )
 
     /**
      * The chance that one of the ten nest rolls succeeds, for a tier whose level-99 endpoint is

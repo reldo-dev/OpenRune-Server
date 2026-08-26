@@ -356,12 +356,12 @@ constructor(
      * is why [landCollapses] drops an entry that finds one. So [PitState.Empty] is only ever
      * correct when this player has **nothing** left here.
      *
-     * This method used to read only the entries that had already **landed**, and so wrote
-     * [PitState.Empty] over a pit a sibling was still falling into. That broke the invariant in
-     * both directions: the in-flight creature landed on an empty pit and was dropped unpaid, and a
-     * player who re-armed the pit and caught a third had the abandoned entry land behind it, ending
-     * with two landed catches for one creature - the same mint-from-nothing [clearPits] was fixed
-     * for, on a path nothing guarded.
+     * Reading only the entries that have already **landed** is the obvious shortcut, and it breaks
+     * that invariant in both directions: it writes [PitState.Empty] over a pit a sibling is still
+     * falling into, so the in-flight creature lands on an empty pit and is dropped unpaid, and a
+     * player who re-arms that pit and catches a third has the abandoned entry land behind it,
+     * ending with two landed catches for one creature. Everything still pending is counted here
+     * instead, landed or not.
      *
      * ## The order
      *
@@ -485,10 +485,10 @@ constructor(
      *
      * ## No delay
      *
-     * `suspend` so this composes with the suspending op handler a later task registers it in, but
-     * there is no suspension point: the tease animation is fired and the player is free the same
-     * cycle. A lock of even one cycle would break the *Pitfall* page's own "quickly tease nearby
-     * creature B ... while creature A is still walking over it" procedure.
+     * `suspend` so this composes with the suspending op handler [PitfallEvents] registers it in,
+     * but there is no suspension point: the tease animation is fired and the player is free the
+     * same cycle. A lock of even one cycle would break the *Pitfall* page's own "quickly tease
+     * nearby creature B ... while creature A is still walking over it" procedure.
      *
      * @return false, with a message already sent where the player could have done something about
      *   it, if nothing was teased.
@@ -555,7 +555,7 @@ constructor(
      *   That is the fact [chases] exists to keep, as a [PlayerUid] rather than a slot;
      * - **the species is the pit's own**, so a graahk that wandered over a larupia pit cannot be
      *   collected as larupia fur and meat. The five hunting grounds do not overlap, so this cannot
-     *   happen by walking - but nothing stops a later task from teasing across one;
+     *   happen by walking - but nothing stops a later change from teasing across one;
      * - **it is within [CATCH_RANGE] of the pit**, which is what "passes the trap" reduces to.
      *
      * The nearest qualifying creature is taken, so a hunter with two on their heels catches the one
@@ -793,11 +793,11 @@ constructor(
      * The crab trap defers its catch with `player.softQueue(CRAB_CATCH_QUEUE, ...)`, and this is
      * the same shape of problem, so the queue is the idiom to reach for first. The collapse rides
      * the per-cycle hook instead, and the reason is not that a queue was unavailable - this module
-     * now declares [PITFALL_REBUILD_QUEUE] and could have declared a second. It is that the
-     * collapse has nowhere else to be: [tick] has to exist anyway for the chase leash, a landing
-     * costs it one list walk, and putting the two on one hook makes the pair impossible to
-     * half-wire. Whoever registers [tick] for the leash gets the landing with it, whereas a queue
-     * would have been a second registration that could go missing on its own.
+     * declares [PITFALL_REBUILD_QUEUE] and could have declared a second. It is that the collapse
+     * has nowhere else to be: [tick] has to exist anyway for the chase leash, a landing costs it
+     * one list walk, and putting the two on one hook makes the pair impossible to half-wire.
+     * Whoever registers [tick] for the leash gets the landing with it, whereas a queue would have
+     * been a second registration that could go missing on its own.
      *
      * ## Where a collapse can land
      *
@@ -810,15 +810,12 @@ constructor(
      *   rather than writing a catch over whatever the player has since done to the pit. The crab
      *   trap's matured-catch-on-an-unbaited-trap branch makes the same call.
      *
-     * **The last branch is a backstop, and it was not always one.** It used to be reachable - and
-     * destructive - by ordinary play: a dismantle taken while a sibling was still in the air wrote
-     * the pit [PitState.Empty], and the creature still falling into it arrived here and was thrown
-     * away unpaid. [takeCatch] is where that was fixed, by leaving such a pit [PitState.Catching].
-     * With that done, no routine path reaches this branch: [clearPits] takes its own entries with
-     * it, and every other write to the varbit either leaves room for what is pending or has nothing
-     * pending to leave room for. It stays because it is the one place positioned to notice if some
-     * later path breaks that agreement again, and dropping a catch is a smaller failure than
-     * stamping one over a pit the player has since re-armed.
+     * **The last branch is a backstop, and no routine path reaches it.** [takeCatch] leaves a pit a
+     * sibling is still falling into at [PitState.Catching] rather than [PitState.Empty],
+     * [clearPits] takes its own entries with it, and every other write to the varbit either leaves
+     * room for what is pending or has nothing pending to leave room for. It stays because it is the
+     * one place positioned to notice if some later path breaks that agreement, and dropping a catch
+     * is a smaller failure than stamping one over a pit the player has since re-armed.
      *
      * A landed entry stays until [collectPit] takes it, and is dropped here once its owner is no
      * longer in the world or its pit no longer holds a catch. That is what bounds this list: a
@@ -902,14 +899,11 @@ constructor(
      * Returns every one of this player's twenty-five pits to [PitState.Empty].
      *
      * **Test-only, and deliberately left that way.** Nothing in [PitfallEvents] or anywhere else in
-     * the server calls it: the recovery it was once described as - the way back out of a pit
-     * stranded in [PitState.Catching] - has a real, wired owner in [rebuildPits], which runs off
-     * the login queue, and no source describes a "reset my traps" action to hang a second one on.
-     * What it is genuinely for is the suites, which need a hunter's fifty-first catch to start from
-     * an empty pit without going through the op under test.
-     *
-     * It writes every site rather than only the non-empty ones because writing [PitState.Empty]
-     * over [PitState.Empty] costs nothing and a filtered pass would need the read anyway.
+     * the server calls it: the way back out of a pit stranded in [PitState.Catching] has a real,
+     * wired owner in [rebuildPits], which runs off the login queue, and no source describes a
+     * "reset my traps" action to hang a second one on. What it is for is the suites, which need a
+     * hunter's fifty-first catch to start from an empty pit without going through the op under
+     * test.
      *
      * The player's half of [collapses] goes with the varbits. A catch left in the ledger after its
      * pit had been emptied would land - or be collected - on a pit that no longer holds anything,
@@ -951,10 +945,10 @@ constructor(
      * The two alternatives both destroy something the player earned. [PitState.Set] would throw
      * the catch away and leave the pit armed, which reads as generous and is not - the creature is
      * gone from the world either way, so the player is down a catch and up nothing.
-     * [PitState.Empty] would throw the catch *and* the log away. This is the same direction the rest of the slice
-     * errs in, and the one place it is worth restating: two catches taken in the two-creature
-     * window and left across a relog still come back as **one**, because the varbit has no room
-     * for the second. Loss, never duplication.
+     * [PitState.Empty] would throw the catch *and* the log away. Every trade this feature makes
+     * across a logout errs the same way: two catches taken in the two-creature window and left
+     * across a relog still come back as **one**, because the varbit has no room for the second.
+     * Loss, never duplication.
      *
      * The rotation is not recoverable - it lived in the [Collapse] the logout took with it - so
      * every rebuilt pit lands on [PitState.Full] rather than [PitState.FullRotated]. That is

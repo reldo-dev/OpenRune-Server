@@ -34,9 +34,10 @@ import org.rsmod.map.CoordGrid
  *   neighbour's state for the other two. Let `ServerCacheManager.getVarbit` supply the bits,
  *   exactly as [CrabTrapSites] does.
  *
- * [index] is the site's number in the cache's own naming, 1 through 25, and is what a pending catch
- * carries as its queue argument. Like the crab trap's it is never persisted: the whole of a site's
- * state is the cache varbit, so a login rebuilds any pending catch by reading them back.
+ * [index] is the site's number in the cache's own naming, 1 through 25, and is a label rather than
+ * a key - nothing is looked up by it, and like the crab trap's it is never persisted. The whole of
+ * a site's state is the cache varbit, so a login rebuilds a catch a logout stranded by reading
+ * those back.
  *
  * Coordinates were surveyed against the packed map, not read off the wiki; the survey, and the
  * direct tile decode behind the level-0 column, are in
@@ -281,7 +282,7 @@ object PitfallSites {
      */
     val byBaseLoc: Map<String, PitfallSite> = all.associateBy { it.baseLoc }
 
-    /** The site behind a state varbit, for the login pass that rebuilds pending catches. */
+    /** The site behind a state varbit name, keyed and size-checked exactly as [byBaseLoc] is. */
     val byVarbit: Map<String, PitfallSite> = all.associateBy { it.varbit }
 
     /**

@@ -140,17 +140,15 @@ class ImplingSpawnerTest {
      * lookup finds first. Filtering by "is this a shipped impling" is also the honest question -
      * the test wants to know what was produced, not what is standing there.
      */
-    private fun implingAt(world: HunterButterflyTestWorld, coords: CoordGrid): String? =
-        world.npcRepo
-            .findAll(coords)
-            .filter { it.isVisible }
-            .firstOrNull { ImplingCreatures.byNpcId(it.visType.id) != null }
-            ?.let { npc -> ImplingCreatures.byNpcId(npc.visType.id) }
-            ?.let { creature ->
-                val overworld = creature.npcOverworld.asRSCM(RSCMType.NPC)
-                val found = world.npcRepo.findAll(coords).first { it.isVisible && ImplingCreatures.byNpcId(it.visType.id) != null }
-                if (found.visType.id == overworld) creature.npcOverworld else creature.npc
-            }
+    private fun implingAt(world: HunterButterflyTestWorld, coords: CoordGrid): String? {
+        val npc =
+            world.npcRepo.findAll(coords).firstOrNull {
+                it.isVisible && ImplingCreatures.byNpcId(it.visType.id) != null
+            } ?: return null
+        val creature = checkNotNull(ImplingCreatures.byNpcId(npc.visType.id))
+        val overworld = creature.npcOverworld.asRSCM(RSCMType.NPC)
+        return if (npc.visType.id == overworld) creature.npcOverworld else creature.npc
+    }
 
     private companion object {
         private const val COMMON_PRECURSOR = "npc.ii_common_impling_precursor"

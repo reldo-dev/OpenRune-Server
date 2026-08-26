@@ -40,7 +40,7 @@ import org.rsmod.plugin.scripts.ScriptContext
  * `setDeadfall`, `collectTrap`, `catchKebbit` and friends directly. That proves the *bodies* are
  * right and says nothing about whether a player clicking the thing ever reaches them: an op
  * registered on the wrong content group, on the wrong op index, or not registered at all would
- * leave all 127 of those tests green and the feature dead in game. Nothing else covers it - the
+ * leave every one of those tests green and the feature dead in game. Nothing else covers it - the
  * packed-data verifier checks values, and no in-client scenario exists for the net trap, magic box,
  * falconry or butterflies.
  *

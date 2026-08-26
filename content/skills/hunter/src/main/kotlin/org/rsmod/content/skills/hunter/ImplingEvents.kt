@@ -9,22 +9,21 @@ import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
 
 /**
- * Impling catching's one player-facing op.
+ * Impling catching's two player-facing ops.
  *
- * **`op1=Catch` already exists on every impling npc**; none is invented here. Both forms of all
- * twelve carry it - the overworld `ii_impling_type_1..12` and the Puro-Puro `_maze` ids alike - so
- * this only routes what the client already draws.
+ * **Neither op is invented here.** `op1=Catch` already exists on every impling npc - both forms of
+ * all twelve, the overworld `ii_impling_type_1..12` and the Puro-Puro `_maze` ids alike - and
+ * `iop3=Loot` already exists on every filled jar, so this only routes what the client already
+ * draws.
  *
  * Registered by npc rather than by content group, for the reason [ButterflyEvents] and
  * [FalconryEvents] give: a content group would need a `[gamevals.content]` id *and* a `contentGroup`
- * on each npc in `.data/raw-cache/server/npcs.toml` - the two-declaration rule - and six explicit
- * registrations for six npcs is both shorter and impossible to half-declare.
+ * on each npc in `.data/raw-cache/server/npcs.toml` - the two-declaration rule - where a loop over
+ * the creature table is both shorter and impossible to half-declare.
  *
- * Beyond those two ops and the spawner's cycle hook there is nothing to register: no timer,
- * because a catch resolves within the op; no area entry or exit, because the npc ids already carry
- * "in Puro-Puro" on their own; no `onAiConTimer`, because no controller is ever created. `iop3=Loot` on the filled jars is the other half of the
- * reward and is registered here too - it is `iop3` on all six, and like `op1=Catch` it already
- * exists on the objs.
+ * Beyond those two ops and the spawner's cycle hook there is nothing to register: no timer, because
+ * a catch resolves within the op; no area entry or exit, because the npc ids already carry "in
+ * Puro-Puro" on their own; no `onAiConTimer`, because no controller is ever created.
  */
 class ImplingEvents
 @Inject

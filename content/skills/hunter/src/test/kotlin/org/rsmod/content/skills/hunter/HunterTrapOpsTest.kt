@@ -1,5 +1,6 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.rscm.RSCM
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -11,16 +12,16 @@ import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.rsmod.content.skills.hunter.HunterTrapTestWorld.Companion.TRAP_TILE
+import org.rsmod.game.entity.Controller
 import org.rsmod.game.entity.Player
 
 /**
  * The player-facing half of the engine: the five `ProtectedAccess` ops.
  *
- * These were expected to be out of reach, because the harness that used to supply a player context
- * (`api/testing`) was deleted. They are not: `ProtectedAccessContextFactory.empty()` supplies a
- * context whose every dependency throws on first touch, and none of the hunter ops touch one. The
- * suspending `setDeadfall` needs a little more - see [HunterTrapTestWorld.startProtected] - but it
- * runs too.
+ * No player-context harness ships with the repo, and none is needed:
+ * `ProtectedAccessContextFactory.empty()` supplies a context whose every dependency throws on first
+ * touch, and none of the hunter ops touch one. The suspending `setDeadfall` needs a little more -
+ * see [HunterTrapTestWorld.startProtected] - but it runs too.
  *
  * Two things here cannot be reached and are covered nowhere:
  * - the **timed** half of a loc change, including `setDeadfall`'s safety-net revert of an abandoned
@@ -67,12 +68,13 @@ class HunterTrapOpsTest {
     }
 
     /**
-     * The invariant behind `fix: charge the deadfall log only once the boulder is armed`.
+     * The log is charged only once the boulder is armed.
      *
-     * Charging up front cost the player a log for nothing twice over - on a contested boulder and on
-     * a logout during the set delay - and neither is observable in play, because in both cases the
-     * player simply finds themselves one log short with no message. The set delay is the only window
-     * in which the difference exists, so this steps the op cycle by cycle rather than awaiting it.
+     * Charging up front costs the player a log for nothing twice over - on a contested boulder and
+     * on a logout during the set delay - and neither is observable in play, because in both cases
+     * the player simply finds themselves one log short with no message. The set delay is the only
+     * window in which the difference exists, so this steps the op cycle by cycle rather than
+     * awaiting it.
      */
     @Test
     fun `the deadfall log is not charged until after the set delay`() {
@@ -280,7 +282,8 @@ class HunterTrapOpsTest {
 
     @Test
     fun `a tile that already holds a trap cannot take another`() {
-        val player = hunter(level = 99, carrying = listOf("obj.hunting_box_trap", "obj.hunting_box_trap"))
+        val player =
+            hunter(level = 99, carrying = listOf("obj.hunting_box_trap", "obj.hunting_box_trap"))
 
         assertTrue(world.runProtected(player) { it.layTrap(TrapFamily.BOX, TRAP_TILE) })
         assertFalse(world.runProtected(player) { it.layTrap(TrapFamily.BOX, TRAP_TILE) })
@@ -294,8 +297,8 @@ class HunterTrapOpsTest {
      */
     @Test
     fun `a level-1 hunter can only lay one trap`() {
-        val player =
-            hunter(level = 1, carrying = listOf("obj.hunting_ojibway_bird_snare", "obj.hunting_ojibway_bird_snare"))
+        val snare = "obj.hunting_ojibway_bird_snare"
+        val player = hunter(level = 1, carrying = listOf(snare, snare))
 
         assertTrue(world.runProtected(player) { it.layTrap(TrapFamily.SNARE, TRAP_TILE) })
         assertFalse(
@@ -330,10 +333,9 @@ class HunterTrapOpsTest {
     /**
      * The Hunter xp modifier is *applied*, not merely injected.
      *
-     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
-     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
-     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
-     * multiplication load-bearing.
+     * A world built with no modifiers is a flat 1.0, so the `* xpMods.get(player, "stat.hunter")`
+     * on the award site could be deleted with the rest of the suite still green. Running the same
+     * catch twice, once in a doubled world, is what makes the multiplication load-bearing.
      */
     @Test
     fun `the xp modifier scales the trap award`() {
@@ -471,7 +473,7 @@ class HunterTrapOpsTest {
     }
 
     /** Lays [player]'s box trap on [TRAP_TILE] and springs it on a chinchompa, then settles it. */
-    private fun springBoxTrapOn(player: Player): org.rsmod.game.entity.Controller {
+    private fun springBoxTrapOn(player: Player): Controller {
         world.runProtected(player) { it.layTrap(TrapFamily.BOX, TRAP_TILE) }
         val controller = world.controllerAt(TRAP_TILE)!!
         world.addNpc("npc.hunting_chinchompa", TRAP_TILE.translate(0, 1))
@@ -482,6 +484,5 @@ class HunterTrapOpsTest {
         return controller
     }
 
-    private fun objId(internal: String): Int =
-        dev.openrune.rscm.RSCM.getRSCM(internal)
+    private fun objId(internal: String): Int = RSCM.getRSCM(internal)
 }

@@ -35,7 +35,7 @@ class FalconryTest {
      * here rather than shipping a subtly wrong curve. Every point below is an exact 256th read off
      * the `{{Skilling success chart}}` on the creature's own page - spotted oldid=15225548, dark
      * oldid=15288973, dashing oldid=15225549 - and the full 112-point extract lives in
-     * `.data/cache/wiki-hunter/falconry-chance.tsv`.
+     * `src/test/resources/wiki-charts/falconry-chance.tsv`.
      */
     @Test
     fun fittedRatesReproduceTheWikiCharts() {
@@ -122,9 +122,9 @@ class FalconryTest {
      *
      * Asserted against the TOML rather than against the packed npc definition on purpose. The
      * declaration is only *packed* by a cache build, so a test that read the packed def would fail
-     * on every checkout until someone ran one; the file is the thing this change is responsible
-     * for. The single-block check is not incidental either - duplicate ids in a `raw-cache` TOML
-     * are last-wins and silently drop the earlier entry's scalars.
+     * on any checkout where nobody had run one. The single-block check is not incidental either -
+     * duplicate ids in a `raw-cache` TOML are last-wins and silently drop the earlier entry's
+     * scalars.
      */
     @Test
     fun falconNpcsAreDeclaredStationary() {
@@ -196,7 +196,6 @@ class FalconryTest {
             "Falconry creatures must not appear in HunterCreatures.all",
         )
         assertEquals(21, HunterCreatures.all.size, "trap creature count must not change")
-        // The five shipped trap families and no sixth.
         assertEquals(5, TrapFamily.entries.size, "falconry must not add a TrapFamily entry")
     }
 
@@ -322,7 +321,6 @@ class FalconryTest {
             world.npcNameAt(kebbitTile),
             "the spotted kebbit's own falcon npc should stand on its tile",
         )
-        // The bird is out, so the glove is empty.
         assertTrue(player.inv.contains(FALCON_GLOVE), "glove should be empty while the bird is out")
         assertFalse(player.inv.contains(FALCON_GLOVE_WITH_BIRD))
 
@@ -443,8 +441,8 @@ class FalconryTest {
      * The Hunter xp modifier is *applied*, not merely injected.
      *
      * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
-     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
-     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with the suite
+     * still green. Running the same catch twice, once in a doubled world, is what makes the
      * multiplication load-bearing.
      */
     @Test
@@ -480,8 +478,8 @@ class FalconryTest {
      * controller and returned silently: no message, no loot, no xp, no bird back, and an
      * `Int.MAX_VALUE` npc left in the world for good.
      *
-     * This is the case the other 22 falconry tests could not see. None of them moves a falcon,
-     * because this world has no `NpcMainProcess` and nothing else makes an npc walk.
+     * No other test in this file can see the case: none of them moves a falcon, because this world
+     * has no `NpcMainProcess` and nothing else makes an npc walk.
      */
     @Test
     fun falconStaysItsOwnAfterWanderingOffThePreyTile() {

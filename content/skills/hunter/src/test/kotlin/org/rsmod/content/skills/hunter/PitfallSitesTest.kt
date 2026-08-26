@@ -78,9 +78,9 @@ class PitfallSitesTest {
     /**
      * Every gameval on every site resolves and has a packed definition behind it.
      *
-     * Resolution alone proves only that a name maps to an id; `CLAUDE.md` carries the scar tissue
-     * for the difference. `asRSCM` throws on an unmapped name and the `getObject`/`getVarbit`
-     * lookup covers the other half.
+     * Resolution alone proves only that a name maps to an id: a name can resolve and still have
+     * nothing packed behind it, which throws at first use rather than at boot. `asRSCM` throws on
+     * an unmapped name and the `getObject`/`getVarbit` lookup covers the other half.
      */
     @Test
     fun `every base loc, varbit and animal companion has a packed definition`() {
@@ -119,7 +119,7 @@ class PitfallSitesTest {
      * the same varbit would shrink the map and lose one of them with no error anywhere.
      */
     @Test
-    fun `byBaseLoc and byVarbit each retain one entry per site`() {
+    fun `every site is still reachable by its own base loc and its own varbit`() {
         assertEquals(25, PitfallSites.byBaseLoc.size, "a duplicate base loc would shrink this")
         assertEquals(25, PitfallSites.byVarbit.size, "a duplicate varbit would shrink this")
         for (site in PitfallSites.all) {
@@ -300,7 +300,6 @@ class PitfallSitesTest {
         }
     }
 
-    /** Each companion is placed in the same map square as the site it belongs to. */
     @Test
     fun `every animal companion is placed in its own site's map square`() {
         for (site in PitfallSites.all) {

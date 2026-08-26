@@ -403,8 +403,7 @@ constructor(
     }
 
     /**
-     * How long the player is locked while the falcon flies, floored at
-     * [FALCON_MIN_FLIGHT_CYCLES].
+     * How long the player is locked while the falcon flies, floored at [FALCON_MIN_FLIGHT_CYCLES].
      *
      * Chebyshev, matching every other distance in this feature and the engine's own movement model.
      */

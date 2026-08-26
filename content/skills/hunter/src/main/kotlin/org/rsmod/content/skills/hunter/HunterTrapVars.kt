@@ -36,7 +36,7 @@ private const val EMPTY_TRAP_COORD: Int = 0
 /**
  * The value an unwritten `varcon.hunter_trap_deadfall_log` reads back as. No deadfall path ever
  * writes it: every usable log has a positive obj id, so zero unambiguously means "no log recorded",
- * which is the case for every trap of the other two families.
+ * which is the case for every trap of the other four families.
  */
 internal const val NO_TRAP_LOG: Int = 0
 

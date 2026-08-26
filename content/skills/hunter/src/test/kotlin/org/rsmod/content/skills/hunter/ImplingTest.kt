@@ -31,7 +31,7 @@ class ImplingTest {
     /* The table, against the wiki. */
 
     /**
-     * The six shipped rows carry the wiki's levels and *both* of its experience values.
+     * Every shipped row carries the wiki's levels and *both* of its experience values.
      *
      * Levels and experience are read from each creature's `Hunter info` infobox, which publishes
      * "Level required", "Puro Puro XP" and "Overworld XP" as three separate rows - see [WIKI] for
@@ -81,7 +81,7 @@ class ImplingTest {
     }
 
     /**
-     * The faster curve really is `+20` on both coefficients, for all six.
+     * The faster curve really is `+20` on both coefficients, on every row.
      *
      * The claim [HunterImpling.usesFasterCurve] rests on, checked against the published parameters
      * of the *second* series on each page rather than against the constant. If the wiki ever
@@ -106,11 +106,12 @@ class ImplingTest {
     }
 
     /**
-     * Every shipped npc is a `_maze` id, which is what licenses [HunterImpling] having no area
-     * check.
+     * Every impling carries both of its npc ids, paired by the `_maze` suffix.
      *
-     * "In Puro-Puro" is answered by which npc was clicked. The day a row that is not a maze npc is
-     * added, that stops being true and the jar rule becomes wrong for it - so this fails first.
+     * "In Puro-Puro" is answered by which npc was clicked rather than by an area check, so the two
+     * ids have to be recognisably one creature rather than two rows that happen to agree. The
+     * crystal impling is the one row with no Puro-Puro form, and it is named rather than filtered
+     * out, so a second such row fails here.
      */
     @Test
     fun everyImplingCarriesBothOfItsNpcIds() {
@@ -170,7 +171,7 @@ class ImplingTest {
      *
      * Both are published per creature and both are packed, two experience apart at this tier, so
      * reading the wrong column produces a number that looks entirely reasonable. Asserted against
-     * the wiki's own figures - baby 18 (not 20), eclectic 30 (not 32) - and against the *absence* of
+     * the wiki's own figures - baby 18 (not 20), lucky 80 (not 380) - and against the *absence* of
      * the overworld value, which is the half that actually fails if the columns are swapped.
      */
     @Test
@@ -195,10 +196,10 @@ class ImplingTest {
     /**
      * The Hunter xp modifier is *applied*, not merely injected.
      *
-     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
-     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
-     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
-     * multiplication load-bearing.
+     * Every other world in this suite builds its `XpModifiers` from an empty set, which is a flat
+     * 1.0, so the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with the
+     * rest of the suite still green. Running the same catch twice, once in a doubled world, is what
+     * makes the multiplication load-bearing.
      */
     @Test
     fun theXpModifierScalesTheImplingAward() {
@@ -459,9 +460,7 @@ class ImplingTest {
     /**
      * An impling npc with no row is simply not handled, and nothing is consumed.
      *
-     * The nature impling's maze npc: a real impling with a real jar, a published chart and a level
-     * requirement, and no row here because nothing in `.data` ever spawns it. It must be inert
-     * rather than half-working.
+     * It has to be inert rather than half-working: no swing, no draw, no jar taken.
      */
     @Test
     fun theWanderingImplingIsNotCatchable() {
@@ -473,14 +472,14 @@ class ImplingTest {
         // an impling by name and model and carries `Talk-to`/`Check-gates`, not `Catch` - the wiki
         // says outright that he cannot be caught. The nearest thing to a false positive this table
         // can produce.
-        val nature = world.addNpc("npc.ii_lost_impling")
+        val wandering = world.addNpc("npc.ii_lost_impling")
         world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
 
-        val caught = world.runImpling(player) { with(it) { catchImpling(nature) } }
+        val caught = world.runImpling(player) { with(it) { catchImpling(wandering) } }
 
         assertFalse(caught)
         assertEquals(0, world.random.doubleDraws)
-        assertTrue(world.npcIsSpawned(nature))
+        assertTrue(world.npcIsSpawned(wandering))
         assertTrue(player.inv.contains(IMPLING_JAR))
     }
 

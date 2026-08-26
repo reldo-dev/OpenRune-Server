@@ -17,14 +17,14 @@ internal const val DOUBLE_HUNTER_XP: Double = 1.0
 /**
  * An [XpModifiers] that adds [bonus] to `stat.hunter` and nothing to any other stat.
  *
- * Every world in this suite used to build its own from `emptySet()`, which is a 1.0 multiplier, so
- * the `* xpMods.get(player, "stat.hunter")` on all eight award sites could be deleted with the
- * whole suite still green - the modifier was wired everywhere and exercised nowhere. Worlds take a
- * bonus now, and one test per technique spends it.
+ * An `emptySet()` of modifiers is a flat 1.0 multiplier, so the
+ * `* xpMods.get(player, "stat.hunter")` on all eight award sites could be deleted with the whole
+ * suite still green. One test per technique therefore drives its world with a non-zero bonus and
+ * spends it.
  *
  * [bonus] is what [org.rsmod.api.stats.xpmod.XpMod] returns, i.e. the amount added to the base
- * `1.0`: `0.5` is a 1.5x award and [DOUBLE_HUNTER_XP] is a 2x one. `0.0` returns the empty set the
- * worlds carried before, so a default-constructed world is byte for byte the world it was.
+ * `1.0`: `0.5` is a 1.5x award and [DOUBLE_HUNTER_XP] is a 2x one. `0.0` returns an empty set, so a
+ * default-constructed world applies no modifier at all.
  */
 internal fun hunterXpModifiers(bonus: Double, craftingBonus: Double = 0.0): XpModifiers {
     val mods = buildSet {

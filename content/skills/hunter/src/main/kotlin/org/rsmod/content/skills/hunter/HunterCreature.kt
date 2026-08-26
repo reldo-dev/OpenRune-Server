@@ -40,10 +40,10 @@ enum class TrapFamily {
      * The magic box, which is portable and reuses the [SNARE]/[BOX] path wholesale - but is not a
      * [BOX].
      *
-     * `HunterTrapStates` builds a box trap's loc names from its npc's own name, and the imp
-     * (`npc.imp`) has no `hunting_` prefix to strip, its states are the unsuffixed
-     * `hunting_imptrap_*` set, and it is laid from `obj.magic_imp_box`. Filing it under [BOX] would
-     * resolve to loc names that do not exist - an RSCM throw at the first catch.
+     * `HunterTrapStates` names a box trap's loc states `hunting_boxtrap_*` with a per-creature
+     * suffix; the imp's are the unsuffixed `hunting_imptrap_*` set, and it is laid from
+     * `obj.magic_imp_box` rather than `obj.hunting_box_trap`. Filing it under [BOX] would resolve
+     * to loc names that do not exist - an RSCM throw at the first catch.
      */
     MAGICBOX;
 

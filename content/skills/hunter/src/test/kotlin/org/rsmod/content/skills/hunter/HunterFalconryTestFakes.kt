@@ -36,9 +36,8 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * Its own class rather than an extension of the trap world, and smaller than one. Falconry touches
  * no locs at all - no `LocRegistry`, no `LocZoneStorage`, no region plumbing - so half of that
  * world's setup would be dead weight here. More to the point, [HunterTrapTestWorld.runProtected]
- * binds its lambda receiver to `HunterTrap`, and generalising that would have meant editing every
- * one of the 81 trap tests' harness. A separate ~30 lines of registry construction is cheaper than
- * touching a green suite.
+ * binds its lambda receiver to `HunterTrap`, and generalising it would mean reworking every trap
+ * test's harness.
  *
  * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */
@@ -86,9 +85,9 @@ class HunterFalconryTestWorld(hunterXpBonus: Double = 0.0) {
      * The decrement is **replicated, not called**. `ControllerRepository.processDurations` - the
      * `controller.duration-- <= 0` loop the real game process runs once per cycle - is `internal` to
      * `api:repo` and so unreachable from a content module's tests. Without it `duration` never moves
-     * and every timeout test passes vacuously, which is exactly what happened before this existed:
-     * the trap suite sidesteps the problem by assigning `controller.duration = 1` outright, which
-     * proves the collapse branch but not that a lifetime actually elapses.
+     * and a timeout test written the obvious way passes vacuously. The trap suite sidesteps the
+     * problem by assigning `controller.duration = 1` outright, which proves the collapse branch but
+     * not that a lifetime actually elapses.
      *
      * Deletion of an expired controller is deliberately *not* replicated, because [falconTick] is
      * documented to give up one cycle early precisely so the repository never gets the chance.

@@ -16,7 +16,7 @@ import org.rsmod.map.CoordGrid
 import org.rsmod.routefinder.loc.LocLayerConstants
 
 /**
- * A world for crab trapping, and the emptiest of the four.
+ * A world for crab trapping, and the emptiest in the suite.
  *
  * There is no loc registry, no controller repository, no npc registry and no zone bookkeeping -
  * because [HunterCrabTrap] takes none of them. A crab trap lives entirely in the player's own

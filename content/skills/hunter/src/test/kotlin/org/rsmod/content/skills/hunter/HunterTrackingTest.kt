@@ -220,10 +220,10 @@ class HunterTrackingTest {
     /**
      * The Hunter xp modifier is *applied*, not merely injected.
      *
-     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
-     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
-     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
-     * multiplication load-bearing.
+     * Every other world in this suite builds its `XpModifiers` from an empty set, which is a flat
+     * 1.0, so the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with the
+     * rest of the suite still green. Running the same catch twice, once in a doubled world, is what
+     * makes the multiplication load-bearing.
      */
     @Test
     fun `the xp modifier scales the tracking award`() {

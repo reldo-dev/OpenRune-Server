@@ -145,8 +145,7 @@ class BirdHouseNestsTest {
                 BirdHouseNests.nestRollChance(redwood.nestPermille, 99)
         )
         // The seed nest curve is unclamped too, so this documents a known deviation rather than
-        // asserting a fix: nothing about the roll reads a boost separately from the level. It is
-        // recorded in the slice notes.
+        // asserting a fix: nothing about the roll reads a boost separately from the level.
         assertTrue(BirdHouseNests.seedNestChance(104) > BirdHouseNests.seedNestChance(99))
     }
 

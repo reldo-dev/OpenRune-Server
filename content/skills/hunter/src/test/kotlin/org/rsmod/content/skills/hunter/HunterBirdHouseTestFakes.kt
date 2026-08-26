@@ -89,7 +89,7 @@ class ScriptedDrawRandom(
 }
 
 /**
- * A world for bird house trapping, and the emptiest of the five.
+ * A world for bird house trapping, and one of the emptiest in the suite.
  *
  * There is no loc registry, no controller repository and no npc registry, because [HunterBirdHouse]
  * takes none of them: a bird house lives entirely in the player's own varps. The single repository it

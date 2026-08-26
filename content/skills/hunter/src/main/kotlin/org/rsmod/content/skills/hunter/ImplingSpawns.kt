@@ -108,9 +108,9 @@ object ImplingSpawns {
      * Rolls one creature's overworld npc symbol out of [tier].
      *
      * Walks the entries accumulating weight, which is the same shape the drop tables roll with. The
-     * final `?:` cannot be reached while the weights sum to the total - which
+     * trailing return cannot be reached while the weights sum to the total - which
      * `ImplingSpawnsTest` asserts against the published numbers - but a table edited to sum short
-     * would otherwise return null and spawn nothing at all, silently.
+     * would otherwise fall out of the loop and spawn nothing at all, silently.
      */
     fun roll(tier: ImplingTier, random: GameRandom): String {
         val entries = table(tier)

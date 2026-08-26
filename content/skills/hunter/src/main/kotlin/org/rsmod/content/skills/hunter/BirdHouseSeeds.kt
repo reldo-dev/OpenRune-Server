@@ -70,7 +70,10 @@ object BirdHouseSeeds {
             "obj.torstol_seed",
         )
 
-    /** The thirty seeds a house takes ten of: the rest of the hops, herbs, flowers, allotments and bushes. */
+    /**
+     * The thirty seeds a house takes ten of: the rest of the hops, herbs, flowers, allotments and
+     * bushes.
+     */
     val lowValue: List<String> =
         listOf(
             "obj.barley_seed",
@@ -109,11 +112,8 @@ object BirdHouseSeeds {
     val all: List<String> = highValue + lowValue
 
     /**
-     * Unit cost keyed by packed obj id, resolved once so a seed symbol that does not exist fails at
-     * class load rather than at whichever seeding happens to reach it.
-     *
-     * Keyed by id rather than by symbol because an [org.rsmod.game.inv.InvObj] carries only an id -
-     * the same reason [HunterCrabTrap] inverts its nail resolution.
+     * Unit cost by packed obj id, resolved once so a seed symbol that does not exist fails at class
+     * load rather than at whichever seeding happens to reach it.
      */
     private val unitsById: Map<Int, Int> by lazy {
         buildMap {
@@ -126,9 +126,8 @@ object BirdHouseSeeds {
         }
     }
 
-    /** What one of [objId] is worth towards filling a house, or null if it is not an accepted seed. */
-    fun unitsOf(objId: Int): Int? = unitsById[objId]
-
-    /** What one of [obj] is worth towards filling a house, or null if it is not an accepted seed. */
+    /**
+     * What one of [obj] is worth towards filling a house, or null if it is not an accepted seed.
+     */
     fun unitsOf(obj: String): Int? = unitsById[obj.asRSCM(RSCMType.OBJ)]
 }

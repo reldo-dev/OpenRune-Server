@@ -55,8 +55,8 @@ const val BUTTERFLY_NET_SWING: String = "seq.human_butterflynet_swing"
  * the black warlock, a multi-stat restore for the sunlight moth), and the released-from-a-jar half
  * of that same effect is a separate `Release` item op on six objs. A jarless catch here awards the
  * Hunter xp, removes the creature and says so; it does not boost. That is a stated gap, not an
- * oversight - the alternative was to refuse a jarless catch, which would be an invention, or to
- * ship six half-wired stat effects on the back of a data slice.
+ * oversight - the alternatives were to refuse a jarless catch, which would be an invention, or to
+ * ship six half-wired stat effects alongside it.
  */
 class HunterButterfly
 @Inject

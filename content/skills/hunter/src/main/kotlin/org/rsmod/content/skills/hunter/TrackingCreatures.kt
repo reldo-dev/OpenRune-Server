@@ -19,48 +19,53 @@ data class TrackingCreature(
 
 /** Values derived from the wiki technique table. */
 object TrackingCreatures {
-    val polar = TrackingCreature(
-        name = "polar kebbit",
-        level = 1,
-        xp = 300,
-        fur = "obj.huntingbeast_polar_fur",
-        catchSeq = "seq.hunting_noose_polar",
-    )
+    val polar =
+        TrackingCreature(
+            name = "polar kebbit",
+            level = 1,
+            xp = 300,
+            fur = "obj.huntingbeast_polar_fur",
+            catchSeq = "seq.hunting_noose_polar",
+        )
 
-    val common = TrackingCreature(
-        name = "common kebbit",
-        level = 3,
-        xp = 360,
-        fur = "obj.huntingbeast_woodland_fur",
-        catchSeq = "seq.hunting_noose_wood",
-    )
+    val common =
+        TrackingCreature(
+            name = "common kebbit",
+            level = 3,
+            xp = 360,
+            fur = "obj.huntingbeast_woodland_fur",
+            catchSeq = "seq.hunting_noose_wood",
+        )
 
-    val feldipWeasel = TrackingCreature(
-        name = "feldip weasel",
-        level = 7,
-        xp = 480,
-        fur = "obj.huntingbeast_jungle_fur",
-        catchSeq = "seq.hunting_noose_jungle",
-    )
+    val feldipWeasel =
+        TrackingCreature(
+            name = "feldip weasel",
+            level = 7,
+            xp = 480,
+            fur = "obj.huntingbeast_jungle_fur",
+            catchSeq = "seq.hunting_noose_jungle",
+        )
 
-    val desertDevil = TrackingCreature(
-        name = "desert devil",
-        level = 13,
-        xp = 660,
-        fur = "obj.huntingbeast_desert_fur",
-        catchSeq = "seq.hunting_noose_desert",
-    )
+    val desertDevil =
+        TrackingCreature(
+            name = "desert devil",
+            level = 13,
+            xp = 660,
+            fur = "obj.huntingbeast_desert_fur",
+            catchSeq = "seq.hunting_noose_desert",
+        )
 
-    val razorBacked = TrackingCreature(
-        name = "razor-backed kebbit",
-        level = 49,
-        // 348.5, not 348. The only fractional award of the five, and the reason [xp] is stored
-        // x10 at all; the wiki states it three times over - the infobox, the page lead, and the
-        // Hunter training guide. It shipped rounded because the survey document rounded it.
-        xp = 3485,
-        fur = "obj.huntingbeast_bigspike",
-        catchSeq = "seq.hunting_noose_razorback",
-    )
+    val razorBacked =
+        TrackingCreature(
+            name = "razor-backed kebbit",
+            level = 49,
+            // 348.5, not 348. The only fractional award of the five, and the reason [xp] is stored
+            // x10 at all; the wiki states it three times over - the infobox, the page lead, and the
+            // Hunter training guide. The survey document rounds it; the wiki does not.
+            xp = 3485,
+            fur = "obj.huntingbeast_bigspike",
+            catchSeq = "seq.hunting_noose_razorback",
+        )
 
     val all: List<TrackingCreature> = listOf(polar, common, feldipWeasel, desertDevil, razorBacked)
 }

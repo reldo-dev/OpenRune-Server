@@ -151,7 +151,7 @@ class NetTrapTest {
         assertNull(world.controllerAt(TRAP_TILE))
     }
 
-    /** The same invariant behind `fix: charge the deadfall log only once the boulder is armed`. */
+    /** The deadfall's rule, on this family's materials: nothing is charged until the trap is up. */
     @Test
     fun `the rope and net are not charged until after the set delay`() {
         val player = hunter(level = 99, carrying = NET_TRAP_KIT)

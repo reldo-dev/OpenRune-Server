@@ -31,8 +31,9 @@ import org.rsmod.game.entity.Player
  * whichever of twenty-five sites is clicked.
  *
  * Every figure is pinned to a **literal**. Nothing here reads the constant it is testing back as
- * its own expected value - this module has already shipped two vacuous tests of exactly that shape
- * (`CLAUDE.md`, bird house `NEST_ROLLS` and `Controller.duration`).
+ * its own expected value - such a test moves with the constant and so asserts nothing, and this
+ * module has already shipped two of exactly that shape, against bird house `NEST_ROLLS` and
+ * against `Controller.duration`.
  *
  * Serialised for the reason the rest of the suite is: `ServerCacheManager` is a singleton and
  * `RSCM` memoises into a plain `HashMap`.
@@ -518,17 +519,16 @@ class HunterPitfallTest {
     /**
      * The Hunter xp modifier is *applied*, not merely injected.
      *
-     * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
-     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
-     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
-     * multiplication load-bearing.
+     * Every other world in this suite builds its `XpModifiers` from an empty set, which is a flat
+     * 1.0, so the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with
+     * every other test still green. Running the same catch twice, once in a doubled world, is what
+     * makes the multiplication load-bearing.
      */
     @Test
     fun `the xp modifier scales the pitfall award`() {
         val plain = dismantledFullPitFineXp(hunterXpBonus = 0.0)
         val doubled = dismantledFullPitFineXp(hunterXpBonus = DOUBLE_HUNTER_XP)
 
-        // The sunlight antelope's pinned 380 xp, in the stat map's tenths.
         assertEquals(3800, plain, "unmodified, a sunlight antelope is 380.0 xp")
         assertEquals(7600, doubled, "a +100% modifier makes it 760.0")
     }
@@ -787,7 +787,7 @@ class HunterPitfallTest {
     }
 
     /**
-     * The spear and the stick tease **identically**, which is this branch's decision, not an
+     * The spear and the stick tease **identically**, which is this server's decision, not an
      * oversight.
      *
      * The hunter's spear's published +5% is a *relative* modifier on a base tease rate that is
@@ -852,12 +852,13 @@ class HunterPitfallTest {
     /**
      * A second teaser takes the creature over, rather than being refused.
      *
-     * This is the branch's call, and the reasoning is worth stating because no source describes it.
-     * These npcs carry no `Attack` op and no combat target of their own, so there is nothing in the
-     * packed data that reserves one to a player. Refusing the second tease would let anyone park a
-     * creature on themselves indefinitely and lock every other hunter out of it, and it would break
-     * the wiki's own two-creatures-one-trap procedure, which depends on teasing being cheap and
-     * repeatable. The newest teaser therefore wins, and the previous one simply loses the chase.
+     * That is this server's call, and the reasoning is worth stating because no source describes
+     * it. These npcs carry no `Attack` op and no combat target of their own, so there is nothing in
+     * the packed data that reserves one to a player. Refusing the second tease would let anyone
+     * park a creature on themselves indefinitely and lock every other hunter out of it, and it
+     * would break the wiki's own two-creatures-one-trap procedure, which depends on teasing being
+     * cheap and repeatable. The newest teaser therefore wins, and the previous one simply loses the
+     * chase.
      */
     @Test
     fun `a creature already chasing someone switches to whoever teases it next`() {
@@ -1131,6 +1132,7 @@ class HunterPitfallTest {
         assertEquals(first.uid, world.teasedBy(firstNpc))
         assertEquals(second.uid, world.teasedBy(secondNpc))
     }
+
     /* The jump: who goes in, who does not, and what the pit does about it. */
 
     /**
@@ -1418,7 +1420,7 @@ class HunterPitfallTest {
      * (*Varlamore: Part One - Overview*, 20 January 2024). The *Hunter's spear* page instead reads
      * the same bonus onto the catch, contradicting both, and it is the weaker source.
      *
-     * Until now that decision lived only in [HunterPitfall.teaseCreature]'s prose, which cannot
+     * That decision otherwise lives only in [HunterPitfall.teaseCreature]'s prose, which cannot
      * fail. The draw is chosen so that **any** of the three plausible ways of applying a +5% would
      * turn this miss into a catch: on the rate multiplicatively (0.5352 x 1.05 = 0.5619), on the
      * rate as five points (0.5852), or on both coefficients as `(53 + 13, 325 + 13)`, which is
@@ -1586,11 +1588,11 @@ class HunterPitfallTest {
      *
      * **The first dismantle is taken between the two landings**, which is the wiki's own step 3:
      * the results of creature A falling are there to collect as soon as A lands, and B is still in
-     * the air at that point. That is the sequence a version of this test that ticked past the whole
-     * window before dismantling stepped straight over - and the hole it left was not cosmetic.
-     * Collecting A off a pit that only looked at what had *landed* wrote the pit empty, and B then
-     * arrived on an empty pit and was thrown away having paid nothing. The middle assertion is the
-     * load-bearing one: the pit has to be left **collapsing**, because B has still to land in it.
+     * the air at that point. Ticking past the whole window before dismantling steps straight over
+     * that sequence, and the hole it leaves is not cosmetic: collecting A off a pit that only
+     * looked at what had *landed* writes the pit empty, and B then arrives on an empty pit and is
+     * thrown away having paid nothing. The middle assertion is the load-bearing one: the pit has to
+     * be left **collapsing**, because B has still to land in it.
      */
     @Test
     fun `two creatures caught in one collapse are worth a dismantle each`() {
@@ -1666,11 +1668,11 @@ class HunterPitfallTest {
      * A pit dismantled between the landings cannot be re-armed under the creature still falling.
      *
      * The other half of the same hole, and the one that mints rather than destroys. A collection
-     * that wrote the pit empty while a sibling was in the air handed the player a pit they could
-     * arm and catch a third creature in; the abandoned entry then landed on the *new* catch's
-     * collapsing frame and the new one landed behind it, leaving two landed catches in a pit that
-     * had taken one creature since. That is the mint-from-nothing `clearPits` was fixed for,
-     * arrived at without `clearPits`.
+     * that wrote the pit empty while a sibling was in the air would hand the player a pit they
+     * could arm and catch a third creature in; the abandoned entry would then land on the *new*
+     * catch's collapsing frame and the new one land behind it, leaving two landed catches in a pit
+     * that had taken one creature since - the same mint-from-nothing shape `clearPits` cancels its
+     * own ledger entries to avoid, reached here without `clearPits`.
      *
      * Leaving the pit collapsing closes it at the source: an armed pit is one no creature is
      * falling into, so `trapPit`'s "there is something in this trap already" is the whole guard.
@@ -1715,7 +1717,7 @@ class HunterPitfallTest {
      *
      * This is the narrow half: nothing has been collected, so the pit is holding two and the count
      * charged against the log is two, and a cap counting either would refuse the third. The test
-     * below it is the half that tells those apart, and it is the one that was failing.
+     * below it is the half that tells those two readings apart.
      *
      * The draw counter is asserted for the reason the refusal rule's is: a cap implemented as a
      * roll that loses would leave the outcome right and the meaning wrong.
@@ -1762,7 +1764,8 @@ class HunterPitfallTest {
      *
      * The count therefore belongs to the **arming**, not to the pit's contents. Charged that way,
      * the log that took A and B is spent whatever the hunter collects, and the third creature is
-     * refused with B still falling - which is exactly the moment the old cap said yes.
+     * refused with B still falling - which is exactly the moment a cap counted against the pit's
+     * contents says yes.
      *
      * The draw counter is asserted for the reason the narrow half's is: a refusal implemented as a
      * roll that loses would leave the outcome right and the meaning wrong. The two dismantles at
@@ -2047,8 +2050,8 @@ class HunterPitfallTest {
      *
      * `PathingEntityCommon.anim` reads the sequence's own priority out of the packed cache and
      * dereferences the result, so a name that resolves to an id with no definition behind it throws
-     * on the first catch rather than at boot. That is `CLAUDE.md`'s two-declaration trap, and
-     * `PitfallCreaturesTest` only proves the first half of it.
+     * on the first catch rather than at boot. A gameval needs both declarations - the id and the
+     * packed definition - and `PitfallCreaturesTest` only proves the first half of that.
      */
     @Test
     fun `every creature's leap sequence is packed, not merely resolvable`() {

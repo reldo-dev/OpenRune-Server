@@ -11,10 +11,10 @@ import org.rsmod.game.entity.Player
  * is exactly the state during the login event. So the reset has to ride a soft queue instead,
  * exactly as the bird house fill does.
  *
- * So the queue is the reset's only entry point: `TrackingEvents` arms it from `onPlayerLogin` and
- * runs `HunterTracking.loginReset` from the `onPlayerSoftQueue` body. Calling `loginReset` from the
- * login handler directly would still pass every unit test - the varps do change - and leave the
- * client drawing the footprints it had before.
+ * The queue is therefore the reset's only entry point: `TrackingEvents` arms it from
+ * `onPlayerLogin` and runs `HunterTracking.loginReset` from the `onPlayerSoftQueue` body. Calling
+ * `loginReset` from the login handler directly would still pass every unit test - the varps do
+ * change - and leave the client drawing the footprints it had before.
  */
 const val TRACKING_RESET_QUEUE: String = "queue.hunter_tracking_reset"
 
@@ -26,8 +26,7 @@ const val TRACKING_RESET_QUEUE: String = "queue.hunter_tracking_reset"
  * a ring must not reset the count, which is exactly what a player varp models for free. Unwritten
  * reads back `0`, so a fresh account starts with the full ten-charge allowance.
  *
- * The charges counter is read and advanced each time a worn ring of pursuit reveals a trail
- * (via `HunterTracking.spendRingCharge`), and the ring is destroyed and the counter reset to zero
- * on the tenth use.
+ * `HunterTracking.spendRingCharge` advances it on each reveal and resets it to zero when the tenth
+ * use destroys the ring; `HunterTracking.breakRing` is the only other writer.
  */
 internal var Player.trackingRingCharges: Int by intVarp("varp.hunter_ring_of_pursuit_charges")

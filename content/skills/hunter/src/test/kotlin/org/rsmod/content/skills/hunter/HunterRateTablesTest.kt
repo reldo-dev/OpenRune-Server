@@ -239,11 +239,15 @@ class HunterRateTablesTest {
     )
 
     private fun shippedRate(npc: String): ShippedRate =
-        checkNotNull(allShippedRates().firstOrNull { it.npc == npc }) { "No shipped rate row for $npc" }
+        checkNotNull(allShippedRates().firstOrNull { it.npc == npc }) {
+            "No shipped rate row for $npc"
+        }
 
     private fun allShippedRates(): List<ShippedRate> =
         HunterCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) } +
-            FalconryCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) } +
+            FalconryCreatures.all.map {
+                ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
+            } +
             ButterflyCreatures.all.map {
                 ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
             } +
@@ -259,7 +263,8 @@ class HunterRateTablesTest {
         Math.round(SkillingSuccessRate.successRate(low, high, level, 99) * 256).toInt()
 
     /** What the wiki *charts*, which is [chance256] capped at certainty. */
-    private fun charted(low: Int, high: Int, level: Int): Int = minOf(256, chance256(low, high, level))
+    private fun charted(low: Int, high: Int, level: Int): Int =
+        minOf(256, chance256(low, high, level))
 
     private fun readCharts(): Map<String, List<ChartPoint>> =
         CHART_FILES
@@ -402,7 +407,11 @@ class HunterRateTablesTest {
                 Charted("sunlight_moth", "npc.moth_sunlight"),
                 // The magic net's separate, faster curve, modelled as a flat bonus on both
                 // coefficients rather than a second column pair. See `HunterButterfly.NET_BONUS`.
-                Charted("black_warlock_magicnet", "npc.butterfly_warlock", HunterButterfly.NET_BONUS),
+                Charted(
+                    "black_warlock_magicnet",
+                    "npc.butterfly_warlock",
+                    HunterButterfly.NET_BONUS,
+                ),
                 Charted("sunlight_moth_magicnet", "npc.moth_sunlight", HunterButterfly.NET_BONUS),
             )
 
@@ -544,9 +553,11 @@ class HunterRateTablesTest {
                 ),
             )
 
-        /** Charted but deliberately not shipped; see [theMoonlightMothIsNotOnTheOtherButterfliesCurve]. */
-        private val UNSHIPPED_SERIES =
-setOf("moonlight_moth", "moonlight_moth_magicnet")
+        /**
+         * Charted but deliberately not shipped; see
+         * [theMoonlightMothIsNotOnTheOtherButterfliesCurve].
+         */
+        private val UNSHIPPED_SERIES = setOf("moonlight_moth", "moonlight_moth_magicnet")
 
         /** The five rows whose pair `HunterTables` annotates as a guess rather than a fit. */
         private val GUESSED_NPCS =

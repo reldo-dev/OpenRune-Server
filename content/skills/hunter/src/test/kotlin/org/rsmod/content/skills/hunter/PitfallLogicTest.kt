@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test
  *
  * Every state and every ladder boundary is asserted against a **literal**, never against the
  * constant or property under test read back as its own expected value - this module has already
- * shipped two vacuous tests shaped exactly like that (`CLAUDE.md`, bird house `NEST_ROLLS` and
- * `Controller.duration`), where mutating the real value left the test green because it moved with
+ * shipped two vacuous tests shaped exactly like that, against bird house `NEST_ROLLS` and against
+ * `Controller.duration`, where mutating the real value left the test green because it moved with
  * the mutation.
  */
 class PitfallLogicTest {

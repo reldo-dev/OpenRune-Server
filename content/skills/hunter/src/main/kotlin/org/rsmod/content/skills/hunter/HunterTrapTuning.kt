@@ -1,19 +1,11 @@
 package org.rsmod.content.skills.hunter
 
 /**
- * Every tuned number the five trap families run on, and where each one came from.
- *
- * Split out of `HunterTrap.kt` because it is not code: it is this feature's bibliography. Roughly
- * nine of every ten lines below are the prose justifying a number - which wiki page, which revision,
- * which sentence, and where a figure is ours because no source states it. That is the most valuable
- * thing in the module and the reason to keep writing it, but it also meant the first executable line
- * of the trap engine sat 250 lines into the file.
- *
- * Nothing here changed in the move; the declarations are top-level in the same package, so every
- * call site resolves exactly as before.
+ * Every tuned number the five trap families run on, and where each one came from - which wiki page,
+ * which revision, which sentence, and where a figure is ours because no source states it.
  */
 
-/** The controller type every laid trap of either family is anchored to. */
+/** The controller type every laid trap is anchored to, whichever family it belongs to. */
 const val TRAP_CONTROLLER: String = "controller.hunter_trap"
 
 /**

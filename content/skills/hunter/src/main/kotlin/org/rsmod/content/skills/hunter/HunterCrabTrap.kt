@@ -84,7 +84,9 @@ constructor(
         }
 
         if (player.constructionLvl < CRAB_TRAP_CONSTRUCTION_LEVEL) {
-            mes("You need a Construction level of $CRAB_TRAP_CONSTRUCTION_LEVEL to build a crab trap.")
+            mes(
+                "You need a Construction level of $CRAB_TRAP_CONSTRUCTION_LEVEL to build a crab trap."
+            )
             return false
         }
 

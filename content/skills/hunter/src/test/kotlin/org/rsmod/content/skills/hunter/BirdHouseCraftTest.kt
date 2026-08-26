@@ -20,13 +20,13 @@ import org.rsmod.content.skills.hunter.HunterBirdHouse.Companion.HAMMER
 /**
  * Making a bird house: a clockwork on logs, with a chisel and a hammer.
  *
- * **This is the technique's entry point**, and until it existed the other four transactions were
- * unreachable - nothing in the game gave a bird house, so `Build` had nothing to place. Every
- * expectation below is pinned to a **literal read off the wiki**, never to the column it is testing:
- * [WIKI] is transcribed from *Crafting#Birdhouses*, and each of its nine rows was cross-checked
- * against a second page that repeats the same figure independently - *Clockwork#Products* for the
- * normal, maple, mahogany and magic tiers and *Chisel#Usage* for willow and yew. A test that read
- * `type.craftingXp` back would move with a mutation instead of catching it.
+ * **This is the technique's entry point**: nothing else in the game hands out a bird house, so
+ * without a craft `Build` has nothing to place. Every expectation below is pinned to a **literal
+ * read off the wiki**, never to the column it is testing: [WIKI] is transcribed from
+ * *Crafting#Birdhouses*, and each of its nine rows was cross-checked against a second page that
+ * repeats the same figure independently - *Clockwork#Products* for the normal, maple, mahogany
+ * and magic tiers and *Chisel#Usage* for willow and yew. A test that read `type.craftingXp` back
+ * would move with a mutation instead of catching it.
  *
  * Serialised for the reason the rest of the suite is - `ServerCacheManager` is a singleton and
  * `RSCM` memoises into a plain `HashMap`.
@@ -118,7 +118,6 @@ class BirdHouseCraftTest {
         val player = world.addPlayer()
         world.giveCraftingTools(player)
         world.giveItem(player, CLOCKWORK)
-        // Oak logs in the bag, a normal bird house asked for.
         world.giveItem(player, "obj.oak_logs")
 
         assertFalse(world.craft(player, NORMAL.type()), "oak logs are not logs")

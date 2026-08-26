@@ -14,11 +14,11 @@ import org.junit.jupiter.api.parallel.ResourceLock
 /**
  * The bird house table, checked against sources outside itself.
  *
- * Three independent ones are available here, which is unusually good for this branch: the wiki's own
- * figures, the **client's skill guide** (the `skill_features` dbrows the client draws its Hunter and
- * Crafting guides from), and the **packed obj**, which carries each bird house's Crafting
- * requirement as `param_436`. Where a number can be checked against the cache it is, because that is
- * a different source from the wiki rather than the same one twice.
+ * Three independent ones are available here, which is unusually good: the wiki's own figures, the
+ * **client's skill guide** (the `skill_features` dbrows the client draws its Hunter and Crafting
+ * guides from), and the **packed obj**, which carries each bird house's Crafting requirement as
+ * `param_436`. Where a number can be checked against the cache it is, because that is a different
+ * source from the wiki rather than the same one twice.
  */
 @ResourceLock(HUNTER_TEST_WORLD_LOCK)
 class BirdHouseTablesTest {

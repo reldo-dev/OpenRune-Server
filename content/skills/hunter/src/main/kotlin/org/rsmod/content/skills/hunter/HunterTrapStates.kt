@@ -124,19 +124,10 @@ object HunterTrapStates {
     const val MAGIC_BOX_FAILED: String = "loc.hunting_imptrap_failed"
 
     /**
-     * The three `name=Young tree` states, which are the ones that sit on a **permanent map loc**.
-     *
-     * This is the net trap's half of the invariant [HunterTrap] is built around: a young tree is
-     * the map's, not ours, so it is only ever reached through `locRepo.change`. The set is what
-     * finds a tree on a tile without knowing which of the three states it is wearing.
-     */
-    /**
      * Resolves the given states of every net trap creature into one id set.
      *
-     * Seven of these sets existed and each spelled out the same three steps - pick the states off
-     * each creature, drop the nulls, resolve each through RSCM. The states are nullable because a
-     * [HunterCreature] is one record shared by five families and only the net trap fills these in,
-     * so "absent" is normal here rather than an error.
+     * The states are nullable because a [HunterCreature] is one record shared by five families and
+     * only the net trap fills these in, so "absent" is normal here rather than an error.
      */
     private fun netTrapLocIds(vararg states: (HunterCreature) -> String?): Set<Int> =
         HunterCreatures.netTrap
@@ -150,6 +141,13 @@ object HunterTrapStates {
     private fun HunterCreature.requireLoc(state: String, value: String?): String =
         requireNotNull(value) { "Net trap creature is missing its $state loc: $npc" }
 
+    /**
+     * The three `name=Young tree` states, which are the ones that sit on a **permanent map loc**.
+     *
+     * This is the net trap's half of the invariant [HunterTrap] is built around: a young tree is
+     * the map's, not ours, so it is only ever reached through `locRepo.change`. The set is what
+     * finds a tree on a tile without knowing which of the three states it is wearing.
+     */
     val netTrapTreeLocIds: Set<Int> by lazy {
         netTrapLocIds(HunterCreature::upLoc, HunterCreature::settingLoc, HunterCreature::setLoc)
     }
@@ -219,15 +217,14 @@ object HunterTrapStates {
     /**
      * The suffix the bird snare's and box trap's loc states are named by, read off the packed row.
      *
-     * This used to be derived from the npc's own symbol - `substringAfterLast("hunting_bird_")` for
-     * the snare, `substringAfter("npc.hunting_")` for the box. Both worked for the seven creatures
-     * that shipped first and both break for the three that joined later, because Kotlin's
-     * `substringAfter`/`substringAfterLast` return the **whole string** when the delimiter is
-     * absent: the tropical wagtail (`npc.multicoloured_bird` on the `_coloured` states), the ferret
-     * (no `hunting_bird_` prefix) and the embertailed jerboa (`npc.varlamore_hunterjerboa01` on the
-     * `_jerboa` states) would each have produced a loc name like
-     * `loc.hunting_ojibway_trap_full_npc.multicoloured_bird` and thrown at the first catch of that
-     * one creature, rather than at boot. Packing the key removes the guess.
+     * Packed rather than derived from the npc's own symbol, because three of the ten creatures that
+     * need it cannot be derived: the tropical wagtail (`npc.multicoloured_bird` on the `_coloured`
+     * states), the ferret (no `hunting_bird_` prefix to strip) and the embertailed jerboa
+     * (`npc.varlamore_hunterjerboa01` on the `_jerboa` states). A `substringAfter` derivation would
+     * not even fail loudly for them: Kotlin returns the **whole string** when the delimiter is
+     * absent, so each would produce a loc name like
+     * `loc.hunting_ojibway_trap_full_npc.multicoloured_bird` and throw at the first catch of that
+     * one creature rather than at boot.
      */
     private fun locKey(creature: HunterCreature): String =
         requireNotNull(creature.locKey) {

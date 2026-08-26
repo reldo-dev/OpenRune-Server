@@ -17,9 +17,9 @@ import org.junit.jupiter.api.parallel.ResourceLock
  * The five pitfall creatures, checked against sources this table did not produce itself.
  *
  * Levels are pinned twice over: once as an independent literal, and once against the cache's own
- * `skill_features` dbrows - the client's skill-guide data, not the wiki - which is exactly the kind
- * of second source `CLAUDE.md` asks for after a xp constant once shipped wrong because its test
- * literal was copied from the same rounded table the constant was.
+ * `skill_features` dbrows - the client's skill-guide data, not the wiki. A second source is what
+ * this module learnt to insist on after an xp constant shipped wrong under a green test, its
+ * literal having been copied from the same rounded table the constant was.
  *
  * Serialised like the rest of the cache-touching suite: `ServerCacheManager` is a singleton and
  * `RSCM` memoises into a plain `HashMap`.

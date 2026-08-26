@@ -14,9 +14,7 @@ package org.rsmod.content.skills.hunter
  * | 4 ([FullRotated]) | same, rotated 180 degrees | `op2=Dismantle` |
  *
  * [Catching] is transient - the cache gives it no ops at all, so nothing can ever land on it as a
- * player action; it exists only as a frame the client can show mid-collapse. Which ops fire off
- * which state is a later task's concern - this models the values only, not what a handler does with
- * them.
+ * player action; it exists only as a frame the client can show mid-collapse.
  *
  * A pitfall is per-player varbit state on permanent map scenery, never a `locRepo`-owned world
  * object: the client picks which multiloc child to draw from the *viewing player's own* varbit, so
@@ -40,8 +38,7 @@ enum class PitState(val varbitValue: Int) {
          * reaching here means the server itself is confused about what state a pit is in. Coercing
          * that silently to [Empty] would make the corruption invisible at the one place positioned
          * to catch it, and it would resurface later as a pit that renders as something the server's
-         * own state disagrees with, with nothing in any log to say why. A thrown exception is loud
-         * and traceable to the write that caused it; a silently "corrected" state is neither.
+         * own state disagrees with, with nothing in any log to say why.
          */
         fun of(varbitValue: Int): PitState =
             entries.find { it.varbitValue == varbitValue }

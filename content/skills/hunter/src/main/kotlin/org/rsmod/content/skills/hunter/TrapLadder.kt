@@ -6,8 +6,7 @@ package org.rsmod.content.skills.hunter
  *
  * Transcribed from the "Multiple traps" table on the *Pitfall* page (wiki, oldid=15201220), which
  * gives the cap at five Hunter levels - 1, 20, 40, 60, 80 - each holding until the next. The same
- * ladder governs the five tile-based trap families in [HunterTrap], which counted it out
- * separately until the two copies were folded together here.
+ * ladder governs the five tile-based trap families in [HunterTrap].
  *
  * `HunterCrabTrap.crabTrapCap` is deliberately **not** one of these callers. Its published table
  * starts at 2 and has no below-20 rung at all, because the lowest crab site is level 21 and the

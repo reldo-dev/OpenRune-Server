@@ -65,10 +65,10 @@ class TrackingNetworksTest {
 
     @Test
     fun `the razor-backed network owns the basevar1 segments, not the common kebbit`() {
-        /* The sweep's correction, pinned so it cannot silently regress to the spec's
-         * original (wrong) anchor: 2009scape's CommonKebbitEast is the razor-backed
-         * graph mislabelled. Wiki burrow coords put common kebbit in square 36,55 and
-         * every razor-backed RuneLite tile marker in 36,56 - the basevar1/2 network. */
+        /* 2009scape's CommonKebbitEast is the razor-backed graph under the wrong name, and
+         * taking that name at face value is the easy mistake here. Wiki burrow coords put
+         * common kebbit in square 36,55 and every razor-backed RuneLite tile marker in
+         * 36,56 - the basevar1/2 network. */
         val razor = TrackingNetworks.all.single { it.creature == TrackingCreatures.razorBacked }
         val common = TrackingNetworks.all.single { it.creature == TrackingCreatures.common }
         assertTrue(razor.segments.any { it.varbit.startsWith("varbit.hunting_trail_state1_") })
@@ -78,7 +78,7 @@ class TrackingNetworksTest {
     @Test
     fun `razor-backed and common kebbit geometry sits in the map square that settles the anchor`() {
         /* The varbit-prefix assertion above works, but a varbit rename would leave it green for
-         * the wrong reason - it is not the actual basis of the correction. The wiki's burrow pins
+         * the wrong reason - it is not the actual basis of the anchor. The wiki's burrow pins
          * and RuneLite's tile markers place common kebbit in map square 36,55 and razor-backed in
          * 36,56; that placement, not the varbit name, is what settles which creature owns which
          * graph. Map square is x/64, z/64 (CoordGrid.mx / CoordGrid.mz). */
@@ -132,7 +132,7 @@ class TrackingNetworksTest {
 
     @Test
     fun `the graph each network's geometry describes is the one that shipped`() {
-        /* Two fingerprints of the whole authored graph, both computed off the sweep
+        /* Two fingerprints of the whole authored graph, both computed off the map sweep
          * before it was transcribed. A mistyped digit in a junction splits one node in
          * two, which changes the junction count; if the split node was load-bearing it
          * also drops trails. Counting shared junctions alone does not catch it - a split
@@ -190,9 +190,9 @@ class TrackingNetworksTest {
     }
 
     @Test
-    fun `segment counts match the placements the sweep found`() {
-        // 75 placed segments in scope, split per the sweep's section 2 table. Author only
-        // placed segments: state2_9 is declared and unplaced, so network 2 ships nine.
+    fun `segment counts match the placements found on the map`() {
+        // 75 placed segments in scope, split per the map sweep. Author only placed
+        // segments: state2_9 is declared and unplaced, so network 2 ships nine.
         assertEquals(
             mapOf(
                 "rellekka_polar" to 9,

@@ -16,14 +16,14 @@ import org.rsmod.game.entity.Player
 /**
  * The impling loot tables, checked against the published rates rather than against themselves.
  *
- * `ImplingLoot` is a 121-row transcription of what the wiki publishes under Jagex's own
- * "the following drop rates are provided by Jagex" banner. A transcription that size is only
- * trustworthy if something compares it to its source, so every row below is matched against
- * `wiki-charts/impling-loot.tsv` - item, quantity range and rarity - and the match is required to
- * be exact in both directions, so neither a dropped row nor an invented one survives.
+ * `ImplingLoot` transcribes what the wiki publishes under Jagex's own "the following drop rates
+ * are provided by Jagex" banner. A transcription of that size is only trustworthy if something
+ * compares it to its source, so every row below is matched against the
+ * `wiki-charts/impling-loot*.tsv` extract - item, quantity range and rarity - and the match is
+ * required to be exact in both directions, so neither a dropped row nor an invented one survives.
  *
- * Nothing here needs a world, a cache or a player, so unlike the rest of the module's tests it takes
- * no lock and loads nothing.
+ * Nothing here needs a world or a player, but the tables and the creature rows are both read back
+ * out of the packed cache, which is why the cache is loaded and the shared lock taken.
  */
 @ResourceLock(HUNTER_TEST_WORLD_LOCK)
 class ImplingLootTest {
@@ -146,7 +146,6 @@ class ImplingLootTest {
         )
     }
 
-    /** Every jar this slice ships has a table, and every table belongs to a shipped jar. */
     /**
      * Every jar a catch can produce has a table, apart from the lucky impling's.
      *

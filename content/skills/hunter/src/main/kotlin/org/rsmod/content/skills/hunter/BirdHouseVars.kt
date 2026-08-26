@@ -37,7 +37,7 @@ private var Player.birdHouseSeeds3: Int by intVarp("varp.hunter_birdhouse_seeds_
 private var Player.birdHouseSeeds4: Int by intVarp("varp.hunter_birdhouse_seeds_4")
 
 /**
- * The epoch minute [space]'s bird house finishes filling, or [NO_BIRDHOUSE_DEADLINE].
+ * The epoch minute each space's bird house finishes filling, or [NO_BIRDHOUSE_DEADLINE].
  *
  * Wall clock rather than cycles, because the fill has to elapse while its owner is logged out - the
  * one requirement that rules out every runtime timer the engine has. A queue, a controller and a
@@ -60,7 +60,7 @@ internal var Player.birdHouseReadyAt: List<Int>
     }
 
 /**
- * How many of the ten seed units [space] has taken so far, while it is in the `_built` state.
+ * How many of the ten seed units each space has taken so far, while it is in the `_built` state.
  *
  * Needs its own var because partial progress is **invisible to the client**: a tier has three
  * states, and a house holding six seeds shows the same `(empty)` model as one holding none. The

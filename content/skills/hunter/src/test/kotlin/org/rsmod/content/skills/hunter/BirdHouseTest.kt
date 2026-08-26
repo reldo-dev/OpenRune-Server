@@ -21,10 +21,10 @@ import org.rsmod.content.skills.hunter.HunterBirdHouseTestWorld.Companion.REDWOO
 /**
  * The bird house lifecycle: build, seed, fill, harvest.
  *
- * The interesting half of this technique is the **timer**, and it is the first thing on this branch
- * that runs on wall-clock time rather than on the map clock. Every assertion about it therefore winds
- * [WoundBirdHouseClock] rather than stepping cycles, which is also the only way to test the case that
- * matters most: fifty minutes passing while the player is not there.
+ * The interesting half of this technique is the **timer**, and it runs on wall-clock time rather
+ * than on the map clock. Every assertion about it therefore winds [WoundBirdHouseClock] rather than
+ * stepping cycles, which is also the only way to test the case that matters most: fifty minutes
+ * passing while the player is not there.
  *
  * Serialised for the reason the rest of the suite is - `ServerCacheManager` is a singleton and `RSCM`
  * memoises into a plain `HashMap`.
@@ -441,8 +441,8 @@ class BirdHouseTest {
      * The Hunter xp modifier is *applied*, not merely injected.
      *
      * Every world in this suite built its `XpModifiers` from an empty set, which is a flat 1.0, so
-     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with all 481
-     * tests still green. Running the same catch twice, once in a doubled world, is what makes the
+     * the `* xpMods.get(player, "stat.hunter")` on the award site could be deleted with the suite
+     * still green. Running the same catch twice, once in a doubled world, is what makes the
      * multiplication load-bearing.
      */
     @Test

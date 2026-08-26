@@ -21,7 +21,7 @@ import org.rsmod.plugin.scripts.ScriptContext
  *
  * All three op1s share one content group, so the single registration below dispatches on which
  * boulder state was clicked. That is the whole reason the deadfall cannot reuse
- * [HunterTrap.takeTrap] the way the two portable families do: `Set-trap` and `Dismantle` are
+ * [HunterTrap.takeTrap] the way the three portable families do: `Set-trap` and `Dismantle` are
  * opposite transactions on the same content group, not two spellings of "clear this tile".
  *
  * There is no dispatch to write for op2: `Investigate` is the only op2 in this group, and it exists

@@ -104,10 +104,11 @@ constructor(
     /**
      * Why [craftBirdHouse] would refuse [type] right now, or null if it would not.
      *
-     * Split out because the make menu has to decide *before* it opens: `openSkillMulti` shows
-     * nothing at all when no entry is affordable, so a player one Crafting level short of a tier
-     * would otherwise click a clockwork onto logs and watch nothing happen. The order is the order
-     * the messages are worth reading in - the level first, because it is the one a run cannot fix.
+     * Separate from [craftBirdHouse] because the make menu has to decide *before* it opens:
+     * `openSkillMulti` shows nothing at all when no entry is affordable, so a player one Crafting
+     * level short of a tier would otherwise click a clockwork onto logs and watch nothing happen.
+     * The order is the order the messages are worth reading in - the level first, because it is the
+     * one a run cannot fix.
      */
     fun ProtectedAccess.birdHouseCraftRefusal(type: BirdHouseType): String? =
         when {
@@ -123,10 +124,9 @@ constructor(
     /**
      * A clockwork used on [type]'s logs: one bird house, and the tier's Crafting experience.
      *
-     * **The only way a bird house enters the game.** Until this existed the technique was
-     * unstartable and the table's [BirdHouseType.logs] and [BirdHouseType.craftingXp] columns were
-     * dead weight; both are read here rather than restated, which is why the nine tiers need one
-     * function and not nine.
+     * **The only way a bird house enters the game.** [BirdHouseType.logs] and
+     * [BirdHouseType.craftingXp] are read off the row rather than restated here, which is why the
+     * nine tiers need one function and not nine.
      *
      * A `HeldU` pair rather than a make menu, because the pair already names the product: one log
      * type plus a clockwork has exactly one outcome, unlike a knife on logs, which is the case make
@@ -296,7 +296,7 @@ constructor(
      *
      * Returns the clockwork and **nothing else** - no experience, no nests, and not the seeds. That
      * is published, and it is the whole reason the payout lives on the other state's op. The
-     * warning prompt live shows here is not implemented; see the slice notes.
+     * warning prompt live shows here is not implemented.
      *
      * @return false, with a message already sent, if nothing was dismantled.
      */
@@ -429,9 +429,14 @@ constructor(
      *
      * @return false if the player is carrying neither a usable house nor the materials for one.
      */
-    private fun ProtectedAccess.placeBirdHouse(space: BirdHouseSpace, quiet: Boolean = false): Boolean {
+    private fun ProtectedAccess.placeBirdHouse(
+        space: BirdHouseSpace,
+        quiet: Boolean = false,
+    ): Boolean {
         val carried =
-            BirdHouseTypes.all.lastOrNull { it.hunterLevel <= player.hunterLvl && inv.contains(it.obj) }
+            BirdHouseTypes.all.lastOrNull {
+                it.hunterLevel <= player.hunterLvl && inv.contains(it.obj)
+            }
         val best = carried ?: makeBirdHouseToPlace(quiet) ?: return false
         if (invDel(inv, best.obj, 1).failure) {
             return false
@@ -517,7 +522,13 @@ constructor(
         // "Always dropped to the ground, even if there is space in the inventory" - published twice,
         // on the drop table footnote and in the 3 May 2018 changelog. This is the one award here
         // that is on the ground by rule rather than by fallback.
-        objRepo.add(RAW_BIRD_MEAT, player.coords, BIRDHOUSE_DROP_CYCLES, receiver = player, count = RAW_BIRD_MEAT_COUNT)
+        objRepo.add(
+            RAW_BIRD_MEAT,
+            player.coords,
+            BIRDHOUSE_DROP_CYCLES,
+            receiver = player,
+            count = RAW_BIRD_MEAT_COUNT,
+        )
         awardOrDrop(FEATHER, gameRandom.pick(30, 40, 50, 60))
 
         if (BirdHouseNests.seedNestChance(player.hunterLvl) > gameRandom.randomDouble()) {
@@ -612,7 +623,10 @@ constructor(
         /** Game cycles in a minute, at 0.6s a cycle. */
         const val BIRDHOUSE_CYCLES_PER_MINUTE: Int = 100
 
-        /** `obj.poh_clockwork_mechanism` (8792) is `name=Clockwork`; the `poh_` prefix is historical. */
+        /**
+         * `obj.poh_clockwork_mechanism` (8792) is `name=Clockwork`; the `poh_` prefix is
+         * historical.
+         */
         const val CLOCKWORK: String = "obj.poh_clockwork_mechanism"
 
         /** `obj.chisel` (1755). Held, not consumed. */

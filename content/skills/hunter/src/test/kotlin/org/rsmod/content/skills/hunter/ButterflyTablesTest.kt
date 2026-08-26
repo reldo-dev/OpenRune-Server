@@ -22,7 +22,7 @@ class ButterflyTablesTest {
      *
      * Black warlock oldid=15288148 and Sunlight Moth oldid=15197088, both under
      * *Hunter info > Hunting chance*; the full 153-point extract is in
-     * `.data/cache/wiki-hunter/butterfly-chance.tsv`. Points are exact 256ths read off the
+     * `src/test/resources/wiki-charts/butterfly-chance.tsv`. Points are exact 256ths read off the
      * `{{Skilling success chart}}` "Butterfly net" series.
      */
     @Test
@@ -201,7 +201,7 @@ class ButterflyTablesTest {
         assertEquals(144, chance256(wagtail.successLow, wagtail.successHigh, 99) * 100 / 256)
     }
 
-    /** The wagtail joins the snare family with the trap state the old exclusion said was orphaned. */
+    /** The wagtail joins the snare family, on the coloured trap state. */
     @Test
     fun wagtailIsASnareCreatureOnTheColouredTrapState() {
         val wagtail = checkNotNull(HunterCreatures.byNpc("npc.multicoloured_bird"))
@@ -266,9 +266,9 @@ class ButterflyTablesTest {
      * Adding the three closers must not have moved any creature already in the list.
      *
      * This is the save-compatibility guard. `HunterTrap` persists a creature as its index into
-     * `HunterCreatures.all`, so the eighteen rows that shipped before this slice have to still be at
-     * indices 0-17, in order, with the three new ones appended after them - even though two of them
-     * joined tables whose other rows sit at indices 0-6.
+     * `HunterCreatures.all`, so the first eighteen rows have to stay at indices 0-17, in order,
+     * with the three closers appended after them - even though two of them joined tables whose
+     * other rows sit at indices 0-6.
      */
     @Test
     fun theClosersAppendWithoutShiftingAnyExistingIndex() {
@@ -292,7 +292,7 @@ class ButterflyTablesTest {
                 "npc.salamander_black",
                 "npc.salamander_mountain",
                 "npc.imp",
-                // Appended by this slice.
+                // The three closers, appended.
                 "npc.multicoloured_bird",
                 "npc.hunting_ferret",
                 "npc.varlamore_hunterjerboa01",

@@ -293,8 +293,7 @@ class HunterPitfallTestWorld(hunterXpBonus: Double = 0.0) {
     }
 
     /**
-     * One cycle of the hook [HunterPitfall.tick] needs registering on
-     * `GameLifecycle.LateCycle`.
+     * One cycle of the hook [HunterPitfall.tick] needs registering on `GameLifecycle.LateCycle`.
      *
      * Nothing else in this world runs on a clock, so a chase ends here or it does not end at all -
      * which is exactly the production situation the hook exists for.

@@ -13,8 +13,8 @@ package org.rsmod.content.skills.hunter
  * to the same `SkillingSuccessRate.successRate` - **when non-null**. They are nullable on purpose:
  * [sunlight] and [moonlight] are a documented 100% catch and carry `null`, not `(256, 256)` or any
  * other always-true pair. A null is the honest encoding of "this creature cannot fail," and it is
- * what lets the engine that resolves a catch (a later task) skip the roll entirely for them instead
- * of rolling a rate that always wins.
+ * what lets [HunterPitfall] skip the roll entirely for them instead of rolling a rate that always
+ * wins.
  *
  * The other three creatures' pairs are **derived guesses, not published or fitted-from-chart
  * ones**. No pitfall creature has a published catch-rate chart at all - the one Hunter technique
@@ -35,8 +35,8 @@ package org.rsmod.content.skills.hunter
  * this branch's recon did not resolve with confidence; and the tatty-vs-perfect fur split the three
  * cats actually roll for, whose scaling curve is documented as real but unpublished (Mod Ash,
  * 1 Aug 2022) - [loot] carries the clean fur (`_perfect`) as the representative catch, and the
- * tatty variant (e.g. `obj.hunting_fur_jaguar_shabby`) is left for whichever later task implements
- * that roll.
+ * tatty variant (e.g. `obj.hunting_fur_jaguar_shabby`) is left for whichever later change
+ * implements that roll.
  */
 data class PitfallCreature(
     val npc: String,

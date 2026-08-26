@@ -48,9 +48,9 @@ import org.rsmod.plugin.scripts.ScriptContext
  * `onAiConTimer` is registered nowhere here. A bird house has no controller: nothing of it lives in
  * the world, and its fifty minutes are wall-clock time that no controller could outlive anyway.
  *
- * The nine `onOpHeldU` pairs are the technique's **entry point** and the only registration here that
- * is not a loc op: without them a bird house cannot be obtained at all, which is what made the whole
- * lifecycle unreachable until [HunterBirdHouse.craftBirdHouse] existed.
+ * The nine `onOpHeldU` pairs are the technique's **entry point** and the only registration here
+ * that is not a loc op: [HunterBirdHouse.craftBirdHouse] is the only thing in the game that gives a
+ * bird house, so without them the whole lifecycle is unreachable.
  */
 class BirdHouseEvents @Inject constructor(private val birdHouse: HunterBirdHouse) : PluginScript() {
     override fun ScriptContext.startup() {

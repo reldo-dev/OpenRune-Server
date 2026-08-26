@@ -18,12 +18,12 @@ import org.rsmod.plugin.scripts.ScriptContext
  *
  * **One content group, two physically distinct locs.** `content.hunter_net_trap` covers both halves
  * of the trap - the young tree the player clicks to set it and the "Net trap" that appears on the
- * tile beside it - so the dispatch below has to key on the loc *id*, not on the group. Slice 1's
- * deadfall needed the same shape for a different reason (`Set-trap` and `Dismantle` are opposite
- * transactions on one boulder); here the states are additionally split across two tiles, and it is
- * [HunterTrap] that walks from a net back to the tree its controller is anchored to.
+ * tile beside it - so the dispatch below has to key on the loc *id*, not on the group. The deadfall
+ * needs the same shape for a different reason (`Set-trap` and `Dismantle` are opposite transactions
+ * on one boulder); here the states are additionally split across two tiles, and it is [HunterTrap]
+ * that walks from a net back to the tree its controller is anchored to.
  *
- * `Reset` is the op2 on the `_full_*` and `_failed_*` states and is out of scope for v1, exactly as
+ * `Reset` is the op2 on the `_full_*` and `_failed_*` states and is out of scope here, exactly as
  * it is for the box trap. Because [onOpContentLoc2] dispatches on the content group and op slot
  * rather than on the op's label, [investigate] guards on the loc id for that reason.
  *
@@ -64,7 +64,7 @@ class NetTrapEvents @Inject constructor(private val traps: HunterTrap) : PluginS
 
     /**
      * `Investigate` exists only on the two armed states; every other state under this content group
-     * reaches op2 via `Reset`, which v1 does not implement. Live's wording is not recoverable
+     * reaches op2 via `Reset`, which is not implemented. Live's wording is not recoverable
      * offline - the text is server-sent, so it is in neither the cache nor the wiki - so these
      * strings are ours. What they report is the real controller state, not a canned line.
      */

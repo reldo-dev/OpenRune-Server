@@ -93,9 +93,8 @@ class TrackingEvents @Inject constructor(private val tracking: HunterTracking) :
         }
         onOpWorn2(HunterTracking.RING_OF_PURSUIT) { with(tracking) { checkRingCharges() } }
 
-        // The single most important line here: without it, every player who logs out mid-trail is
-        // retained forever in HunterTracking's IdentityHashMap - a real leak, not a theoretical
-        // one.
+        // Without this, every player who logs out mid-trail is retained forever in
+        // `HunterTracking`'s `IdentityHashMap`.
         onPlayerLogout { tracking.discardState(player) }
 
         // loginReset must run from the soft queue, never directly in the login event: a varp/varbit

@@ -44,22 +44,16 @@ private const val JAR_BREAK_CHANCE: Int = 10
  * by hand." So a jarless attempt is **refused** here, where a jarless butterfly catch is a legal
  * catch that simply flies away.
  *
- * **There is no area check, and there must not be one.** All six rows in
- * [ImplingCreatures] are `_maze` npcs - the Puro-Puro-only ids - and they are the only impling npcs
- * with spawns in `.data`. "In Puro-Puro" is therefore already answered by *which npc was clicked*,
- * and an area lookup would be a second, weaker way of asking the same question that could disagree
- * with the first. When the overworld implings ship they will arrive as their own npc ids with their
- * own rules, not as these six standing somewhere else.
+ * **There is no area check, and there must not be one.** Every row in [ImplingCreatures] carries
+ * both of its creature's npc ids, and the id that was caught is what
+ * [ImplingCreature.experienceFor] keys on, because the wiki ties the experience to the spawn's
+ * origin rather than to where the player is standing. An area lookup would be a second, weaker way
+ * of asking a question the npc id has already answered, and the two could disagree.
  *
  * ## What is not modelled
  *
- * **`iop3=Loot` on the filled jar**, which is the other half of the reward and has its own published
- * drop table per impling. A catch here produces the jar; opening it is a separate feature.
- *
- * **The overworld implings**, which need a spawner - `.data` ships five invisible, op-less
- * "precursor" markers that the live game replaces with a rolled impling type, and nothing here does
- * that. **Imp defenders**, the Puro-Puro retaliation, and **crop circles** are out for the same
- * reason: they are their own features, not a branch of this one.
+ * **Imp defenders**, the Puro-Puro retaliation, and **crop circles**: they are their own features,
+ * not a branch of this one.
  */
 class HunterImpling
 @Inject
@@ -164,7 +158,7 @@ constructor(
      * items where only one slot was freed, and the wiki describes loot falling to the floor rather
      * than the open being refused.
      *
-     * @return false only if the obj is not one of the six jars this slice ships.
+     * @return false only if the obj is not one of the jars this slice ships.
      */
     fun ProtectedAccess.openJar(jar: String): Boolean {
         val table = ImplingLoot.forJar(jar) ?: return false

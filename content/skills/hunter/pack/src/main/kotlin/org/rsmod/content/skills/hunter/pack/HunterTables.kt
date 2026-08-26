@@ -6,7 +6,9 @@ import dev.openrune.definition.dbtables.dbTable
 import dev.openrune.definition.util.VarType
 
 /**
- * The bird snare, box trap, deadfall, net trap, magic box, falconry and butterfly creature tables.
+ * The hunter creature tables - bird snare, box trap, deadfall, net trap, magic box, falconry,
+ * butterfly, crab trapping and impling - plus the bird house table, which is not a creature table
+ * at all.
  *
  * Every `npc` and caught `obj` here is a cache symbol confirmed to exist via `config/npc` /
  * `config/obj` lookups - never a wiki name transcribed directly, since the two frequently differ
@@ -27,11 +29,10 @@ import dev.openrune.definition.util.VarType
  * Their dbrow ids still sort after every trap row so the hunter block stays one ascending run, but
  * nothing about trap-index stability depends on that.
  *
- * That stability rule is the reason the three rows added last - the tropical wagtail here in
- * [snareCreatures], the ferret and the embertailed jerboa in [boxCreatures] - carry ids in the
- * 56360s rather than ids next to their table-mates. They are the first rows to join a table that
- * already shipped, and `HunterCreatures.all` reads the five trap tables into **one list sorted by
- * dbrow id**, so an id chosen to sit next to the other birds would sort ahead of the chinchompas and
+ * That stability rule is why three rows - the tropical wagtail in [snareCreatures], the ferret and
+ * the embertailed jerboa in [boxCreatures] - carry ids in the 56360s rather than ids next to their
+ * table-mates. `HunterCreatures.all` reads the five trap tables into **one list sorted by dbrow
+ * id**, so an id chosen to sit next to the other birds would sort ahead of the chinchompas and
  * shift every index already written into a save.
  */
 object HunterTables {
@@ -63,15 +64,15 @@ object HunterTables {
      * The two portable families whose loc states are built from a name suffix rather than stored
      * whole: `loc.hunting_ojibway_trap_full_<key>` and `loc.hunting_boxtrap_full_<key>`.
      *
-     * The key used to be derived in code by stripping a prefix off the npc's own symbol -
-     * `npc.hunting_bird_polar` -> `polar`, `npc.hunting_chinchompa_big` -> `chinchompa_big`. That
-     * held for the seven rows shipped first and breaks for all three added here: the tropical
-     * wagtail's npc is `npc.multicoloured_bird` against a `_coloured` loc set, the ferret's obj and
-     * npc share a symbol but its npc has no `hunting_bird_` prefix to strip, and the embertailed
-     * jerboa is `npc.varlamore_hunterjerboa01` against a `_jerboa` loc set. Kotlin's
+     * **The key is authored, not derived from the npc's own symbol.** Stripping a prefix works for
+     * `npc.hunting_bird_polar` -> `polar` and `npc.hunting_chinchompa_big` -> `chinchompa_big` and
+     * for nothing else: the tropical wagtail's npc is `npc.multicoloured_bird` against a
+     * `_coloured` loc set, the ferret's obj and npc share a symbol but its npc has no
+     * `hunting_bird_` prefix to strip, and the embertailed jerboa is
+     * `npc.varlamore_hunterjerboa01` against a `_jerboa` loc set. Kotlin's
      * `substringAfter`/`substringAfterLast` return the *whole string* when the delimiter is absent,
-     * so each of those would have resolved to a loc name like
-     * `loc.hunting_ojibway_trap_full_npc.multicoloured_bird` and thrown at the first catch rather
+     * so each of those resolves to a loc name like
+     * `loc.hunting_ojibway_trap_full_npc.multicoloured_bird` and throws at the first catch rather
      * than at boot. Storing the key makes it data, and the derivation cannot silently mismatch.
      */
     private object LocKeyed {
@@ -112,27 +113,6 @@ object HunterTables {
         const val COL_FALCON_NPC = 8
     }
 
-    /**
-     * Crab trapping, the one table that shares **none** of [creatureColumns] and starts its own ids
-     * at 0.
-     *
-     * Two of the shared eight do not exist for this technique and the other six would have had to be
-     * reordered around them, so a bespoke dense set is the honest shape:
-     * - **No `success_low`/`success_high`.** "Unlike other methods, players cannot fail to catch a
-     *   crab" (wiki, *Crab trapping*), restated in its own Strategy section - "Because crabs traps
-     *   can never fail to catch a crab, the guild hunter outfit has no effect, nor does anti-odour
-     *   salt". There is no rate to store and no roll to make, so a `(0, 256)` pair would be a
-     *   fabricated coefficient for a formula this technique never evaluates.
-     * - **No `npc`.** The three crab npcs (`red_crab` 15089, `blue_crab` 15090,
-     *   `rainbow_crab_a/b/c` 15091-15093) carry **no ops at all** and are never touched: a crab trap
-     *   is a per-player varbit on a map-placed multiloc, so nothing is lured, found or despawned.
-     *   `.data` holds one red-crab spawn, two blue and **zero** rainbow, and the technique works
-     *   identically for all three - which is the proof the npc is not load-bearing. A column nothing
-     *   reads is the trap [netTrapCreatures] documents for `bait`.
-     *
-     * [COL_CAUGHT_ITEMS] and [COL_FULL_LOC] are **parallel lists**: entry `i` of each is the same
-     * colourway of the same crab. Red and blue have one; the rainbow crab has three.
-     */
     /**
      * Implings, whose only per-technique column is the second experience value.
      *
@@ -179,6 +159,27 @@ object HunterTables {
         const val COL_NEST_PERMILLE = 9
     }
 
+    /**
+     * Crab trapping, the one table that shares **none** of [creatureColumns] and starts its own ids
+     * at 0.
+     *
+     * Two of the shared eight do not exist for this technique and the other six would have had to be
+     * reordered around them, so a bespoke dense set is the honest shape:
+     * - **No `success_low`/`success_high`.** "Unlike other methods, players cannot fail to catch a
+     *   crab" (wiki, *Crab trapping*), restated in its own Strategy section - "Because crabs traps
+     *   can never fail to catch a crab, the guild hunter outfit has no effect, nor does anti-odour
+     *   salt". There is no rate to store and no roll to make, so a `(0, 256)` pair would be a
+     *   fabricated coefficient for a formula this technique never evaluates.
+     * - **No `npc`.** The three crab npcs (`red_crab` 15089, `blue_crab` 15090,
+     *   `rainbow_crab_a/b/c` 15091-15093) carry **no ops at all** and are never touched: a crab trap
+     *   is a per-player varbit on a map-placed multiloc, so nothing is lured, found or despawned.
+     *   `.data` holds one red-crab spawn, two blue and **zero** rainbow, and the technique works
+     *   identically for all three - which is the proof the npc is not load-bearing. A column nothing
+     *   reads is the trap [netTrapCreatures] documents for `bait`.
+     *
+     * [COL_CAUGHT_ITEMS] and [COL_FULL_LOC] are **parallel lists**: entry `i` of each is the same
+     * colourway of the same crab. Red and blue have one; the rainbow crab has three.
+     */
     private object Crab {
         const val COL_LEVEL = 0
         const val COL_XP = 1
@@ -294,24 +295,23 @@ object HunterTables {
             }
 
             /*
-             * The fifth bird, which the first build wrongly recorded as not existing.
+             * The fifth bird, and the one a `hunting_bird_*` symbol search does not find.
              *
-             * That exclusion searched the `hunting_bird_*` symbol prefix, found exactly four, and
-             * concluded there was no npc behind the unused `hunting_ojibway_trap_full_coloured`
-             * trap state. The wagtail sits outside the prefix: it is `npc.multicoloured_bird`
-             * (5548), `name=Tropical wagtail`, and its `model1=model_26839` is the very model that
-             * comment cited as belonging to the orphaned trap state - the evidence read as proving
-             * absence is what identifies the creature. It is otherwise byte-for-byte the shape of
-             * the other four (same `category_651`, same `model2=model_26844`, same six params), and
-             * it has 30 spawns in `.data`, comparable to polar's 23.
+             * That prefix holds exactly four npcs, which reads as proof that nothing stands behind
+             * the otherwise-unused `hunting_ojibway_trap_full_coloured` trap state. The wagtail
+             * sits outside it: `npc.multicoloured_bird` (5548), `name=Tropical wagtail`, whose
+             * `model1=model_26839` is the very model that trap state uses. It is otherwise
+             * byte-for-byte the shape of the other four (same `category_651`, same
+             * `model2=model_26844`, same six params), and it has 30 spawns in `.data`, comparable
+             * to polar's 23.
              *
              * Level 19 / 95.2 xp from its own Hunter info box (oldid=15259195). Its chart is
              * published there too, 43 points over L19-61, and the chart alone does *not* pin the
              * pair: both `(74, 371)` and `(75, 370)` reproduce all 43 points exactly.
              *
-             * **The page's prose separates them, and this is the first row in the hunter branch
-             * where the cross-check has actually decided something rather than merely agreed.** It
-             * states "The catch rate is 29% at lvl 1 and 144% at lvl 99", and the engine evaluates
+             * **The page's prose separates them, and is the one cross-check in this file that
+             * decides a pair rather than merely agreeing with it.** It states "The catch rate is
+             * 29% at lvl 1 and 144% at lvl 99", and the engine evaluates
              * `low + 1` at L1 and `high + 1` at L99: `(75, 370)` gives 76/256 = 29.6% and 371/256 =
              * 144.9%, which truncate to the stated 29 and 144, while `(74, 371)` gives 372/256 =
              * 145.3% and truncates to 145. So `(75, 370)` is pinned after all.
@@ -347,11 +347,10 @@ object HunterTables {
      * those pairs are read off rather than fit. The ferret and the embertailed jerboa state nothing
      * at all - see their rows.
      *
-     * **The `bait` column is gone.** It was recorded but never read, and the two rows added here
-     * have no bait to record: neither the `Ferret (Hunter)` nor the `Embertailed jerboa` page names
-     * one, so keeping the column would have meant inventing a filler obj for something nothing
-     * reads. That is the objection the deadfall and net trap tables already state as their reason
-     * for having no bait column, applied to the one table that did.
+     * **There is no `bait` column.** Nothing would read it, and neither the `Ferret (Hunter)` nor
+     * the `Embertailed jerboa` page names a bait at all, so a column here would mean inventing a
+     * filler obj for something nothing reads. That is the objection the deadfall and net trap
+     * tables already state as their reason for having no bait column.
      */
     fun boxCreatures(): DBTable =
         dbTable("dbtable.hunter_box_creatures", serverOnly = true) {
@@ -525,8 +524,9 @@ object HunterTables {
                 column(COL_XP, 1680)
                 // The chart template's own published parameters (oldid=15196228), read from the
                 // Parsoid transclusion metadata rather than fitted. Only six levels are charted and
-                // 25 different pairs reproduce all six, so a fit cannot pin this one - the previous
-                // hand-derived (-226, 1048) was a member of that set but not the published pair.
+                // 25 different pairs reproduce all six, so a fit cannot pin this one: the
+                // hand-derived (-226, 1048) is a member of that set and still not the published
+                // pair.
                 column(COL_SUCCESS_LOW, -220)
                 column(COL_SUCCESS_HIGH, 1037)
                 columnRSCM(
@@ -562,8 +562,8 @@ object HunterTables {
                 column(COL_LEVEL, 51)
                 column(COL_XP, 2000)
                 // Published parameters (oldid=15196422); same story as barb-tailed - five charted
-                // levels, 19 pairs reproduce them, and the previous fitted (-422, 809) was one of
-                // the 19 rather than the published pair.
+                // levels, 19 pairs reproduce them, and the fitted (-422, 809) is one of the 19
+                // rather than the published pair.
                 column(COL_SUCCESS_LOW, -434)
                 column(COL_SUCCESS_HIGH, 820)
                 // Kebbit teeth, `obj.huntingbeast_sabreteeth` (10109) - not the near-name
@@ -934,13 +934,13 @@ object HunterTables {
      * 145/256 the warlock starts at. So for these two the requirement only decides where you join a
      * shared curve; it does not anchor a curve of its own.
      *
-     * **That is not the same as catch chance being a function of level alone, and an earlier
-     * revision of this comment claimed exactly that.** The moonlight moth is a third published
-     * member of the family (oldid=15208105) and does *not* sit on the shared curve: it fits
-     * `(0, 276)` plain and `(20, 286)` magic, each a unique exact fit, and reads 209/256 at its own
-     * requirement of 75 where the shared curve reads 229/256. It is not shipped - zero spawns - so
-     * nothing here depends on it, but it is the counterexample that bounds the claim. Two agreeing
-     * members license the guess below; they do not rule species-dependence out.
+     * **That is not the same as catch chance being a function of level alone.** The moonlight moth
+     * is a third published member of the family (oldid=15208105) and does *not* sit on the shared
+     * curve: it fits `(0, 276)` plain and `(20, 286)` magic, each a unique exact fit, and reads
+     * 209/256 at its own requirement of 75 where the shared curve reads 229/256. It is not shipped
+     * - zero spawns - so nothing here depends on it, but it is the counterexample that bounds the
+     * claim. Two agreeing members license the guess below; they do not rule species-dependence
+     * out.
      * `HunterRateTablesTest` asserts the disagreement so the stronger claim cannot creep back.
      *
      * The three unpublished rows therefore ship `(20, 296)` as well. That is still a guess - none of
@@ -1149,23 +1149,23 @@ object HunterTables {
         }
 
     /**
-     * The six Puro-Puro implings, and only those six.
+     * All twelve implings.
      *
      * **Every pair here is the chart template's own published parameter**, read from the Parsoid
-     * transclusion metadata rather than fitted - so unlike any technique shipped before it, this
-     * table contains no guess and no annotated approximation. `HunterRateTablesTest` asserts all six
-     * against `published-params.tsv`. The magic-net series is `low + 20` / `high + 20` on all twelve
-     * impling pages, which is `HunterButterfly.NET_BONUS` exactly; it is applied on the content side
-     * as it is for butterflies, not stored twice.
+     * transclusion metadata rather than fitted - so alone among the hunter tables, this one
+     * contains no guess and no annotated approximation. `HunterRateTablesTest` asserts all twelve
+     * against `published-params.tsv`. The magic-net series is `low + 20` / `high + 20` on all
+     * twelve impling pages, which is `HunterButterfly.NET_BONUS` exactly; it is applied on the
+     * content side as it is for butterflies, not stored twice.
      *
-     * **Why the `_maze` npcs and not the overworld ones.** Each impling has two npc ids, an
-     * overworld one and a Puro-Puro `_maze` one. Only the `_maze` ids of types 1-6 have spawns in
-     * `.data` - 51 of them, all in map square 40,67 - and every other impling npc, overworld and
-     * maze alike, has **zero**. The overworld spawn data is instead five invisible, op-less
-     * "precursor" markers that the live game replaces with a rolled impling type, so the overworld
-     * six and the high-tier six are blocked on a spawner that does not exist here yet, not on
-     * missing content. That is a different blocker from letvek's and Stymphike's, whose npcs have no
-     * spawns *and* nothing that would ever produce one.
+     * **Why the shared [COL_NPC] holds the `_maze` id.** Only the `_maze` ids of types 1-6 have
+     * spawns in `.data` - 51 of them, all in map square 40,67 - and every other impling npc,
+     * overworld and maze alike, has **zero**. The overworld spawn data is five invisible, op-less
+     * "precursor" markers that `ImplingSpawner` replaces with a rolled impling type, which is why
+     * the overworld rows are reachable at all. Letvek and the Stymphike are the other case
+     * entirely: their npcs have no spawns *and* nothing that would ever produce one. The crystal
+     * impling is the one row with no `_maze` form - it is Prifddinas-only, so both npc columns hold
+     * the same overworld id.
      *
      * Levels are twice-sourced and agree: the client's own skill guide (`config/dbrow`
      * `skill_feature_hunter_impling_*`, `data=skill,23,<level>,4`) and each creature's wiki infobox.

@@ -28,9 +28,8 @@ import org.rsmod.game.loc.LocShape
  * the draw makes both branches ordinary.
  *
  * The `ProtectedAccess`-receiver half of the engine - `layTrap`, `setDeadfall`, `collectTrap`,
- * `takeTrap`, `dismantleDeadfall` - is *not* covered here; see the class KDoc on
- * [HunterTrapTestWorld] for why. Traps are therefore set up by the harness in the same shape those
- * paths leave them in.
+ * `takeTrap`, `dismantleDeadfall` - has its own file, [HunterTrapOpsTest]. Traps are therefore set
+ * up here by the harness, in the same shape those paths leave them in.
  *
  * Serialised against the other world-driven hunter tests: `test-conventions` turns JUnit parallel
  * execution on for every module, and these share more than their own worlds - `ServerCacheManager`
@@ -550,13 +549,6 @@ class HunterTrapTickTest {
 
     /* Helpers. */
 
-    /**
-     * A box trap with its owner standing clear of it and a chinchompa one tile north.
-     *
-     * [hunterLvl] defaults to 99, where the chinchompa's rate exceeds `1.0` and the catch is
-     * certain. Tests that need a miss pass [CHINCHOMPA_LEVEL] instead - see
-     * [ScriptedRandom.HIGHEST_DRAW].
-     */
     /** Puts a sprung trap and the creature it sprang on back the way they were. */
     private fun rearm(controller: Controller, prey: Npc) {
         controller.trapCreature = TRAP_CREATURE_NONE
@@ -565,6 +557,13 @@ class HunterTrapTickTest {
         }
     }
 
+    /**
+     * A box trap with its owner standing clear of it and a chinchompa one tile north.
+     *
+     * [hunterLvl] defaults to 99, where the chinchompa's rate exceeds `1.0` and the catch is
+     * certain. Tests that need a miss pass [CHINCHOMPA_LEVEL] instead - see
+     * [ScriptedRandom.HIGHEST_DRAW].
+     */
     private fun boxTrapWithChinchompaInRange(hunterLvl: Int = 99): Controller {
         val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = hunterLvl)
         val controller = world.layPortableTrap(TrapFamily.BOX, TRAP_TILE, owner)

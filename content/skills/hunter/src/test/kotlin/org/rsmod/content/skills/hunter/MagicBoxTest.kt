@@ -30,9 +30,9 @@ import org.rsmod.game.entity.Player
  * `npc.imp` has no prefix to strip.
  *
  * The occupancy guard gets its own test for a different reason: the wiki is explicit for this
- * family ("only when the player is not standing on the trap"), and it was the positive confirmation
- * that the predicate driving the guard is right - a confirmation only worth having if something
- * checks the code agrees.
+ * family ("only when the player is not standing on the trap"), which is the positive confirmation
+ * that the predicate driving the guard is right - and a confirmation is only worth having if
+ * something checks the code agrees with it.
  *
  * Serialised against the other world-driven hunter tests for the reason given on
  * [HunterTrapTickTest].
@@ -213,7 +213,7 @@ class MagicBoxTest {
      * safe, inserting silently re-files every trap and every catch already written.
      */
     @Test
-    fun `the two new families and their creatures are appended, never inserted`() {
+    fun `family ordinals and creature blocks are appended, never inserted`() {
         assertEquals(0, TrapFamily.SNARE.ordinal)
         assertEquals(1, TrapFamily.BOX.ordinal)
         assertEquals(2, TrapFamily.DEADFALL.ordinal)
@@ -221,25 +221,25 @@ class MagicBoxTest {
         assertEquals(4, TrapFamily.MAGICBOX.ordinal)
 
         val families = HunterCreatures.all.map { it.family }
-        val firstNew = families.indexOfFirst { it == TrapFamily.NETTRAP }
-        assertTrue(firstNew > 0, "The net trap block must not be first.")
+        val firstNetTrap = families.indexOfFirst { it == TrapFamily.NETTRAP }
+        assertTrue(firstNetTrap > 0, "The net trap block must not be first.")
         assertTrue(
-            families.take(firstNew).none {
+            families.take(firstNetTrap).none {
                 it == TrapFamily.NETTRAP || it == TrapFamily.MAGICBOX
             },
             "Slice 2's blocks must sit after every block shipped before them.",
         )
         assertEquals(
             listOf(TrapFamily.SNARE, TrapFamily.BOX, TrapFamily.DEADFALL),
-            families.take(firstNew).distinct(),
+            families.take(firstNetTrap).distinct(),
             "The order of the three shipped blocks is save data and must not change.",
         )
-        // Slice 4's three closers sit after the magic box despite being snare and box creatures:
-        // they joined tables that had already shipped, and `HunterCreatures.all` sorts every table
-        // into one list by dbrow id precisely so that "give it a higher id" is what appending means.
+        // The last three rows sit after the magic box despite being snare and box creatures:
+        // `HunterCreatures.all` sorts every table into one list by dbrow id, precisely so that
+        // "give it a higher id" is what appending to an already-indexed table means.
         assertEquals(
             listOf(TrapFamily.NETTRAP, TrapFamily.MAGICBOX, TrapFamily.SNARE, TrapFamily.BOX),
-            families.drop(firstNew).distinct(),
+            families.drop(firstNetTrap).distinct(),
         )
     }
 
@@ -275,15 +275,15 @@ class MagicBoxTest {
                 "npc.huntingbeast_spiky",
                 "npc.huntingbeast_sabreteeth",
                 "npc.varlamore_fennecfox",
-                // Net trap, slice 2.
+                // Net trap.
                 "npc.salamander_green",
                 "npc.salamander_orange",
                 "npc.salamander_red",
                 "npc.salamander_black",
                 "npc.salamander_mountain",
-                // Magic box, slice 2.
+                // Magic box.
                 "npc.imp",
-                // Slice 4's three closers, appended by id despite joining older tables.
+                // Appended by dbrow id, despite joining the snare and box tables.
                 "npc.multicoloured_bird",
                 "npc.hunting_ferret",
                 "npc.varlamore_hunterjerboa01",

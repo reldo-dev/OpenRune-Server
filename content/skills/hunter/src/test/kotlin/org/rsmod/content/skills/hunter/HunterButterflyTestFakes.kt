@@ -26,7 +26,7 @@ import org.rsmod.map.zone.ZoneKey
 import org.rsmod.routefinder.collision.CollisionFlagMap
 
 /**
- * A world for the two netting techniques, and the smallest of the four.
+ * A world for the two netting techniques.
  *
  * Butterfly netting and impling catching touch no locs, no controllers and no ground objs, so this
  * is a player, an npc registry and nothing else - even [HunterFalconryTestWorld]'s controller
@@ -35,10 +35,10 @@ import org.rsmod.routefinder.collision.CollisionFlagMap
  * The one thing it has that no other world does is a **worn** inventory, because "wielding a net" is
  * a worn-slot question and the barehanded branch is decided by its absence.
  *
- * It carries both [butterfly] and [impling] rather than being copied into a fifth world file: the
- * two techniques share the nets, the barehanded cost, the faster curve and the jar swap, so a second
- * world would be this one with a different field name and a second place for the worn-inventory
- * setup to drift.
+ * It carries both [butterfly] and [impling] rather than being copied into a world file of its own:
+ * the two techniques share the nets, the barehanded cost, the faster curve and the jar swap, so a
+ * second world would be this one with a different field name and a second place for the
+ * worn-inventory setup to drift.
  *
  * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
  */

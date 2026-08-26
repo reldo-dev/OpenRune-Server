@@ -94,8 +94,8 @@ class TrackingTrailTest {
 
     @Test
     fun `no render value is ever a bare varp write`() {
-        // Guards the amendment: every write this type produces is keyed by a varbit gameval,
-        // because zeroing a trail varp would also reset lumbridge_alchemy_high (varp 925).
+        // Every write this type produces is keyed by a varbit gameval, because zeroing a trail
+        // varp would also reset lumbridge_alchemy_high (varp 925).
         val steps = listOf(TrailStep(seg(0, o, a), reversed = false))
         assertTrue(TrailLogic.revealWrites(steps, revealed = 1).all { it.first.startsWith("varbit.") })
     }

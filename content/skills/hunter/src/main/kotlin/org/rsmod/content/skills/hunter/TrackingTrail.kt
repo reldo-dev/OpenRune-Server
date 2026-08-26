@@ -145,7 +145,7 @@ object TrailLogic {
 
     /**
      * The writes that render a trail with [revealed] steps showing: one per segment, keyed by
-     * varbit gameval. Never a varp value - see the class amendment note.
+     * varbit gameval. Never a varp value - see [HunterTracking.clearTrail] for why.
      */
     fun revealWrites(steps: List<TrailStep>, revealed: Int): List<Pair<String, Int>> =
         steps.take(revealed).map { it.segment.varbit to revealValue(it) }

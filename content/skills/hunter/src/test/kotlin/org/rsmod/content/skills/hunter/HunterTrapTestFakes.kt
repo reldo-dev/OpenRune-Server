@@ -2,6 +2,7 @@ package org.rsmod.content.skills.hunter
 
 import dev.openrune.ServerCacheManager
 import dev.openrune.gamevals.GameValProvider
+import dev.openrune.rscm.RSCM
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
 import java.io.File
@@ -267,9 +268,9 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
      * A [ProtectedAccess] over [player] backed by [ProtectedAccessContextFactory.empty], whose every
      * dependency throws on first touch.
      *
-     * That is enough for the collect path, which only needs the player's own inventory, stat map and
-     * varps - but not for anything that routes through an interaction, an area check or the client,
-     * so the lay paths stay out of reach. See the KDoc on `HunterProtectedAccessTest`.
+     * That is enough for every hunter op, none of which touches one: they read the player's own
+     * inventory, stat map and varps and nothing else. See the KDoc on [HunterTrapOpsTest] for what
+     * an empty context does leave out of reach.
      */
     fun protectedAccess(player: Player): ProtectedAccess =
         ProtectedAccess(player, GameCoroutine(), ProtectedAccessContextFactory.empty())
@@ -385,7 +386,7 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
     fun locAt(coords: CoordGrid): LocInfo? = locRepo.findAll(coords).firstOrNull()
 
     fun locNameAt(coords: CoordGrid): String? =
-        locAt(coords)?.let { dev.openrune.rscm.RSCM.getReverseMapping(RSCMType.LOC, it.id) }
+        locAt(coords)?.let { RSCM.getReverseMapping(RSCMType.LOC, it.id) }
 
     /** True when [coords] still carries a deadfall boulder in any of its nineteen states. */
     fun deadfallPresent(coords: CoordGrid): Boolean =
@@ -405,7 +406,7 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
     /** The name of the spawned "Net trap" loc belonging to the tree on [coords], if there is one. */
     fun netLocNameAt(treeCoords: CoordGrid): String? {
         val net = netLocAt(treeCoords) ?: return null
-        return dev.openrune.rscm.RSCM.getReverseMapping(RSCMType.LOC, net.id)
+        return RSCM.getReverseMapping(RSCMType.LOC, net.id)
     }
 
     /** The spawned "Net trap" loc belonging to the tree on [coords], if there is one. */
@@ -425,7 +426,7 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
     fun objNamesAt(coords: CoordGrid): List<String> =
         objRepo
             .findAll(coords)
-            .mapNotNull { dev.openrune.rscm.RSCM.getReverseMapping(RSCMType.OBJ, it.type) }
+            .mapNotNull { RSCM.getReverseMapping(RSCMType.OBJ, it.type) }
             .toList()
 
     /* Traps */
@@ -441,7 +442,7 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
             coords,
             checkNotNull(HunterTrapStates.setLoc(family)),
             Int.MAX_VALUE,
-            org.rsmod.game.loc.LocAngle.West,
+            LocAngle.West,
             LocShape.CentrepieceStraight,
         )
         return addTrapController(family, coords, owner)

@@ -116,9 +116,11 @@ class HunterTrackingTestWorld(hunterXpBonus: Double = 0.0) {
 
     /* Vars */
 
-    /** The value the client would render for [varbit] - read back one varbit at a time, never a
-     *  varp: varp 925 carries unrelated fields (e.g., `lumbridge_alchemy_high`), so a varp write
-     *  would silently reset them. */
+    /**
+     * The value the client would render for [varbit] - read back one varbit at a time, never a
+     * varp: varp 925 carries unrelated fields (e.g., `lumbridge_alchemy_high`), so a varp write
+     * would silently reset them.
+     */
     fun varbitOf(player: Player, varbit: String): Int = player.vars[varbit]
 
     fun setVarbit(player: Player, varbit: String, value: Int) {

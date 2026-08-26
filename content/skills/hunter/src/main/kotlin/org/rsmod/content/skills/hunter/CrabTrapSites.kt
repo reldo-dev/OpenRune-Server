@@ -2,6 +2,7 @@ package org.rsmod.content.skills.hunter
 
 import dev.openrune.ServerCacheManager
 import dev.openrune.definition.type.VarBitType
+import dev.openrune.rscm.RSCM
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
 
@@ -30,9 +31,9 @@ const val CRAB_TRAP_ACTIVE_FINE: String = "loc.crab_trap_active_fine_offcuts"
  * **A crab trap is not a world object.** The map places a `crab_trap_<site>_<n>` loc that carries no
  * ops of its own and a `multivar` naming a varbit; the client picks which of that loc's `multiloc`
  * children to draw from the value of that varbit, *for the viewing player*. So every player has
- * their own five traps per island, two players never contend for a hole, and - the invariant this
- * slice inherits - **nothing here ever calls `locRepo` at all**, let alone `locRepo.del`. The whole
- * feature is a varbit write. See [HunterCrabTrap].
+ * their own five traps per island, two players never contend for a hole, and - the invariant the
+ * whole technique inherits - **nothing here ever calls `locRepo` at all**, let alone `locRepo.del`.
+ * The whole feature is a varbit write. See [HunterCrabTrap].
  *
  * Everything but [loc] is derived from the packed cache rather than retyped:
  * - [varbit] is the loc's own `multiVarBit`, so the server writes the exact var the client renders
@@ -63,7 +64,9 @@ data class CrabTrapSite(
     /** True while the trap counts against the level cap: "active (baited or full)" on the wiki. */
     fun isActive(state: Int): Boolean = state == baitedState || state in fullStates
 
-    /** Which of [CrabCreature.variants] a trap in [state] is holding, or null if it holds nothing. */
+    /**
+     * Which of [CrabCreature.variants] a trap in [state] is holding, or null if it holds nothing.
+     */
     fun variantAt(state: Int): CrabVariant? =
         fullStates.indexOf(state).takeIf { it >= 0 }?.let(creature.variants::get)
 }
@@ -185,6 +188,5 @@ object CrabTrapSites {
         return if (plain >= 0) plain else fine
     }
 
-    private fun reverseLoc(locId: Int): String? =
-        dev.openrune.rscm.RSCM.getReverseMapping(RSCMType.LOC, locId)
+    private fun reverseLoc(locId: Int): String? = RSCM.getReverseMapping(RSCMType.LOC, locId)
 }

@@ -64,11 +64,11 @@ object FalconryCreatures {
     }
 
     /**
-     * The two tables again, keyed by resolved npc id for callers holding a live [Npc].
+     * The two tables again, keyed by resolved npc id, for the op handlers that hold a live npc.
      *
-     * `RSCM.getReverseMapping` scans the whole ~14.5k-entry npc table and memoises nothing, and
-     * `falconAt` runs it against every npc on a tile every tick while a falcon is out. Resolving
-     * each row's symbol once here makes that a hash lookup.
+     * `RSCM.getReverseMapping` scans the whole ~14.5k-entry npc table and memoises nothing, so a
+     * `Catch` or a `Retrieve` would pay for that scan on every click. Resolving each row's symbol
+     * once here makes it a hash lookup.
      */
     private val byNpcId: Map<Int, FalconryCreature> by lazy {
         all.associateBy { it.npc.asRSCM(RSCMType.NPC) }

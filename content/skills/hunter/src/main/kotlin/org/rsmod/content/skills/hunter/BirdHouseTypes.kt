@@ -21,9 +21,6 @@ data class BirdHouseType(
     val craftingLevel: Int,
     val craftingXp: Int,
     val logs: String,
-    val builtLoc: String,
-    val fullLoc: String,
-    val birdLoc: String,
     val nestPermille: Int,
     val builtState: Int,
     val fullState: Int,
@@ -90,26 +87,19 @@ object BirdHouseTypes {
         }
     }
 
-    private fun type(row: HunterBirdhouseTypesRow): BirdHouseType {
-        val built = row.builtLoc.internalName
-        val full = row.fullLoc.internalName
-        val bird = row.birdLoc.internalName
-        return BirdHouseType(
+    private fun type(row: HunterBirdhouseTypesRow): BirdHouseType =
+        BirdHouseType(
             obj = row.obj.internalName,
             hunterLevel = row.hunterLevel,
             hunterXp = row.hunterXp,
             craftingLevel = row.craftingLevel,
             craftingXp = row.craftingXp,
             logs = row.logs.internalName,
-            builtLoc = built,
-            fullLoc = full,
-            birdLoc = bird,
             nestPermille = row.nestPermille,
-            builtState = stateOf(built),
-            fullState = stateOf(full),
-            birdState = stateOf(bird),
+            builtState = stateOf(row.builtLoc.internalName),
+            fullState = stateOf(row.fullLoc.internalName),
+            birdState = stateOf(row.birdLoc.internalName),
         )
-    }
 
     private fun stateOf(child: String): Int {
         val state = children.indexOf(child.asRSCM(RSCMType.LOC))

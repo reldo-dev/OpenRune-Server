@@ -11,9 +11,9 @@ import org.rsmod.api.table.hunter.HunterImplingCreaturesRow
  * [HunterCreature] for the reason that one is not: there is no [TrapFamily] and no loc state, because
  * an impling is caught where it flies and leaves nothing standing in the world.
  *
- * [successLow] and [successHigh] are the same engine coefficients [HunterCreature] documents, fed to
- * the same `SkillingSuccessRate.successRate`. Unlike every technique shipped before it, no pair here
- * is a fit or a guess: all six are the `{{Skilling success chart}}` template's own published
+ * [successLow] and [successHigh] are the same engine coefficients [HunterCreature] documents, fed
+ * to the same `SkillingSuccessRate.successRate`. Unlike every other hunter technique, no pair here
+ * is a fit or a guess: all twelve are the `{{Skilling success chart}}` template's own published
  * parameters. The magic-net and barehanded curve is those two coefficients plus
  * `HunterButterfly.NET_BONUS`, not a second column pair.
  *

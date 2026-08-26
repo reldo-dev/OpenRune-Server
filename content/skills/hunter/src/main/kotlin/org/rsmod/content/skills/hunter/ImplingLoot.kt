@@ -14,12 +14,14 @@ import org.rsmod.game.entity.Player
  * **Every rate here is published.** The wiki prints these under a "The following drop rates are
  * provided by Jagex" banner, so unlike a fitted catch curve there is nothing derived and nothing
  * guessed. The extract, with an oldid per page, is checked in at
- * `src/test/resources/wiki-charts/impling-loot.tsv`, and `ImplingLootTest` asserts every row here
- * against it - which is the only reason a 121-row transcription is trustworthy.
+ * `src/test/resources/wiki-charts/impling-loot.tsv` and `impling-loot-2.tsv`, and `ImplingLootTest`
+ * asserts every row here against it - which is the only reason a transcription this size is
+ * trustworthy.
  *
- * All six main tables sum to exactly 1, so each is written as a weighted table out of 100: the
- * published rates are all tenths or hundredths, and 100 is the smallest denominator that holds
- * both without rounding.
+ * Every main table sums to exactly 1. Where the published rates are tenths and hundredths the
+ * table is written out of 100, the smallest denominator that holds both without rounding. The
+ * high-tier jars publish one flat rate across the whole list instead, so those are written with
+ * unit weights out of the number of published slots.
  *
  * Three shapes here are not "roll one item":
  * - **`nothing()` in the baby table.** A real 1/10 entry, not padding. *Baby impling* trivia
@@ -451,7 +453,7 @@ private val lootByJar: Map<String, RSDropTable<Player, DropRollItem>> =
 const val LUCKY_IMPLING_JAR: String = "obj.ii_captured_impling_11"
 
 /**
- * The six jars this slice can open, and their tables.
+ * The jars this slice can open, and their tables.
  *
  * Held here rather than registered with `DropTableRegistry` because that registry keys on npcs and
  * locs only, and the key here is an **obj** - the jar the player clicks. Adding an obj key would

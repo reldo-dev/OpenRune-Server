@@ -13,12 +13,9 @@ import org.rsmod.game.loc.BoundLocInfo
 /**
  * The handful of rules every hunter technique shares.
  *
- * Each of these was written once per technique before it lived here, which is the shape this module
- * keeps growing into: a slice adds a script, copies the three or four lines it needs out of the last
- * one, and the copies drift. They are top-level rather than members of any one technique because no
- * technique owns them - [HunterTrap], [HunterFalconry], [HunterButterfly] and [HunterCrabTrap] are
- * deliberately independent of each other, and the alternative to a shared file is one class reaching
- * into another's private surface.
+ * Top-level rather than members of any one technique because no technique owns them - [HunterTrap],
+ * [HunterFalconry], [HunterButterfly] and [HunterCrabTrap] are deliberately independent of each
+ * other, and the alternative to a shared file is one class reaching into another's private surface.
  */
 
 /**
@@ -50,10 +47,9 @@ internal fun rollQuantity(random: GameRandom, quantity: IntRange): Int =
  * present just grows its existing stack and needs none whatever the count; a stackable item not yet
  * held at all needs exactly one; anything else needs one per item.
  *
- * Shared because the trap collect and falconry's retrieve need the identical rule, and a second copy
- * would be a second place for "a stackable award the player already holds costs no slot" to drift.
- * Getting that wrong over-rejects a legitimate collect, which is exactly the bug this function
- * exists to prevent.
+ * Getting that last rule wrong over-rejects a legitimate collect - a chinchompa catch when the
+ * player already holds that chinchompa type, say - which is exactly the bug this function exists to
+ * prevent.
  */
 internal fun hunterInvSlotsNeeded(inv: Inventory, internal: String, count: Int): Int {
     val stackable = ServerCacheManager.getItem(internal.asRSCM(RSCMType.OBJ))?.isStackable == true
@@ -67,10 +63,9 @@ internal fun hunterInvSlotsNeeded(inv: Inventory, internal: String, count: Int):
 /**
  * `Investigate` on an armed trap: walk to it, then say who owns it and whether it has caught.
  *
- * All five trap families carry this op and all five answered it identically, in five copies that
- * differed only in the noun. That is three strings - the collapsed message, the not-yours message
- * and the ownership test itself - living in five places, and a sixth copy waiting for every
- * trap-shaped technique still to come.
+ * All five trap families carry this op and all five answer it identically bar the noun: the
+ * collapsed message, the not-yours message and the ownership test are the same three things every
+ * time.
  *
  * The two things that genuinely vary are parameters. [armed] is the family's own test for "is this
  * loc even in a state worth investigating", which the two fixed-loc families answer differently
