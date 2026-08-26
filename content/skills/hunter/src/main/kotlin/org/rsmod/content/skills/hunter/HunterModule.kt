@@ -13,5 +13,6 @@ class HunterModule : PluginModule() {
         // Bound as an instance because the production implementation is an object with no state.
         bindSingleton<BirdHouseClock>(SystemBirdHouseClock)
         bindInstance<HunterBirdHouse>()
+        bindInstance<HunterTracking>()
     }
 }

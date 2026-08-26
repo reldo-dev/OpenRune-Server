@@ -323,6 +323,56 @@ class HunterWiringTest {
         }
     }
 
+    /**
+     * Tracking registers one op1 per burrow and per clue, and both ops on every catch spot.
+     *
+     * Every gameval walked here comes from [TrackingNetworks] itself - the same tables
+     * `TrackingEvents.startup()` loops over - so a network added or a placement changed joins this
+     * assertion on its own, the same reasoning [dispatchedLocStates] uses for the trap families.
+     */
+    @Test
+    fun `tracking registers an op1 on every burrow and every clue loc`() {
+        val bus = Wiring().start(scripts.tracking)
+
+        for (loc in TrackingNetworks.burrowLocs.keys) {
+            assertTrue(bus.hasOpLoc1(loc), "op1 (`Inspect`) on burrow $loc")
+        }
+        for (loc in TrackingNetworks.clueLocs.keys) {
+            assertTrue(bus.hasOpLoc1(loc), "op1 (`Inspect`) on clue $loc")
+        }
+    }
+
+    @Test
+    fun `tracking registers both ops on every catch spot`() {
+        val bus = Wiring().start(scripts.tracking)
+
+        for (loc in TrackingNetworks.catchLocs.keys) {
+            assertTrue(bus.hasOpLoc1(loc), "op1 (`Search`) on catch spot $loc")
+            assertTrue(bus.hasOpLoc2(loc), "op2 (`Attack`) on catch spot $loc")
+        }
+    }
+
+    /**
+     * Logout must discard the in-memory trail state, and login must re-arm the reset queue rather
+     * than write varps directly.
+     *
+     * The logout half is the single most important assertion in this class: `HunterTracking` holds
+     * an `IdentityHashMap<Player, TrailState>` with strong references, so a logout that is not
+     * wired retains every player who logged out mid-trail forever - a real leak, not a theoretical
+     * one. The login half guards the companion trap: a varp/varbit write from `onPlayerLogin`
+     * itself would update the server and leave the client rendering stale footprints, because
+     * `VarPlayerIntMapSetter` short-circuits while `processedMapClock == 0` - exactly the state
+     * during login.
+     */
+    @Test
+    fun `tracking registers the logout discard and the login reset queue`() {
+        val bus = Wiring().start(scripts.tracking)
+
+        assertTrue(bus.hasPlayerLogout(), "discardState on logout")
+        assertTrue(bus.hasPlayerLogin(), "the login re-arm")
+        assertTrue(bus.hasSoftQueue(TRACKING_RESET_QUEUE), "loginReset on $TRACKING_RESET_QUEUE")
+    }
+
     /* The once-only invariant. */
 
     /**
@@ -614,6 +664,7 @@ class HunterWiringTest {
         private val butterflyWorld = HunterButterflyTestWorld()
         private val crabWorld = HunterCrabTrapTestWorld()
         private val birdHouseWorld = HunterBirdHouseTestWorld()
+        private val trackingWorld = HunterTrackingTestWorld()
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
@@ -625,12 +676,13 @@ class HunterWiringTest {
         val crabTrap = CrabTrapEvents(crabWorld.crabTrap)
         val impling = ImplingEvents(butterflyWorld.impling, butterflyWorld.implingSpawner)
         val birdHouse = BirdHouseEvents(birdHouseWorld.birdHouse)
+        val tracking = TrackingEvents(trackingWorld.tracking)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
         val all: List<PluginScript> =
-            trapFamily + listOf(falconry, butterfly, crabTrap, impling, birdHouse)
+            trapFamily + listOf(falconry, butterfly, crabTrap, impling, birdHouse, tracking)
     }
 
     /**
@@ -674,6 +726,12 @@ class HunterWiringTest {
         fun hasOpHeld1(obj: String): Boolean =
             eventBus.contains(HeldObjEvents.Op1::class.java, obj.asRSCM(RSCMType.OBJ))
 
+        fun hasOpLoc1(loc: String): Boolean =
+            eventBus.contains(LocEvents.Op1::class.java, loc.asRSCM(RSCMType.LOC))
+
+        fun hasOpLoc2(loc: String): Boolean =
+            eventBus.contains(LocEvents.Op2::class.java, loc.asRSCM(RSCMType.LOC))
+
         /**
          * `onAiConTimer` subscribes a [org.rsmod.events.KeyedEvent], not a suspending one, so
          * `EventBus.contains` - which only reads the suspend map - cannot answer this. The keyed
@@ -699,6 +757,10 @@ class HunterWiringTest {
         /** `onPlayerLogin` subscribes an unbound event, which is a third map again. */
         fun hasPlayerLogin(): Boolean =
             eventBus.unbound[SessionStateEvent.Login::class.java].orEmpty().isNotEmpty()
+
+        /** The logout counterpart of [hasPlayerLogin], same unbound map. */
+        fun hasPlayerLogout(): Boolean =
+            eventBus.unbound[SessionStateEvent.Logout::class.java].orEmpty().isNotEmpty()
 
         fun areaExitIsCached(area: String): Boolean =
             engineQueue.hasScript(EngineQueueType.AreaExit, area.asRSCM(RSCMType.AREA))
