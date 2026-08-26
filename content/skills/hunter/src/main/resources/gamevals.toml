@@ -120,6 +120,11 @@ hunter_magic_box = 58
 # map-placed site locs, and `LocInteractions.opTrigger` resolves the child before it looks for a
 # handler, so the group belongs on the children - the sites themselves carry no ops at all.
 hunter_crab_trap = 59
+# One group for all 28 bird house lifecycle locs - the bare space and nine tiers x three states.
+# They are `multiloc` children of the four map-placed spaces, so the group belongs on the children
+# for the reason the crab trap's does. One group rather than four because the op *indices* are
+# consistent across the states: op1 Build/Interact, op2 Seeds, op3 Dismantle/Empty, op4 Reset.
+hunter_bird_house = 60
 
 # The falconry enclosure, whose exit strips the rented glove. 58 is the next free id above the packed
 # area run's low block, which ends at runecrafting's `rune_essence_mine = 57`; the high block starts
@@ -138,14 +143,43 @@ piscatoris_falconry = 58
 [gamevals.queue]
 hunter_crab_catch = 60
 
+# A bird house fills on wall-clock time rather than on ticks, so the queue is only the in-session
+# half of the timer: the deadline lives in `hunter_birdhouse_ready_*` and the queue is re-armed
+# against it at login. Soft, and on the player, for the same reason the crab catch is - the whole
+# loop is to seed a house and walk to the next one, and a house maturing must not interrupt
+# whatever its owner is doing fifty minutes later.
+hunter_birdhouse_fill = 61
+
 # The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
 # lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom
-# varp ids grow downward from the lowest id in the packed cache's own varp table (65502); the block
+# varp ids grow downward from the low-water mark of the server-authored block (65502); the block
 # 65481-65501 is already claimed by runecrafting, sandstorm, slayer, instances, herblore and
-# prayer, so hunter takes the next five below it.
+# prayer, so hunter takes the next five below it. (65502 is not, as an earlier version of this
+# comment claimed, the packed cache's own floor: `max-ids.toml` puts the packed varp table at
+# 0..5725, and `varp.rscm` already runs *above* 65535 for slayer's kill counts. The descent is a
+# convention with a lot of headroom, not a boundary.)
 [gamevals.varp]
 hunter_trap_coord_1 = 65480
 hunter_trap_coord_2 = 65479
 hunter_trap_coord_3 = 65478
 hunter_trap_coord_4 = 65477
 hunter_trap_coord_5 = 65476
+
+# Bird houses. The four spaces render from packed varps (1626-1629, `Perm`), so the tier and the
+# state need nothing authored; these eight carry the two things that varp has no room for.
+#
+# `_ready_*` is the epoch minute the space's house finishes filling. Wall clock rather than ticks
+# because the fill has to elapse while its owner is logged out, which no queue or controller can
+# do. This is `RuneTime.epochMinute()`'s first caller in the repo.
+#
+# `_seeds_*` is how many of the ten seed units a space has taken so far. It needs its own var
+# because partial progress is invisible to the client - a tier has only three states - and
+# refusing anything short of a full fill would strand a player holding six seeds.
+hunter_birdhouse_ready_1 = 65475
+hunter_birdhouse_ready_2 = 65474
+hunter_birdhouse_ready_3 = 65473
+hunter_birdhouse_ready_4 = 65472
+hunter_birdhouse_seeds_1 = 65471
+hunter_birdhouse_seeds_2 = 65470
+hunter_birdhouse_seeds_3 = 65469
+hunter_birdhouse_seeds_4 = 65468

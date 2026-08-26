@@ -851,3 +851,56 @@ isServerOnly = true
 id = "varp.hunter_trap_coord_5"
 scope = "Perm"
 transmit = "Never"
+
+# Bird houses. Four fill deadlines and four seed counters, one of each per space. Server-only
+# and never transmitted: the client renders a bird house from the packed varps 1626-1629 and has
+# no use for either of these. `Perm` because the whole point of the deadline is that it survives
+# a logout - a bird house fills on wall-clock time, which no queue or controller can outlive.
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_ready_1"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_ready_2"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_ready_3"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_ready_4"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_seeds_1"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_seeds_2"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_seeds_3"
+scope = "Perm"
+transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_birdhouse_seeds_4"
+scope = "Perm"
+transmit = "Never"

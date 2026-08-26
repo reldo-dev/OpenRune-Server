@@ -2157,3 +2157,159 @@ contentGroup = "content.hunter_crab_trap"
 id = "loc.crab_trap_full_rainbow_c"
 inherit = "loc.crab_trap_full_rainbow_c"
 contentGroup = "content.hunter_crab_trap"
+
+# Bird house trapping. These 28 are the `multiloc` children of the four map-placed
+# `birdhouse_1`..`_4` spaces (30565-30568), which carry no ops of their own: the client picks a
+# child from the space's own varp - 1626-1629, one per space, holding 0..27 - and
+# `LocInteractions.opTrigger` resolves that child before it looks for a handler. So the group
+# belongs on the children, exactly as it does for the crab trap above.
+#
+# One group covers all four states because the op *indices* are consistent across them: op1 is
+# `Build` on the bare space and `Interact` on a full one, op2 is `Seeds` everywhere it appears,
+# op3 is `Dismantle` on a filling house and `Empty` on a full one, and op4 is `Reset`. Four
+# handlers dispatch the whole family off the varp. Splitting it into four groups would buy
+# nothing and would put the same `when` in four places.
+#
+# `_full` is full of *seeds*, not of birds; `_bird` is the harvestable state. The symbols read
+# the other way round and this is the one place that ordering matters, since a group missing
+# from one state makes the bird house unclickable in exactly that state.
+
+[[object]]
+id = "loc.birdhouse_not_built"
+inherit = "loc.birdhouse_not_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_normal_built"
+inherit = "loc.birdhouse_normal_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_normal_full"
+inherit = "loc.birdhouse_normal_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_normal_bird"
+inherit = "loc.birdhouse_normal_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_oak_built"
+inherit = "loc.birdhouse_oak_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_oak_full"
+inherit = "loc.birdhouse_oak_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_oak_bird"
+inherit = "loc.birdhouse_oak_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_willow_built"
+inherit = "loc.birdhouse_willow_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_willow_full"
+inherit = "loc.birdhouse_willow_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_willow_bird"
+inherit = "loc.birdhouse_willow_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_teak_built"
+inherit = "loc.birdhouse_teak_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_teak_full"
+inherit = "loc.birdhouse_teak_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_teak_bird"
+inherit = "loc.birdhouse_teak_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_maple_built"
+inherit = "loc.birdhouse_maple_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_maple_full"
+inherit = "loc.birdhouse_maple_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_maple_bird"
+inherit = "loc.birdhouse_maple_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_mahogany_built"
+inherit = "loc.birdhouse_mahogany_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_mahogany_full"
+inherit = "loc.birdhouse_mahogany_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_mahogany_bird"
+inherit = "loc.birdhouse_mahogany_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_yew_built"
+inherit = "loc.birdhouse_yew_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_yew_full"
+inherit = "loc.birdhouse_yew_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_yew_bird"
+inherit = "loc.birdhouse_yew_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_magic_built"
+inherit = "loc.birdhouse_magic_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_magic_full"
+inherit = "loc.birdhouse_magic_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_magic_bird"
+inherit = "loc.birdhouse_magic_bird"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_redwood_built"
+inherit = "loc.birdhouse_redwood_built"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_redwood_full"
+inherit = "loc.birdhouse_redwood_full"
+contentGroup = "content.hunter_bird_house"
+
+[[object]]
+id = "loc.birdhouse_redwood_bird"
+inherit = "loc.birdhouse_redwood_bird"
+contentGroup = "content.hunter_bird_house"
