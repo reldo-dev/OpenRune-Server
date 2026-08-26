@@ -1233,6 +1233,9 @@ class HunterPitfallTest {
         world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
 
         repeat(50) { attempt ->
+            // Emptied rather than merely re-armed: a pit holds two creatures at once, and fifty
+            // catches stacked into one of them would be testing the cap instead of the draw.
+            world.clearPits(player)
             world.setState(player, site, PitState.Set)
             val npc = world.addCreatureAt(site, tilesAway = attempt % 3)
             assertTrue(world.tease(player, npc))
@@ -1416,6 +1419,43 @@ class HunterPitfallTest {
         assertEquals(PitState.Set, world.stateOf(player, first), "the other pit is untouched")
     }
 
+    /**
+     * A chase the leash ends takes the creature's refusal with it.
+     *
+     * "Twice **in a row**" is a fact about one lure. A creature that vaulted a pit and was then
+     * walked so far from home that [HunterPitfall.tickChases] cut the chase loose is not in the
+     * middle of anything any more, and the hunter who teases it again is making a fresh first
+     * attempt.
+     *
+     * The leak underneath this is the reason it is worth a test rather than a judgement call. The
+     * refusal map is only ever swept by `tickChases`, and `tickChases` walks the *chases* map - so
+     * a refusal left behind by a chase that has already been taken out of that map is never looked
+     * at again by anything. It outlives the lure, the walk home, and the creature's next respawn,
+     * and shows up as a pit that one particular creature will not go near for no reason a player
+     * could ever discover.
+     */
+    @Test
+    fun `a chase the leash ends takes the creature's refusal with it`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+        val (player, npc) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertFalse(world.jump(player, site), "the first attempt misses and the pit is remembered")
+
+        world.lureNpc(npc, 65)
+        world.tickChases()
+        assertNull(world.teasedBy(npc), "the leash has ended the chase")
+
+        world.moveNpcTo(npc, site)
+        assertTrue(world.tease(player, npc), "a fresh lure back to the same pit")
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        assertTrue(world.jump(player, site), "a new chase is a fresh first attempt")
+
+        assertEquals(PitState.Catching, world.stateOf(player, site))
+        assertFalse(npc.isVisible)
+    }
+
     /* Two creatures, one trap. */
 
     /**
@@ -1432,6 +1472,14 @@ class HunterPitfallTest {
      * reserving the pit for the creature heading into it, or refusing any state but a freshly armed
      * one - makes a documented technique impossible. The pit is jumped a second time while it is
      * still in [PitState.Catching], and the two catches are then collected one dismantle at a time.
+     *
+     * **The first dismantle is taken between the two landings**, which is the wiki's own step 3:
+     * the results of creature A falling are there to collect as soon as A lands, and B is still in
+     * the air at that point. That is the sequence a version of this test that ticked past the whole
+     * window before dismantling stepped straight over - and the hole it left was not cosmetic.
+     * Collecting A off a pit that only looked at what had *landed* wrote the pit empty, and B then
+     * arrived on an empty pit and was thrown away having paid nothing. The middle assertion is the
+     * load-bearing one: the pit has to be left **collapsing**, because B has still to land in it.
      */
     @Test
     fun `two creatures caught in one collapse are worth a dismantle each`() {
@@ -1450,6 +1498,46 @@ class HunterPitfallTest {
         assertFalse(first.isVisible)
         assertFalse(second.isVisible)
 
+        world.tick(3)
+        assertEquals(PitState.Full, world.stateOf(player, site), "A has landed, B has two to go")
+
+        assertTrue(world.dismantle(player, site), "the results of creature A falling")
+        assertEquals(1, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"))
+        assertEquals(
+            PitState.Catching,
+            world.stateOf(player, site),
+            "the pit stays collapsing: creature B has still to land in it",
+        )
+
+        world.tick(2)
+        assertEquals(PitState.Full, world.stateOf(player, site), "and B lands in it")
+
+        assertTrue(world.dismantle(player, site), "the results of creature B falling")
+        assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"))
+        assertEquals(2, world.itemCount(player, "obj.big_bones"))
+        assertEquals(PitState.Empty, world.stateOf(player, site), "and now the pit is empty")
+    }
+
+    /**
+     * The same two-for-one with both catches landed, which is the other order to collect in.
+     *
+     * A hunter who does not dismantle the instant creature A lands has two catches sitting in one
+     * pit, and they are still worth a dismantle each. This is the half that pins the *second*
+     * entry's own rendering being what the pit is left showing - not merely "still full" - since a
+     * landed sibling keeps the pit at its own rotation rather than at the collected one's.
+     */
+    @Test
+    fun `both catches landed before the dismantle are still worth a dismantle each`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site), "creature A goes in")
+        world.tick(2)
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site), "creature B goes into the same trap")
+
         world.tick(5)
         assertEquals(PitState.Full, world.stateOf(player, site), "both have landed")
 
@@ -1461,6 +1549,90 @@ class HunterPitfallTest {
         assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"))
         assertEquals(2, world.itemCount(player, "obj.big_bones"))
         assertEquals(PitState.Empty, world.stateOf(player, site), "and now the pit is empty")
+    }
+
+    /**
+     * A pit dismantled between the landings cannot be re-armed under the creature still falling.
+     *
+     * The other half of the same hole, and the one that mints rather than destroys. A collection
+     * that wrote the pit empty while a sibling was in the air handed the player a pit they could
+     * arm and catch a third creature in; the abandoned entry then landed on the *new* catch's
+     * collapsing frame and the new one landed behind it, leaving two landed catches in a pit that
+     * had taken one creature since. That is the mint-from-nothing `clearPits` was fixed for,
+     * arrived at without `clearPits`.
+     *
+     * Leaving the pit collapsing closes it at the source: an armed pit is one no creature is
+     * falling into, so `trapPit`'s "there is something in this trap already" is the whole guard.
+     */
+    @Test
+    fun `a pit dismantled between the landings cannot be re-armed under the creature falling`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site))
+        world.tick(2)
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site))
+
+        world.tick(3)
+        assertTrue(world.dismantle(player, site), "the results of creature A falling")
+
+        world.giveTrapKit(player)
+        assertFalse(world.trap(player, site), "creature B is still falling into this pit")
+        assertEquals(PitState.Catching, world.stateOf(player, site))
+        val logs = world.itemCount(player, HunterPitfallTestWorld.LOGS)
+        assertEquals(1, logs, "the log is not spent")
+
+        world.tick(2)
+        assertTrue(world.dismantle(player, site), "the results of creature B falling")
+        assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"), "two creatures")
+        assertEquals(PitState.Empty, world.stateOf(player, site))
+    }
+
+    /**
+     * A pit holds two creatures and no more, however quick the hunter is.
+     *
+     * The wiki's technique is a two-for-one and its four steps name exactly two creatures: "lure
+     * one creature into a trap and tease a second one into the same trap as the first is still
+     * walking over it, netting two kills for one trap" (wiki, *Pitfall*, oldid=15201220). Nothing
+     * describes a third. Left bounded by the collapse timing alone, a third *is* reachable - the
+     * window is five cycles wide and a hunter with a creature already teased needs one click - so
+     * how many creatures a single log buys would be a number nobody chose, and one that a later
+     * tweak to the collapse timing would quietly change.
+     *
+     * The draw counter is asserted for the reason the refusal rule's is: a cap implemented as a
+     * roll that loses would leave the outcome right and the meaning wrong.
+     */
+    @Test
+    fun `a third creature cannot be caught in a pit that already holds two`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+
+        assertTrue(world.jump(player, site), "creature A goes in")
+        world.tick(1)
+        val second = world.addCreatureAt(site, tilesAway = 1)
+        assertTrue(world.tease(player, second))
+        assertTrue(world.jump(player, site), "creature B goes in behind it")
+
+        world.tick(1)
+        val third = world.addCreatureAt(site, tilesAway = 2)
+        assertTrue(world.tease(player, third))
+        val drawsBefore = world.random.doubleDraws
+
+        assertFalse(world.jump(player, site), "the pit already holds two")
+
+        assertTrue(third.isVisible, "the third creature is left standing on the map")
+        assertEquals(drawsBefore, world.random.doubleDraws, "a full pit must not roll")
+        assertEquals(PitState.Catching, world.stateOf(player, site))
+
+        world.tick(5)
+        assertTrue(world.dismantle(player, site))
+        assertTrue(world.dismantle(player, site))
+        assertEquals(2, world.itemCount(player, "obj.hunting_fur_jaguar_perfect"), "two, not three")
+        assertEquals(PitState.Empty, world.stateOf(player, site), "two dismantles empty the pit")
     }
 
     /**
