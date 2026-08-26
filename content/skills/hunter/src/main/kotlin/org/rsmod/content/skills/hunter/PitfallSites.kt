@@ -1,5 +1,7 @@
 package org.rsmod.content.skills.hunter
 
+import dev.openrune.rscm.RSCM.asRSCM
+import dev.openrune.rscm.RSCMType
 import org.rsmod.map.CoordGrid
 
 /**
@@ -281,4 +283,106 @@ object PitfallSites {
 
     /** The site behind a state varbit, for the login pass that rebuilds pending catches. */
     val byVarbit: Map<String, PitfallSite> = all.associateBy { it.varbit }
+
+    /**
+     * The `multiloc` child a pit renders as at [PitState.Empty], and the only loc in the whole
+     * family that carries `op3=Trap`.
+     *
+     * All twenty-five sites share it - every base loc declares `multiloc=0,` this - so `Trap` is
+     * one registration rather than twenty-five, and it is registered here rather than on the base
+     * loc because `LocInteractions.opTrigger` resolves the child *before* it looks for a handler.
+     */
+    const val EMPTY_LOC: String = "loc.hunting_pitfall_invis_empty"
+
+    /**
+     * The child a pit renders as at [PitState.Set], carrying `op1=Jump` **and** `op2=Dismantle`.
+     *
+     * Shared by all twenty-five sites, like [EMPTY_LOC].
+     */
+    const val SET_LOC: String = "loc.hunting_pitfall_invis_set"
+
+    /**
+     * The seven children a pit can render as at [PitState.Full] / [PitState.FullRotated], each
+     * carrying `op2=Dismantle`.
+     *
+     * Seven rather than ten because the two states are a rotation pair per creature and **the two
+     * antelopes do not have one**: sites 1-16 name `hunter_pitfall_full_<cat>` and its `_180`
+     * twin in their own multiloc children, while sites 17-25 name the creature-agnostic
+     * `hunter_pitfall_full` at *both* states 3 and 4. The four
+     * `hunter_pitfall_full_antelope_<kind>[_180]` locs exist but are children of the companion
+     * `hunting_pitfall_<n>_animal` loc, are `active=no`, and carry no ops at all - they are the
+     * model the client draws beside the pit, not anything a click can reach. See [opLessLocs].
+     *
+     * Written out rather than assembled from [PitfallCreatures]: the family mixes the
+     * `hunting_pitfall_*` and `hunter_pitfall_full*` spellings and the antelopes break the
+     * per-creature pattern outright, so a name built by string surgery would resolve to nothing
+     * and throw at first click.
+     */
+    val fullLocs: List<String> =
+        listOf(
+            "loc.hunter_pitfall_full",
+            "loc.hunter_pitfall_full_kyatt",
+            "loc.hunter_pitfall_full_kyatt_180",
+            "loc.hunter_pitfall_full_larupia",
+            "loc.hunter_pitfall_full_larupia_180",
+            "loc.hunter_pitfall_full_graahk",
+            "loc.hunter_pitfall_full_graahk_180",
+        )
+
+    /**
+     * Every child a `Dismantle` click can arrive on: the spiked pit and all seven full renderings.
+     *
+     * One list because one handler covers them - [HunterPitfall.dismantlePit] branches on the
+     * site's varbit, not on which child it was handed.
+     */
+    val dismantleLocs: List<String> = listOf(SET_LOC) + fullLocs
+
+    /**
+     * The pitfall locs that carry **no reachable op**, and so must never be registered.
+     *
+     * - `hunting_pitfall_invis_catching` is [PitState.Catching]: the cache gives it no ops, which
+     *   is what makes that state transient rather than clickable.
+     * - `hunting_pitfall_invis_collpased` (the misspelling is the cache's) declares
+     *   `op2=Dismantle` but appears in **no** multiloc chain at this revision, so no varbit value
+     *   can ever render it. Registering it would be dead code that looks live.
+     * - the four `hunter_pitfall_full_antelope_*` locs are `active=no` with no ops; see [fullLocs].
+     *
+     * `PitfallSitesTest` and `HunterWiringTest` both read this: the first to assert the cache
+     * really declares no reachable op on them, the second to assert nothing subscribes to them.
+     */
+    val opLessLocs: List<String> =
+        listOf(
+            "loc.hunting_pitfall_invis_catching",
+            "loc.hunting_pitfall_invis_collpased",
+            "loc.hunter_pitfall_full_antelope_sunlight",
+            "loc.hunter_pitfall_full_antelope_sunlight_180",
+            "loc.hunter_pitfall_full_antelope_moonlight",
+            "loc.hunter_pitfall_full_antelope_moonlight_180",
+        )
+
+    /**
+     * Every site's base loc id, in table order.
+     *
+     * Touching it resolves all twenty-five `hunting_pitfall_<n>` names through `RSCM`, which is
+     * why `PitfallEvents.startup` reads it: a mistyped site name then throws at boot rather than
+     * at whichever click happens to reach it first. `HunterWiringTest` reads it for the other
+     * reason - to assert that none of the twenty-five is subscribed to by id.
+     */
+    val baseLocIds: List<Int> by lazy { all.map { it.baseLoc.asRSCM(RSCMType.LOC) } }
+
+    private val sitesByLocId: Map<Int, PitfallSite> by lazy { baseLocIds.zip(all).toMap() }
+
+    /**
+     * The site a click landed on, keyed by the **base** loc's id.
+     *
+     * `LocEvents.OpN` hands over both halves of a multiloc - `loc` is the map-placed site, `vis` is
+     * the child the player's varbit resolved to - and this reads the site off `loc`. The state is
+     * then read from the varbit rather than from `vis`, for the reason `CrabTrapSites.byLocId`
+     * gives: the varbit is what the client rendered from and is the value the server is about to
+     * overwrite, so the two cannot disagree.
+     *
+     * Lazy because it is the first thing in this file to touch `RSCM`, and the twenty-five literal
+     * rows above deliberately do not.
+     */
+    fun byLocId(locId: Int): PitfallSite? = sitesByLocId[locId]
 }

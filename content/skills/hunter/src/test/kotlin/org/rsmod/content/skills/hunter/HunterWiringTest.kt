@@ -12,6 +12,7 @@ import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.rsmod.api.controller.events.ControllerAIEvents
+import org.rsmod.api.game.process.GameLifecycle
 import org.rsmod.api.player.events.EngineQueueEvents
 import org.rsmod.api.player.events.PlayerQueueEvents
 import org.rsmod.api.player.events.interact.HeldObjEvents
@@ -32,7 +33,7 @@ import org.rsmod.plugin.scripts.PluginScript
 import org.rsmod.plugin.scripts.ScriptContext
 
 /**
- * What the nine hunter scripts actually put on the event bus.
+ * What the ten hunter scripts actually put on the event bus.
  *
  * **The gap this closes.** Every other test in this module reaches the ops by calling
  * `setDeadfall`, `collectTrap`, `catchKebbit` and friends directly. That proves the *bodies* are
@@ -399,6 +400,123 @@ class HunterWiringTest {
         assertTrue(bus.hasSoftQueue(TRACKING_RESET_QUEUE), "loginReset on $TRACKING_RESET_QUEUE")
     }
 
+    /**
+     * Pitfall trapping registers three ops across **nine child locs**, and no content group at all.
+     *
+     * The nine are the `multiloc` children the twenty-five sites resolve to, so this is the crab
+     * trap's shape answered without a group: nine direct registrations against a
+     * `[gamevals.content]` id plus nine `contentGroup` blocks. The walk is driven off
+     * [PitfallSites] rather than a transcribed list, so a child added to the family joins on its
+     * own - and the two size assertions are here because that only helps if the table is the size
+     * the cache says it is.
+     */
+    @Test
+    fun `pitfall registers Trap, Jump and Dismantle on every op-carrying child loc`() {
+        val bus = Wiring().start(scripts.pitfall)
+
+        val empty = PitfallSites.EMPTY_LOC
+        val set = PitfallSites.SET_LOC
+        assertTrue(bus.hasOpLoc3(empty), "op3 (`Trap`) on $empty")
+        assertTrue(bus.hasOpLoc1(set), "op1 (`Jump`) on $set")
+
+        assertEquals(7, PitfallSites.fullLocs.size, "seven full renderings draw `Dismantle`")
+        assertEquals(8, PitfallSites.dismantleLocs.size, "and the spiked pit draws it too")
+        for (loc in PitfallSites.dismantleLocs) {
+            assertTrue(bus.hasOpLoc2(loc), "op2 (`Dismantle`) on $loc")
+        }
+
+        // Nothing of a pitfall exists in the world, so there is no controller to tick - and no
+        // content group is claimed, because the registrations are by loc id.
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAiConTimer(FALCON_CONTROLLER), "no controller is created")
+        for (group in ALL_TRAP_GROUPS + CRAB_GROUP + BIRD_HOUSE_GROUP) {
+            assertFalse(bus.hasOpContentLoc1(group), "pitfalls must not claim $group")
+        }
+    }
+
+    /** `Tease` is registered on all five creature npcs, which is what starts every chase. */
+    @Test
+    fun `pitfall registers a tease on every creature npc`() {
+        val bus = Wiring().start(scripts.pitfall)
+
+        assertEquals(5, PitfallCreatures.all.size, "all five pitfall creatures ship")
+        for (creature in PitfallCreatures.all) {
+            assertTrue(bus.hasOpNpc1(creature.npc), "`Tease` on ${creature.npc}")
+        }
+    }
+
+    /**
+     * **The single most important assertion in this class.**
+     *
+     * `HunterPitfall.tick` is inert until something registers it on `GameLifecycle.LateCycle`, and
+     * it carries two things nothing else carries: the leash that ends a chase, and the landing of
+     * a collapse. Without this one line a teased creature follows its hunter across the world
+     * forever - `NpcModeProcessor` gives `NpcMode.PlayerFollow` no timeout, no leash and no
+     * give-up, and teleports the creature onto the player's tile past 15 tiles - and no catch ever
+     * finishes collapsing, so no pit can be dismantled. **Every one of this module's other tests
+     * stays green through all of that**, because they drive the hook by hand.
+     */
+    @Test
+    fun `pitfall registers the late cycle hook that bounds chases and lands catches`() {
+        val bus = Wiring().start(scripts.pitfall)
+
+        assertTrue(bus.hasLateCycle(), "GameLifecycle.LateCycle -> HunterPitfall.tick")
+    }
+
+    /**
+     * The login rebuild rides a soft queue, and there is deliberately no logout hook.
+     *
+     * The queue half guards the companion trap [`tracking registers the logout discard and the
+     * login reset queue`] names: a varbit written from `onPlayerLogin` itself updates the server
+     * and leaves the client drawing the old frame, because `VarPlayerIntMapSetter` short-circuits
+     * while `processedMapClock == 0`. A pit stranded at `PitState.Catching` by a logout is the one
+     * piece of pitfall state that cannot fix itself, and this is what resolves it.
+     *
+     * The logout half is an assertion of absence with a reason behind it: `HunterTracking` needs a
+     * logout because it holds an `IdentityHashMap<Player, TrailState>`, whereas `HunterPitfall`
+     * keys everything by `Npc` and stores a `PlayerUid`, and `tick` sweeps a departed owner's
+     * chases and collapses on the next cycle. If a `Player` is ever put in a field there, this
+     * assertion is the thing that has to be argued with first.
+     */
+    @Test
+    fun `pitfall registers the login rebuild queue and no logout hook`() {
+        val bus = Wiring().start(scripts.pitfall)
+
+        assertTrue(bus.hasPlayerLogin(), "the stranded-collapse rebuild")
+        assertTrue(bus.hasSoftQueue(PITFALL_REBUILD_QUEUE), "rebuildPits on $PITFALL_REBUILD_QUEUE")
+        assertFalse(bus.hasPlayerLogout(), "nothing here holds a Player to drop")
+    }
+
+    /**
+     * The **site** locs, their antelope companions, and the op-less children are not registered.
+     *
+     * The site locs are `multiloc` parents with no ops; `LocInteractions.opTrigger` tries the
+     * type-level `LocEvents.OpN` before it recurses into the child, so a per-id registration on a
+     * site would shadow the child's handler for every state at once. The other two groups are the
+     * ones easiest to add by mistake: the four `hunter_pitfall_full_antelope_*` locs look like the
+     * missing rows of [PitfallSites.fullLocs] and are `active=no` with no ops, and
+     * `hunting_pitfall_invis_collpased` declares `op2=Dismantle` and is in **no** multiloc chain at
+     * this revision, so a handler on it is dead code that reads as live.
+     */
+    @Test
+    fun `no pitfall site, companion or op-less loc is registered by id`() {
+        val bus = Wiring().start(*scripts.all.toTypedArray())
+
+        assertEquals(25, PitfallSites.baseLocIds.size, "all twenty-five sites resolve")
+        val unregistered =
+            PitfallSites.all.map { it.baseLoc } +
+                PitfallSites.all.mapNotNull { it.animalLoc } +
+                PitfallSites.opLessLocs
+        assertEquals(40, unregistered.size, "25 sites, 9 companions and 6 op-less children")
+
+        for (loc in unregistered) {
+            val id = loc.asRSCM(RSCMType.LOC)
+            assertFalse(bus.eventBus.contains(LocEvents.Op1::class.java, id), "op1 on $loc")
+            assertFalse(bus.eventBus.contains(LocEvents.Op2::class.java, id), "op2 on $loc")
+            assertFalse(bus.eventBus.contains(LocEvents.Op3::class.java, id), "op3 on $loc")
+        }
+    }
+
     /* The once-only invariant. */
 
     /**
@@ -423,9 +541,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all nine scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all ten scripts share one bus at startup. */
     @Test
-    fun `all nine scripts start together on one bus without a duplicate key`() {
+    fun `all ten scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -570,6 +688,9 @@ class HunterWiringTest {
             for (creature in ImplingCreatures.all) {
                 add(creature.npc to InteractionOp.Op1)
             }
+            for (creature in PitfallCreatures.all) {
+                add(creature.npc to InteractionOp.Op1)
+            }
         }
 
         for ((npc, op) in expected) {
@@ -578,6 +699,50 @@ class HunterWiringTest {
                     ?: error("No packed npc definition for $npc")
             assertTrue(type.hasOp(op.slot), "$npc must carry ${op.name} (${type.actions})")
         }
+    }
+
+    /**
+     * Every pitfall child a handler sits on really draws that op, and the op-less ones really are.
+     *
+     * The pitfall half of [`every dispatched loc state carries its content group and the op it is
+     * dispatched for`], minus the group: these nine are registered by id, so the only declaration
+     * behind each registration is the op itself. A `Dismantle` handler on a loc that draws no op2
+     * is unreachable and looks fine.
+     *
+     * `hunting_pitfall_invis_collpased` is excluded from the second half and pinned on its own,
+     * because it is the one loc that carries an op and is still unreachable - no base loc names it
+     * in any multiloc chain, so no varbit value can render it.
+     */
+    @Test
+    fun `every pitfall child loc carries the op it is registered for`() {
+        val expected = buildList {
+            add(PitfallSites.EMPTY_LOC to InteractionOp.Op3)
+            add(PitfallSites.SET_LOC to InteractionOp.Op1)
+            for (loc in PitfallSites.dismantleLocs) {
+                add(loc to InteractionOp.Op2)
+            }
+        }
+
+        for ((loc, op) in expected) {
+            val type =
+                ServerCacheManager.getObject(loc.asRSCM(RSCMType.LOC))
+                    ?: error("No packed loc definition for $loc")
+            assertTrue(type.hasOp(op), "$loc must carry ${op.name} (${type.actions})")
+        }
+
+        for (loc in PitfallSites.opLessLocs - UNREACHABLE_PIT_LOC) {
+            val type =
+                ServerCacheManager.getObject(loc.asRSCM(RSCMType.LOC))
+                    ?: error("No packed loc definition for $loc")
+            for (op in InteractionOp.entries) {
+                assertFalse(type.hasOp(op), "$loc must draw no ${op.name} (${type.actions})")
+            }
+        }
+
+        val unreachable =
+            ServerCacheManager.getObject(UNREACHABLE_PIT_LOC.asRSCM(RSCMType.LOC))
+                ?: error("No packed loc definition for $UNREACHABLE_PIT_LOC")
+        assertTrue(unreachable.hasOp(Op2), "$UNREACHABLE_PIT_LOC draws an op2 and is still dead")
     }
 
     /** Every obj a lay op is registered on really draws an inventory op1. */
@@ -679,7 +844,7 @@ class HunterWiringTest {
         HunterCreatures.all.filter { it.family == family }
 
     /**
-     * The eight scripts, built over the same worlds the rest of the suite uses.
+     * The ten scripts, built over the same worlds the rest of the suite uses.
      *
      * The collaborators are only there to satisfy the constructors - `startup()` never touches them,
      * because every handler body it registers is a lambda that is not run here.
@@ -691,6 +856,7 @@ class HunterWiringTest {
         private val crabWorld = HunterCrabTrapTestWorld()
         private val birdHouseWorld = HunterBirdHouseTestWorld()
         private val trackingWorld = HunterTrackingTestWorld()
+        private val pitfallWorld = HunterPitfallTestWorld()
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
@@ -703,12 +869,14 @@ class HunterWiringTest {
         val impling = ImplingEvents(butterflyWorld.impling, butterflyWorld.implingSpawner)
         val birdHouse = BirdHouseEvents(birdHouseWorld.birdHouse)
         val tracking = TrackingEvents(trackingWorld.tracking)
+        val pitfall = PitfallEvents(pitfallWorld.pitfall)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
         val all: List<PluginScript> =
-            trapFamily + listOf(falconry, butterfly, crabTrap, impling, birdHouse, tracking)
+            trapFamily +
+                listOf(falconry, butterfly, crabTrap, impling, birdHouse, tracking, pitfall)
     }
 
     /**
@@ -768,6 +936,18 @@ class HunterWiringTest {
         fun hasOpLoc2(loc: String): Boolean =
             eventBus.contains(LocEvents.Op2::class.java, loc.asRSCM(RSCMType.LOC))
 
+        fun hasOpLoc3(loc: String): Boolean =
+            eventBus.contains(LocEvents.Op3::class.java, loc.asRSCM(RSCMType.LOC))
+
+        /**
+         * `onEvent<GameLifecycle.LateCycle>` subscribes an [org.rsmod.events.UnboundEvent], so it
+         * lives in the same map [hasPlayerLogin] reads rather than in `contains`' suspend map. Read
+         * per script rather than on the combined bus: [ImplingEvents] registers one too, and on a
+         * shared bus a missing pitfall hook would be hidden by the spawner's.
+         */
+        fun hasLateCycle(): Boolean =
+            eventBus.unbound[GameLifecycle.LateCycle::class.java].orEmpty().isNotEmpty()
+
         /**
          * `onAiConTimer` subscribes a [org.rsmod.events.KeyedEvent], not a suspending one, so
          * `EventBus.contains` - which only reads the suspend map - cannot answer this. The keyed
@@ -824,6 +1004,12 @@ class HunterWiringTest {
         private const val BOX_OBJ = "obj.hunting_box_trap"
         private const val MAGIC_BOX_OBJ = "obj.magic_imp_box"
         private const val RING_OBJ = HunterTracking.RING_OF_PURSUIT
+
+        /**
+         * The pitfall loc that draws `op2=Dismantle` and can still never be clicked: no base loc
+         * names it in any multiloc chain at this revision. The misspelling is the cache's.
+         */
+        private const val UNREACHABLE_PIT_LOC = "loc.hunting_pitfall_invis_collpased"
 
         private const val FALCONER_NPC = "npc.hunting_npc_falconer"
         private const val FALCONRY_AREA = "area.piscatoris_falconry"

@@ -64,7 +64,7 @@ class HunterPitfallTest {
      * would have been a repository to look creatures up through. They hold nothing but npcs the
      * caller already handed them. `PlayerList` is the engine's own player array, which is what
      * `NpcPlayerFollowModeProcessor` resolves a follow target through and what
-     * [HunterPitfall.tickChases] resolves one through in turn; it is not a repository and cannot
+     * [HunterPitfall.tick] resolves one through in turn; it is not a repository and cannot
      * add, delete or move anything. The `ArrayList` is the collapse ledger.
      *
      * `NpcRepository` **is** held, and is deliberately not in the forbidden list: a creature that
@@ -932,7 +932,7 @@ class HunterPitfallTest {
 
         assertTrue(world.tease(player, npc))
         world.lureNpc(npc, 41)
-        world.tickChases()
+        world.tick()
 
         assertEquals(NpcMode.PlayerFollow, npc.mode)
         assertSame(player, world.chaseTarget(npc))
@@ -955,7 +955,7 @@ class HunterPitfallTest {
 
         assertTrue(world.tease(player, npc))
         world.lureNpc(npc, 64)
-        world.tickChases()
+        world.tick()
 
         assertSame(player, world.chaseTarget(npc))
         assertEquals(player.uid, world.teasedBy(npc))
@@ -966,7 +966,7 @@ class HunterPitfallTest {
      *
      * `NpcMode.PlayerFollow` has no timeout, no leash and no give-up condition of its own, and
      * `NpcPlayerFollowModeProcessor` teleports the creature onto the player's exact tile past
-     * fifteen. Without [HunterPitfall.tickChases] a teased larupia follows its hunter to Varrock
+     * fifteen. Without [HunterPitfall.tick] a teased larupia follows its hunter to Varrock
      * and stands on them there until one of them logs out.
      */
     @Test
@@ -977,7 +977,7 @@ class HunterPitfallTest {
 
         assertTrue(world.tease(player, npc))
         world.lureNpc(npc, 65)
-        world.tickChases()
+        world.tick()
 
         assertEquals(NpcMode.Wander, npc.mode)
         assertNull(world.chaseTarget(npc))
@@ -993,7 +993,7 @@ class HunterPitfallTest {
 
         assertTrue(world.tease(player, npc))
         world.lureNpc(npc, 1000)
-        world.tickChases()
+        world.tick()
 
         assertEquals(NpcMode.Wander, npc.mode)
         assertNull(world.teasedBy(npc))
@@ -1016,7 +1016,7 @@ class HunterPitfallTest {
 
         assertTrue(world.tease(player, npc))
         world.removePlayer(player)
-        world.tickChases()
+        world.tick()
 
         assertEquals(NpcMode.Wander, npc.mode)
         assertNull(world.chaseTarget(npc))
@@ -1044,7 +1044,7 @@ class HunterPitfallTest {
         val stranger = world.addPlayer(slot = slot)
         assertEquals(slot, stranger.slotId, "the test needs the freed slot to be reused")
 
-        world.tickChases()
+        world.tick()
 
         assertEquals(NpcMode.Wander, npc.mode)
         assertNull(world.teasedBy(npc))
@@ -1065,7 +1065,7 @@ class HunterPitfallTest {
 
         assertTrue(world.tease(player, npc))
         world.removeNpc(npc)
-        world.tickChases()
+        world.tick()
 
         assertNull(world.teasedBy(npc))
         assertEquals(NpcMode.PlayerFollow, npc.mode)
@@ -1116,6 +1116,76 @@ class HunterPitfallTest {
         assertFalse(npc.isVisible, "the creature is in the pit, not on the map")
         assertNull(world.teasedBy(npc), "a creature in a pit is not chasing anybody")
         assertEquals(NpcMode.Wander, npc.mode)
+    }
+
+    /**
+     * A pit a logout stranded mid-collapse is finished on the way back in, not reset.
+     *
+     * This is the exact state a relog leaves: the varbit persists at [PitState.Catching] and the
+     * collapse ledger does not, so nothing in the feature would ever move the pit again -
+     * `landCollapses` walks entries that no longer exist, and `dismantlePit` refuses that state
+     * outright. Set directly rather than reached through a jump, because setting the varbit with an
+     * empty ledger *is* what a loaded save looks like.
+     *
+     * Finished rather than reset, and the assertion is the whole argument for that choice: the
+     * creature was despawned before the varbit was ever written, so the catch has already happened
+     * and only its rendering is unfinished. Paying it out mints nothing.
+     */
+    @Test
+    fun `the login rebuild finishes a collapse a logout stranded`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+        world.setState(player, site, PitState.Catching)
+
+        world.rebuildPits(player)
+
+        assertEquals(PitState.Full, world.stateOf(player, site))
+        assertTrue(world.dismantle(player, site), "the rebuilt catch is collectable")
+        assertEquals(PitState.Empty, world.stateOf(player, site))
+    }
+
+    /**
+     * Every other state is left exactly as it was.
+     *
+     * The rebuild is a repair for one stranded value, not a login-time sweep of the technique. An
+     * armed pit that survived a logout is still armed, and a full one is still waiting to be
+     * dismantled; touching either would cost the player a log or a catch for having logged out.
+     */
+    @Test
+    fun `the login rebuild leaves every other pit state alone`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        val player = world.addPlayer(hunterLvl = 31)
+
+        for (state in listOf(PitState.Empty, PitState.Set, PitState.Full, PitState.FullRotated)) {
+            world.setState(player, site, state)
+            world.rebuildPits(player)
+            assertEquals(state, world.stateOf(player, site), "$state must survive a login")
+        }
+    }
+
+    /**
+     * A collapse that is still counting down is not finished early by a rebuild.
+     *
+     * Unreachable in production - `landCollapses` drops a departed owner's entries, so a login
+     * never finds one of its own - but it is the one way this repair could do damage rather than
+     * fix it: landing a catch early would let the pit be dismantled while a second creature was
+     * still in the air, which is the mint-from-nothing shape the whole ledger exists to prevent.
+     * The guard is one lookup, and this is what proves it is doing something.
+     */
+    @Test
+    fun `the login rebuild does not finish a collapse that is still in flight`() {
+        val site = HunterPitfallTestWorld.LARUPIA_SITE
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val (player, _) = armedPitWithChaser(site, hunterLvl = 31)
+        assertTrue(world.jump(player, site))
+
+        world.rebuildPits(player)
+
+        assertEquals(PitState.Catching, world.stateOf(player, site), "still collapsing")
+        // The literal, not `COLLAPSE_CYCLES`: a count read off the constant under test would move
+        // with it and assert nothing.
+        world.tick(5)
+        assertEquals(PitState.Full, world.stateOf(player, site), "and it lands on its own clock")
     }
 
     /**
@@ -1423,12 +1493,12 @@ class HunterPitfallTest {
      * A chase the leash ends takes the creature's refusal with it.
      *
      * "Twice **in a row**" is a fact about one lure. A creature that vaulted a pit and was then
-     * walked so far from home that [HunterPitfall.tickChases] cut the chase loose is not in the
+     * walked so far from home that [HunterPitfall.tick] cut the chase loose is not in the
      * middle of anything any more, and the hunter who teases it again is making a fresh first
      * attempt.
      *
      * The leak underneath this is the reason it is worth a test rather than a judgement call. The
-     * refusal map is only ever swept by `tickChases`, and `tickChases` walks the *chases* map - so
+     * refusal map is only ever swept by `tick`, and `tick` walks the *chases* map - so
      * a refusal left behind by a chase that has already been taken out of that map is never looked
      * at again by anything. It outlives the lure, the walk home, and the creature's next respawn,
      * and shows up as a pit that one particular creature will not go near for no reason a player
@@ -1443,7 +1513,7 @@ class HunterPitfallTest {
         assertFalse(world.jump(player, site), "the first attempt misses and the pit is remembered")
 
         world.lureNpc(npc, 65)
-        world.tickChases()
+        world.tick()
         assertNull(world.teasedBy(npc), "the leash has ended the chase")
 
         world.moveNpcTo(npc, site)

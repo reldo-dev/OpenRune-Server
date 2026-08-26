@@ -179,6 +179,11 @@ class HunterPitfallTestWorld {
         pitfall.clearPits(player)
     }
 
+    /** The body of `PITFALL_REBUILD_QUEUE`, which a login arms one cycle in. */
+    fun rebuildPits(player: Player) {
+        pitfall.rebuildPits(player)
+    }
+
     /* Creatures */
 
     /** A live creature on [coords], registered so it has a slot and a uid of its own. */
@@ -265,7 +270,7 @@ class HunterPitfallTestWorld {
      * [HunterPitfall.jumpPit] is `suspend` for the same reason the tease is - it composes with the
      * suspending op handler a later task registers it in - and has no suspension point of its own:
      * the catch resolves in the cycle the player jumps, and the collapse is a cycle count on
-     * [HunterPitfall.tickChases] rather than a delay the player waits out. The [checkNotNull] is the
+     * [HunterPitfall.tick] rather than a delay the player waits out. The [checkNotNull] is the
      * assertion of exactly that.
      */
     fun jump(player: Player, site: PitfallSite): Boolean {
@@ -287,19 +292,19 @@ class HunterPitfallTestWorld {
     }
 
     /**
-     * One cycle of the hook [HunterPitfall.tickChases] needs registering on
+     * One cycle of the hook [HunterPitfall.tick] needs registering on
      * `GameLifecycle.LateCycle`.
      *
      * Nothing else in this world runs on a clock, so a chase ends here or it does not end at all -
      * which is exactly the production situation the hook exists for.
      */
-    fun tickChases() {
-        pitfall.tickChases()
+    fun tick() {
+        pitfall.tick()
     }
 
     /** [times] cycles of that same hook, which is how a collapse finishes landing. */
     fun tick(times: Int) {
-        repeat(times) { pitfall.tickChases() }
+        repeat(times) { pitfall.tick() }
     }
 
     /** Who [npc] is chasing, read exactly as `NpcPlayerFollowModeProcessor` reads it each cycle. */

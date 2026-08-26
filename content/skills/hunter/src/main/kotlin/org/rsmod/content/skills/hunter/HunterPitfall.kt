@@ -20,6 +20,21 @@ import org.rsmod.game.entity.PlayerList
 import org.rsmod.game.entity.player.PlayerUid
 
 /**
+ * The soft queue that finishes a collapse a logout interrupted, `queue.hunter_pitfall_rebuild`.
+ *
+ * A player who logs out between a catch and its landing leaves a pit sitting at
+ * [PitState.Catching] with nothing left to move it: the collapse ledger is in memory and the
+ * varbit is in the save. [HunterPitfall.rebuildPits] is what resolves those, and it cannot run
+ * from the login event itself - `VarPlayerIntMapSetter` short-circuits before its transmit branch
+ * while `processedMapClock == 0`, which is exactly the state during `SessionStateEvent.Login`, so
+ * the varbit would change on the server and the client would go on drawing the collapsing frame.
+ * Riding a one-cycle soft queue puts the write after the login clock has moved. Soft because a
+ * rebuild must never interrupt whatever the player is doing on the way in, which is the same
+ * reasoning [TRACKING_RESET_QUEUE] and `BIRDHOUSE_FILL_QUEUE` carry.
+ */
+const val PITFALL_REBUILD_QUEUE: String = "queue.hunter_pitfall_rebuild"
+
+/**
  * Pitfall trapping: setting a pit, jumping it, the catch that follows the hunter in, and taking the
  * pit apart again.
  *
@@ -47,21 +62,22 @@ import org.rsmod.game.entity.player.PlayerUid
  *   its minimum, and the antelopes' draw count, so "cannot fail" cannot decay into "rolls a rate
  *   that always wins".
  *
- * ## What this class is not, yet
+ * ## Where the clicks come from, and the one hook that is not a click
  *
- * Nothing here is registered against a click. The op layer - a `Jump` on the spiked pit, a `Trap`
- * and a `Dismantle` on the loc, a `Tease` on the creature - is a later task's, as is the player's
- * own vault across the pit: that is an `exactMove` off the clicked loc's angle, and [PitfallSite]
- * carries coordinates rather than an angle precisely because the click is what knows which way a
- * pit faces. [jumpPit] resolves the catch; it does not move the player.
+ * [PitfallEvents] registers all of it: `op3=Trap` and `op1=Jump` and `op2=Dismantle` on the
+ * `multiloc` children a pit renders as, `op1=Tease` on the five creature npcs, and the login
+ * queue [rebuildPits] rides. Nothing is registered on the twenty-five map-placed base locs, which
+ * carry no ops at all.
  *
- * **[tickChases] is the one thing here that is not an op, and it is not optional.** It needs a
- * `GameLifecycle.LateCycle` registration - `onEvent<GameLifecycle.LateCycle> { pitfall.tickChases()
- * }`, exactly as [ImplingSpawner] gets one - and without it a teased creature follows its hunter
- * across the world forever and every catch stays stuck mid-collapse. It is the feature's single
- * per-cycle hook and it runs both halves: the chase leash, and the landing of a collapse [jumpPit]
- * started. See [tickChases] for why nothing else in the engine will stop a chase, and
- * [landCollapses] for why the landing is a cycle count rather than a queue.
+ * **[tick] is the one thing here that is not an op, and it is not optional.** It is registered on
+ * `GameLifecycle.LateCycle`, exactly as [ImplingSpawner] is, and without that line a teased
+ * creature follows its hunter across the world forever and every catch stays stuck mid-collapse -
+ * with every unit test in this module still green, because they all drive the hook by hand. See
+ * [tick] for why nothing else in the engine will stop a chase, and [landCollapses] for why the
+ * landing is a cycle count rather than a queue.
+ *
+ * The player's own vault across the pit is still not modelled: that is an `exactMove` off the
+ * clicked loc's angle, and [jumpPit] resolves the catch without moving anybody.
  *
  * @see PitState for what each varbit value renders as, and which ops the cache declares on it.
  */
@@ -96,7 +112,7 @@ constructor(
      * right: a chase is a thing in flight, and a creature that respawns has nobody to chase.
      *
      * Entries are added by [teaseCreature] and removed by [stopChasing], which is the call the
-     * catch belongs on, and by [tickChases] for a chase that ended some other way. The map is in
+     * catch belongs on, and by [tick] for a chase that ended some other way. The map is in
      * any case bounded by the number of pitfall creatures the map spawns - a few dozen - rather
      * than growing without limit. Identity keying, and the reasoning behind it, is `FalconLinks`'.
      */
@@ -114,11 +130,11 @@ constructor(
      *
      * An entry is written by a failed [jumpPit] and overwritten by the next failure elsewhere. It
      * is dropped **with the chase it belongs to**: [stopChasing] clears it, and so does the branch
-     * of [tickChases] that handles a creature the world has already taken away. That is what keeps
+     * of [tick] that handles a creature the world has already taken away. That is what keeps
      * this bounded and what gives a respawn a clean slate, and it has to be the chase rather than
      * the npc's disappearance alone - a chase ended by the leash leaves the creature in the world,
-     * and an entry that only [tickChases] could clear would then never be looked at again, because
-     * [tickChases] iterates [chases]. The refusal is a fact about one lure; a hunter who walks the
+     * and an entry that only [tick] could clear would then never be looked at again, because
+     * [tick] iterates [chases]. The refusal is a fact about one lure; a hunter who walks the
      * creature back and starts a new one is making a fresh first attempt.
      *
      * Deliberately **not** cleared by a tease that continues an existing chase: a hunter who
@@ -379,7 +395,7 @@ constructor(
      * which is not what a tease is; see the retaliation note below.
      *
      * The price of that choice is that `PlayerFollow` has **no** leash at all, and the engine will
-     * not end this chase on its own. [tickChases] is where the leash is put back, and it is a
+     * not end this chase on its own. [tick] is where the leash is put back, and it is a
      * prerequisite of this method rather than a refinement of it.
      *
      * The one thing `PlayerFollow` will not survive is a facing lock: `Npc.facePlayer` is a no-op
@@ -420,7 +436,7 @@ constructor(
      * a teased creature into combat and no way to kill one to be rid of it. A creature that hits
      * for 5-7 every few cycles, on top of a chase with nothing to end it, would be neither
      * escapable nor killable - a hunter's only way out would be to log. So a **chase-termination
-     * rule is a prerequisite of retaliation, not a sibling of it**, and [tickChases] is that rule.
+     * rule is a prerequisite of retaliation, not a sibling of it**, and [tick] is that rule.
      * Whoever builds the attack half inherits a bound already in place and must not widen it.
      *
      * The rest of that half is real combat wiring - an attack mode, a max hit per creature, a
@@ -661,10 +677,18 @@ constructor(
         (npc.coords.x + npc.coords.z) < (site.coords.x + site.coords.z)
 
     /**
-     * The cycle hook that gives every chase somewhere to stop. Register it, or none of them do.
+     * One cycle of everything this feature does on a clock. Register it, or none of it happens.
      *
-     * It is the feature's only per-cycle hook, so it carries the other thing that happens on a
-     * clock as well: [landCollapses], where a pit [jumpPit] set collapsing finishes doing so.
+     * Two unrelated halves, which is why the name is a neutral one rather than either of theirs:
+     * - **the chase leash**, below, which is the only thing in the server that will ever end a
+     *   teased creature's pursuit;
+     * - **[landCollapses]**, where a pit [jumpPit] set collapsing finishes doing so and becomes a
+     *   catch the player can dismantle.
+     *
+     * They share the hook rather than each getting one because a feature that needs a cycle needs
+     * it once: whoever registers this for the leash gets the landing with it, and neither half can
+     * be wired without the other. [ImplingSpawner.tick] is the module's precedent for a per-cycle
+     * hook that advances several things under one neutral name.
      *
      * ## Why this has to exist
      *
@@ -698,7 +722,7 @@ constructor(
      * There is deliberately no cap on a chase that never leaves the hunting ground. A hunter who
      * keeps a creature circling its own pits is doing the technique, not abusing it.
      */
-    fun tickChases() {
+    fun tick() {
         if (chases.isNotEmpty()) {
             // Collected before anything is ended, because `stopChasing` writes the map being read.
             val ended = chases.entries.filterNot { (npc, teaser) -> chaseContinues(npc, teaser) }
@@ -720,13 +744,13 @@ constructor(
      * ## Why a cycle count and not a queue
      *
      * The crab trap defers its catch with `player.softQueue(CRAB_CATCH_QUEUE, ...)`, and this is
-     * the same shape of problem, so the queue is the idiom to reach for first. It is not reachable
-     * here: a queue is a **gameval**, `queue.hunter_crab_catch = 60` and its two siblings are
-     * declared in this module's `gamevals.toml`, and a pitfall collapse would need a fourth id
-     * packed into `gamevals.dat` before `RSCM` could resolve it. This task authors no gamevals, so
-     * the collapse rides the per-cycle hook this feature already requires instead - which costs no
-     * new registration, and cannot be half-wired: whoever registers [tickChases] for the chase
-     * leash gets the landing with it.
+     * the same shape of problem, so the queue is the idiom to reach for first. The collapse rides
+     * the per-cycle hook instead, and the reason is not that a queue was unavailable - this module
+     * now declares [PITFALL_REBUILD_QUEUE] and could have declared a second. It is that the
+     * collapse has nowhere else to be: [tick] has to exist anyway for the chase leash, a landing
+     * costs it one list walk, and putting the two on one hook makes the pair impossible to
+     * half-wire. Whoever registers [tick] for the leash gets the landing with it, whereas a queue
+     * would have been a second registration that could go missing on its own.
      *
      * ## Where a collapse can land
      *
@@ -812,10 +836,10 @@ constructor(
      * **[lastVaulted] goes with the chase**, and that is this method's business rather than the
      * caller's, because this is the one call every ending goes through. A refusal outlives the lure
      * that earned it otherwise: a chase ended by the leash leaves the creature standing in the
-     * world with a pit it will not go near, and nothing would ever clear it - [tickChases] only
+     * world with a pit it will not go near, and nothing would ever clear it - [tick] only
      * looks at creatures still in [chases], which this has just taken it out of.
      *
-     * [tickChases] is the other caller, for the two ways a chase ends that nobody clicks.
+     * [tick] is the other caller, for the two ways a chase ends that nobody clicks.
      */
     fun stopChasing(npc: Npc) {
         chases.remove(npc)
@@ -847,6 +871,59 @@ constructor(
         collapses.removeAll { it.owner == player.uid }
     }
 
+    /**
+     * Finishes any collapse a logout stranded, on the way back in.
+     *
+     * The body of [PITFALL_REBUILD_QUEUE], armed one cycle after login.
+     *
+     * ## The state this resolves
+     *
+     * A pit's persistent state is one three-bit varbit and nothing else; [collapses] is in memory
+     * and goes with the session. So a player who logs out in the five cycles between [jumpPit] and
+     * the landing comes back to a pit reading [PitState.Catching] with no ledger entry behind it,
+     * and **nothing in the feature will ever move it again**: [landCollapses] only walks entries
+     * that exist, [dismantlePit] deliberately refuses that state, and [trapPit] refuses it too. The
+     * pit is bricked - it counts against the trap cap, shows the collapsing frame forever, and the
+     * only way out is [clearPits].
+     *
+     * ## Why it finishes the catch rather than returning the pit to [PitState.Set]
+     *
+     * **Because the creature is already dead.** [PitState.Catching] is written in exactly one
+     * place, and by then [jumpPit] has already rolled the catch, despawned the npc and ended the
+     * chase. The catch is not pending in any sense the server can still take back; only its
+     * *rendering* is unfinished. Writing [PitState.Full] pays out one creature for one creature
+     * that really went in, so nothing is minted: a player cannot reach this state without a
+     * successful catch having happened.
+     *
+     * The two alternatives both destroy something the player earned. [PitState.Set] would throw
+     * the catch away and leave the pit armed, which reads as generous and is not - the creature is
+     * gone from the world either way, so the player is down a catch and up nothing.
+     * [PitState.Empty] would throw the catch *and* the log away. This is the same direction the rest of the slice
+     * errs in, and the one place it is worth restating: two catches taken in the two-creature
+     * window and left across a relog still come back as **one**, because the varbit has no room
+     * for the second. Loss, never duplication.
+     *
+     * The rotation is not recoverable - it lived in the [Collapse] the logout took with it - so
+     * every rebuilt pit lands on [PitState.Full] rather than [PitState.FullRotated]. That is
+     * cosmetic: the two are the same catch facing opposite ways and [collectPit] pays them
+     * identically.
+     *
+     * A site with a live ledger entry is left alone, so a rebuild can never race a landing that is
+     * still counting down. In practice there is none - [landCollapses] drops a departed owner's
+     * entries - but the guard costs one lookup and removes the need to reason about it.
+     */
+    fun rebuildPits(player: Player) {
+        for (site in PitfallSites.all) {
+            if (pitState(player, site) != PitState.Catching) {
+                continue
+            }
+            if (pendingCatches(player.uid, site) > 0) {
+                continue
+            }
+            setPitState(player, site, PitState.Full)
+        }
+    }
+
     /** How many of this player's pits are not empty, which is what the cap counts. */
     private fun activePits(player: Player): Int =
         PitfallSites.all.count { pitState(player, it) != PitState.Empty }
@@ -870,7 +947,7 @@ constructor(
      *
      * The three things the varbit cannot hold, and nothing else:
      * - **whose pit it is.** A [PlayerUid] rather than a [Player], so a landing cannot be written
-     *   to a stranger who inherited the slot; `PlayerUid.resolve` is the lookup [tickChases] uses.
+     *   to a stranger who inherited the slot; `PlayerUid.resolve` is the lookup [tick] uses.
      * - **which of the two collapsed rotations to draw.** See [crossedFromSouthWest].
      * - **how far through the collapse it is.** [cyclesLeft] counts down to the landing and stops
      *   at zero, where the entry becomes the pit's record of an uncollected catch.
@@ -953,7 +1030,7 @@ constructor(
         }
 
         /**
-         * How far a teased creature will follow before [tickChases] takes it off the leash: **64
+         * How far a teased creature will follow before [tick] takes it off the leash: **64
          * tiles, Chebyshev, from the tile it spawned on**.
          *
          * **This number is chosen, not sourced.** No wiki page, cache field or newspost gives a
