@@ -256,6 +256,48 @@ class BirdHouseTest {
 
     /* The timer */
 
+    /**
+     * Fifty minutes, as a number rather than as whatever [HunterBirdHouse.BIRDHOUSE_FILL_MINUTES]
+     * happens to hold.
+     *
+     * Every other assertion about the timer in this file reads the constant back as its own
+     * expected value, so all of them move with it: change the fifty to a nine and the suite stays
+     * green while every bird house in the game fills in nine minutes. This is the same vacuous shape
+     * this module already shipped once, against bird house `NEST_ROLLS`.
+     *
+     * The literal is the wiki's, from four pages that do not depend on one another: *Bird house
+     * trapping* (oldid=15221111) "wait around 50 minutes for the bird houses to passively fill with
+     * birds"; *Hunter* (oldid=15303827) "After approximately 50 minutes, the seed will be depleted";
+     * *Hunter training* (oldid=15299019) "After 50 minutes, dismantle the traps"; and the *Money
+     * making guide* (oldid=15116391), which is the one that states it as a figure rather than as
+     * prose - "Minimum recurrence time: 50 minutes".
+     *
+     * Both halves are asserted because they fail differently. The direct comparison catches a
+     * changed constant; the two clock advances catch a fill that reads the right constant and still
+     * matures on the wrong minute, which is what an off-by-one in the deadline arithmetic looks
+     * like. One house crosses the boundary, rather than two houses either side of it, so the
+     * before and after are the same deadline.
+     */
+    @Test
+    fun `a house fills on the fiftieth minute and not the forty-ninth`() {
+        assertEquals(
+            50,
+            HunterBirdHouse.BIRDHOUSE_FILL_MINUTES,
+            "the wiki says fifty minutes on four independent pages",
+        )
+
+        val world = HunterBirdHouseTestWorld()
+        val player = world.seededHouse()
+
+        world.clock.advance(49)
+        world.fillArrives(player, FIRST_SPACE)
+        assertEquals(NORMAL.fullState, world.stateOf(player, FIRST_SPACE), "not at forty-nine")
+
+        world.clock.advance(1)
+        world.fillArrives(player, FIRST_SPACE)
+        assertEquals(NORMAL.birdState, world.stateOf(player, FIRST_SPACE), "full at fifty")
+    }
+
     @Test
     fun `a house does not mature before its fifty minutes are up`() {
         val world = HunterBirdHouseTestWorld()

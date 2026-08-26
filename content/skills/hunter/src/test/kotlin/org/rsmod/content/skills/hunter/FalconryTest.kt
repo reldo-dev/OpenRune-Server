@@ -600,6 +600,47 @@ class FalconryTest {
         assertFalse(world.npcIsSpawned(falcon))
     }
 
+    /**
+     * The falcon lasts ninety-eight cycles and is gone on the ninety-ninth.
+     *
+     * [FALCON_TIMEOUT_CYCLES] is pinned nowhere: [falconSurvivesUntilItsTimeoutElapses] counts
+     * `FALCON_TIMEOUT_CYCLES - 2` cycles and [HunterFalconryTestWorld.tickFalconUntilGone] bounds
+     * itself at `FALCON_TIMEOUT_CYCLES + 5`, so both move with the constant and neither notices a
+     * falcon that now gives up after five seconds. Same vacuous shape as bird house `NEST_ROLLS`.
+     *
+     * There is no wiki figure to pin it to - the page says only "a short time" - so what is pinned
+     * instead is the thing a player can actually observe: how many cycles a falcon really sits on
+     * its prey. Ninety-eight and ninety-nine are literals, and they are not the constant: a duration
+     * of a hundred is decremented once per cycle and [HunterFalconry.falconTick] gives up at one
+     * remaining, so the two ends of the lifetime differ from the constant by two and by one. That is
+     * exactly the arithmetic a test reading the constant back cannot check, and the pair fails from
+     * both sides - a lifetime raised by a cycle fails the second assertion, one lowered fails the
+     * first.
+     *
+     * The direct comparison is kept alongside, because it says which of the two is wrong when they
+     * disagree: the constant, or what the controller does with it.
+     */
+    @Test
+    fun falconLastsNinetyEightCyclesAndIsGoneOnTheNinetyNinth() {
+        assertEquals(100, FALCON_TIMEOUT_CYCLES, "a minute at 0.6s a cycle")
+
+        val world = HunterFalconryTestWorld()
+        val player = world.addPlayer(FALCONRY_TILE, hunterLvl = 99)
+        val tile = FALCONRY_TILE.translateX(2)
+        val creature = checkNotNull(FalconryCreatures.byNpc("npc.huntingbeast_speedy"))
+        val falcon = world.placeCaughtFalcon(tile, player, creature)
+
+        repeat(98) { world.advanceFalconCycle(tile) }
+
+        assertNotNull(world.falconControllerAt(tile), "still waiting after ninety-eight")
+        assertTrue(world.npcIsSpawned(falcon), "and the bird is still on its prey")
+
+        world.advanceFalconCycle(tile)
+
+        assertNull(world.falconControllerAt(tile), "gone on the ninety-ninth")
+        assertFalse(world.npcIsSpawned(falcon), "and the prey with it")
+    }
+
     /** Before the timeout lands, the falcon is still there to be retrieved. */
     @Test
     fun falconSurvivesUntilItsTimeoutElapses() {
