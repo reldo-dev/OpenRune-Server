@@ -150,6 +150,12 @@ hunter_crab_catch = 60
 # whatever its owner is doing fifty minutes later.
 hunter_birdhouse_fill = 61
 
+# Login-time trail reset. A varp written during the login event never transmits
+# (VarPlayerIntMapSetter short-circuits while processedMapClock == 0), so the zeroing
+# rides a soft queue exactly as the bird house fill does. 62 is the next free queue id
+# above hunter_birdhouse_fill.
+hunter_tracking_reset = 62
+
 # The trap cap is stored as up to five packed trap coords rather than a counter, so that a trap
 # lost while its owner is away (collapse, logout, restart) never permanently costs a slot. Custom
 # varp ids grow downward from the low-water mark of the server-authored block (65502); the block
@@ -183,3 +189,10 @@ hunter_birdhouse_seeds_1 = 65471
 hunter_birdhouse_seeds_2 = 65470
 hunter_birdhouse_seeds_3 = 65469
 hunter_birdhouse_seeds_4 = 65468
+
+# Ring of pursuit charges USED (0-9), one below the bird house block. Per the wiki the ring
+# reveals a kebbit's whole trail while worn and gives ten charges before crumbling, and those
+# charges belong to the player, not the ring: swapping, dropping or alching rings must not
+# reset them, which is precisely what a player varp gives for free. Reads back 0 when unwritten
+# = a fresh 10-charge allowance.
+hunter_ring_of_pursuit_charges = 65467
