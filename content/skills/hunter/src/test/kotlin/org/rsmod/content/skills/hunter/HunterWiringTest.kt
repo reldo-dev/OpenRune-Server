@@ -60,6 +60,8 @@ class HunterWiringTest {
         // Its three op1 states share one group, so nothing may leak onto another family's.
         assertFalse(bus.hasOpContentLoc1(BOX_GROUP), "the snare must not claim $BOX_GROUP")
         assertFalse(bus.hasOpContentLoc1(DEADFALL_GROUP), "the snare must not claim $DEADFALL_GROUP")
+        assertFalse(bus.hasOpContentLoc1(NET_TRAP_GROUP), "the snare must not claim $NET_TRAP_GROUP")
+        assertFalse(bus.hasOpContentLoc1(MAGIC_BOX_GROUP), "the snare must not claim $MAGIC_BOX_GROUP")
     }
 
     @Test
@@ -88,6 +90,33 @@ class HunterWiringTest {
 
         assertFalse(bus.hasOpHeld1(SNARE_OBJ), "nothing is laid from the inventory")
         assertFalse(bus.hasOpHeld1(BOX_OBJ), "nothing is laid from the inventory")
+        assertFalse(bus.hasOpHeld1(MAGIC_BOX_OBJ), "nothing is laid from the inventory")
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "the trap tick belongs to BirdSnareEvents")
+    }
+
+    /**
+     * One registration covers two physically distinct locs: the group has to be on both halves for
+     * either click to arrive.
+     */
+    @Test
+    fun `net trap registers both loc ops on the one group its two halves share`() {
+        val bus = Wiring().start(scripts.netTrap)
+
+        assertTrue(bus.hasOpContentLoc1(NET_TRAP_GROUP), "op1 (`Set-trap`/`Dismantle`/`Check`)")
+        assertTrue(bus.hasOpContentLoc2(NET_TRAP_GROUP), "op2 (`Investigate`)")
+
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "the trap tick belongs to BirdSnareEvents")
+        assertFalse(bus.hasOpContentLoc1(DEADFALL_GROUP), "the net trap must not claim the deadfall")
+    }
+
+    @Test
+    fun `magic box registers its activate op and both loc ops`() {
+        val bus = Wiring().start(scripts.magicBox)
+
+        assertTrue(bus.hasOpHeld1(MAGIC_BOX_OBJ), "`Activate` on $MAGIC_BOX_OBJ")
+        assertTrue(bus.hasOpContentLoc1(MAGIC_BOX_GROUP), "op1 (`Deactivate`/`Retrieve`)")
+        assertTrue(bus.hasOpContentLoc2(MAGIC_BOX_GROUP), "op2 (`Investigate`)")
+
         assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "the trap tick belongs to BirdSnareEvents")
     }
 
@@ -110,9 +139,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all three scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all five scripts share one bus at startup. */
     @Test
-    fun `all three scripts start together on one bus without a duplicate key`() {
+    fun `all five scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -215,7 +244,7 @@ class HunterWiringTest {
     /** Every obj a lay op is registered on really draws an inventory op1. */
     @Test
     fun `every lay obj carries an inventory op1 on the packed obj definition`() {
-        for (obj in listOf(SNARE_OBJ, BOX_OBJ)) {
+        for (obj in listOf(SNARE_OBJ, BOX_OBJ, MAGIC_BOX_OBJ)) {
             val type =
                 ServerCacheManager.getItem(obj.asRSCM(RSCMType.OBJ))
                     ?: error("No packed obj definition for $obj")
@@ -262,6 +291,21 @@ class HunterWiringTest {
         for (creature in HunterCreatures.deadfall) {
             put(HunterTrapStates.fullLoc(creature), DEADFALL_GROUP, Op1)
         }
+
+        // Net trap: two physically distinct locs under one group. Both armed halves carry
+        // `Dismantle` and `Investigate`, which is what lets either one take the trap down.
+        for (creature in HunterCreatures.netTrap) {
+            put(HunterTrapStates.upLoc(creature), NET_TRAP_GROUP, Op1)
+            put(HunterTrapStates.armedTreeLoc(creature), NET_TRAP_GROUP, Op1, Op2)
+            put(HunterTrapStates.netSetLoc(creature), NET_TRAP_GROUP, Op1, Op2)
+            put(HunterTrapStates.fullLoc(creature), NET_TRAP_GROUP, Op1)
+            put(HunterTrapStates.failedLoc(TrapFamily.NETTRAP, creature), NET_TRAP_GROUP, Op1)
+        }
+
+        // Magic box.
+        put(HunterTrapStates.MAGIC_BOX_EMPTY, MAGIC_BOX_GROUP, Op1, Op2)
+        put(HunterTrapStates.MAGIC_BOX_FULL, MAGIC_BOX_GROUP, Op1)
+        put(HunterTrapStates.MAGIC_BOX_FAILED, MAGIC_BOX_GROUP, Op1)
     }
 
     /**
@@ -274,14 +318,21 @@ class HunterWiringTest {
     private fun transientLocStates(): Set<String> = buildSet {
         add(HunterTrapStates.DEADFALL_SETTING)
         add(HunterTrapStates.DEADFALL_FAILING)
+        add(HunterTrapStates.MAGIC_BOX_TRAPPING)
         add(HunterTrapStates.failingLoc(TrapFamily.SNARE))
         add(HunterTrapStates.failingLoc(TrapFamily.BOX))
 
         val offsets = listOf(0 to 1, 0 to -1, 1 to 0, -1 to 0)
         for (creature in HunterCreatures.all) {
+            // The magic box's failure frame is its wreck, which does carry `Deactivate`.
+            if (creature.family == TrapFamily.MAGICBOX) continue
             for ((dx, dz) in offsets) {
                 add(HunterTrapStates.trappingLoc(creature, dx, dz))
             }
+        }
+        for (creature in HunterCreatures.netTrap) {
+            add(HunterTrapStates.settingLoc(creature))
+            add(HunterTrapStates.failingLoc(TrapFamily.NETTRAP, creature))
         }
     }
 
@@ -300,9 +351,11 @@ class HunterWiringTest {
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
         val deadfall = DeadfallEvents(trapWorld.trap, trapWorld.conRepo)
+        val netTrap = NetTrapEvents(trapWorld.trap)
+        val magicBox = MagicBoxEvents(trapWorld.trap, trapWorld.conRepo)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
-        val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall)
+        val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
         val all: List<PluginScript> = trapFamily
     }
@@ -351,10 +404,14 @@ class HunterWiringTest {
         private const val SNARE_GROUP = "content.hunter_bird_snare"
         private const val BOX_GROUP = "content.hunter_box_trap"
         private const val DEADFALL_GROUP = "content.hunter_deadfall"
+        private const val NET_TRAP_GROUP = "content.hunter_net_trap"
+        private const val MAGIC_BOX_GROUP = "content.hunter_magic_box"
 
-        private val ALL_TRAP_GROUPS = listOf(SNARE_GROUP, BOX_GROUP, DEADFALL_GROUP)
+        private val ALL_TRAP_GROUPS =
+            listOf(SNARE_GROUP, BOX_GROUP, DEADFALL_GROUP, NET_TRAP_GROUP, MAGIC_BOX_GROUP)
 
         private const val SNARE_OBJ = "obj.hunting_ojibway_bird_snare"
         private const val BOX_OBJ = "obj.hunting_box_trap"
+        private const val MAGIC_BOX_OBJ = "obj.magic_imp_box"
     }
 }

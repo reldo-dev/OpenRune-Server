@@ -1,0 +1,36 @@
+# creature	level	chance256   (magic box takes no bait and cannot be smoked, so this is the only curve)
+# Extracted 2026-08-24 from the offline wiki snapshot 20260817, `Imp` oldid=15271036,
+# {{Skilling success chart}} "Imp catch chance" (low=0, high=197, req=71), rendered
+# server-side; every y value is an exact 256th. The `Magic box` page (oldid=15185581) has no
+# chart of its own - the curve lives on the creature page, which is why slice 2's spec
+# recorded the imp as rate-blocked. It is not: no guess is needed.
+# 29 points.
+imp	71	142
+imp	72	144
+imp	73	146
+imp	74	148
+imp	75	150
+imp	76	152
+imp	77	154
+imp	78	156
+imp	79	158
+imp	80	160
+imp	81	162
+imp	82	164
+imp	83	166
+imp	84	168
+imp	85	170
+imp	86	172
+imp	87	174
+imp	88	176
+imp	89	178
+imp	90	180
+imp	91	182
+imp	92	184
+imp	93	186
+imp	94	188
+imp	95	190
+imp	96	192
+imp	97	194
+imp	98	196
+imp	99	198

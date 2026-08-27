@@ -79,5 +79,34 @@ private val DEADFALL_TRAIL_LOGS: Set<String> =
 fun isUsableDeadfallLog(objKey: String): Boolean =
     objKey !in DEADFALL_EXCLUDED_LOGS && objKey !in DEADFALL_TRAIL_LOGS
 
+/** Unsourced; measured from the **net**, the wiki's business-end tile (docs/hunter.md). */
+const val NET_TRAP_TRIGGER_DISTANCE: Int = 1
+
+/** Unsourced guess, borrowed from the box trap for [DEADFALL_ATTEMPT_CYCLES]'s reason. */
+const val NET_TRAP_ATTEMPT_CYCLES: Int = 3
+
+/** Unsourced placeholder, as [DEADFALL_SET_CYCLES] is. */
+const val NET_TRAP_SET_CYCLES: Int = 3
+
+/** "will eventually disappear in approximately a minute" (wiki, *Net trap*) - ~100 cycles. */
+const val NET_TRAP_DROP_CYCLES: Int = 100
+
+/** Unsourced; deliberately *not* borrowed from the box trap despite the shared name. */
+const val MAGIC_BOX_TRIGGER_DISTANCE: Int = 1
+
+/** Unsourced guess, borrowed from the box trap for [DEADFALL_ATTEMPT_CYCLES]'s reason. */
+const val MAGIC_BOX_ATTEMPT_CYCLES: Int = 3
+
+internal const val ROPE: String = "obj.rope"
+
+/** `obj.net` is the cache symbol for the Small fishing net (303); `obj.small_fishing_net` is not. */
+internal const val SMALL_FISHING_NET: String = "obj.net"
+
+/**
+ * What a net trap is strung from, hands back on collect, and drops on failure - one list so the
+ * set and dismantle paths cannot disagree.
+ */
+internal val NET_TRAP_COMPONENTS: List<String> = listOf(ROPE, SMALL_FISHING_NET)
+
 /** The most traps any player can have laid, reached at level 80. */
 const val MAX_LAID_TRAPS: Int = 5

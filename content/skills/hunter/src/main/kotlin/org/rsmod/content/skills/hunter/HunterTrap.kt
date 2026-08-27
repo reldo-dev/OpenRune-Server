@@ -14,6 +14,7 @@ import org.rsmod.api.random.GameRandom
 import org.rsmod.api.repo.controller.ControllerRepository
 import org.rsmod.api.repo.loc.LocRepository
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.api.repo.player.PlayerRepository
 import org.rsmod.api.stats.xpmod.XpModifiers
 import org.rsmod.api.table.FiremakingLogsRow
@@ -45,6 +46,7 @@ constructor(
     private val locRepo: LocRepository,
     private val conRepo: ControllerRepository,
     private val npcRepo: NpcRepository,
+    private val objRepo: ObjRepository,
     private val playerRepo: PlayerRepository,
     private val playerList: PlayerList,
     private val random: GameRandom,
@@ -186,6 +188,152 @@ constructor(
         return true
     }
 
+    // The level gate is the creature's own, read off the tree clicked. An occupied net tile
+    // refuses the set outright rather than shuffling to a neighbour (docs/hunter.md).
+    suspend fun ProtectedAccess.setNetTrap(loc: BoundLocInfo): Boolean {
+        val creature = HunterCreatures.byNetTrapLoc(loc.id) ?: return false
+        if (loc.id !in HunterTrapStates.netTrapUpLocIds) {
+            return false
+        }
+
+        if (player.hunterLvl < creature.level) {
+            mes("You need a Hunter level of ${creature.level} to set a trap on this tree.")
+            return false
+        }
+
+        if (conRepo.findExact(loc.coords, TRAP_CONTROLLER) != null) {
+            mes("This trap is already set.")
+            return false
+        }
+
+        val netCoords = netTrapCoords(loc.coords, loc.angle)
+        if (!canTakeTrap(netCoords)) {
+            mes("There isn't enough room to set a net trap here.")
+            return false
+        }
+
+        val laid = trapAllowance() ?: return false
+
+        if (!inv.contains(ROPE) || !inv.contains(SMALL_FISHING_NET)) {
+            mes("You need a rope and a small fishing net to set a net trap.")
+            return false
+        }
+
+        anim("seq.human_laytrap")
+
+        // Timed, for the reason [setDeadfall]'s setting state is: a logout mid-set cannot strand
+        // a permanent map loc in an op-less state.
+        changeNetTrapTreeLoc(
+            loc.coords,
+            HunterTrapStates.settingLoc(creature),
+            NET_TRAP_SET_CYCLES + 1,
+        )
+        delay(NET_TRAP_SET_CYCLES)
+
+        // Someone else may have taken the tree meanwhile, and the net's tile is re-checked too -
+        // three cycles is long enough for somebody to have laid a box trap on it.
+        val current = netTrapTree(loc.coords)
+        val stillOurs =
+            current != null &&
+                current.id in HunterTrapStates.netTrapSettableLocIds &&
+                conRepo.findExact(loc.coords, TRAP_CONTROLLER) == null &&
+                canTakeTrap(netCoords)
+        if (!stillOurs) {
+            mes("Someone else is already using this tree.")
+            return false
+        }
+
+        // Charged past the last refusal, as in [setDeadfall], and taken as a pair: losing the net
+        // mid-set refunds the rope.
+        if (invDel(inv, ROPE, 1).failure) {
+            mes("You need a rope and a small fishing net to set a net trap.")
+            return false
+        }
+        if (invDel(inv, SMALL_FISHING_NET, 1).failure) {
+            invAdd(inv, ROPE, 1)
+            mes("You need a rope and a small fishing net to set a net trap.")
+            return false
+        }
+
+        changeNetTrapTreeLoc(loc.coords, HunterTrapStates.armedTreeLoc(creature))
+        // Spawned carrying the *tree's* angle, which is what makes [netTrapTreeCoords] able to walk
+        // back here from an op that landed on the net. Nothing else records the pairing.
+        locRepo.add(
+            netCoords,
+            HunterTrapStates.netSetLoc(creature),
+            Int.MAX_VALUE,
+            loc.angle,
+            LocShape.CentrepieceStraight,
+        )
+
+        val spawn = Controller(TRAP_CONTROLLER, loc.coords)
+        conRepo.add(spawn, TRAP_LIFETIME_CYCLES)
+        spawn.trapOwner = player.uid.packed
+        spawn.trapFamily = TrapFamily.NETTRAP.ordinal
+        spawn.trapCreature = CREATURE_NONE
+        spawn.aiTimer(1)
+
+        // Re-swept rather than reusing `laid`: three cycles is long enough for one of this player's
+        // other traps to have collapsed.
+        player.hunterTrapCoords = player.sweepTrapCoords() + loc.coords.packed
+        return true
+    }
+
+    // No controller is not an error - a sprung-and-empty wreck already dropped its rope and net
+    // when it failed, and handing them back here as well would mint a second pair.
+    fun ProtectedAccess.dismantleNetTrap(loc: BoundLocInfo): Boolean {
+        val anchor = netTrapAnchor(loc) ?: return false
+        val controller = conRepo.findExact(anchor, TRAP_CONTROLLER)
+        if (controller != null && controller.trapOwner != player.uid.packed) {
+            mes("This isn't your trap.")
+            return false
+        }
+
+        if (controller != null) {
+            val slotsNeeded = NET_TRAP_COMPONENTS.sumOf { hunterInvSlotsNeeded(inv, it, 1) }
+            if (inv.freeSpace() < slotsNeeded) {
+                mes("Your inventory is too full to hold any more.")
+                soundSynth("synth.pillory_wrong")
+                return false
+            }
+            for (obj in NET_TRAP_COMPONENTS) {
+                invAdd(inv, obj, 1)
+            }
+        }
+
+        endTrapLoc(TrapFamily.NETTRAP, anchor)
+
+        if (controller != null) {
+            conRepo.del(controller)
+            player.sweepTrapCoords()
+        }
+        return true
+    }
+
+    // The op lands on the *net*, a tile from the controller, so the anchor is walked back first.
+    fun ProtectedAccess.collectNetTrap(loc: BoundLocInfo): Boolean {
+        val anchor = netTrapAnchor(loc) ?: return false
+        return collectTrapAt(anchor)
+    }
+
+    // A bare findExact(loc.coords) would look on the wrong tile whenever the net was clicked.
+    fun netTrapController(loc: BoundLocInfo): Controller? {
+        val anchor = netTrapAnchor(loc) ?: return null
+        return conRepo.findExact(anchor, TRAP_CONTROLLER)
+    }
+
+    // The net half is walked back and then *checked*: a net whose computed tree tile holds no
+    // young tree is a desynced pair, and acting on the wrong tile is worse than refusing.
+    private fun netTrapAnchor(loc: BoundLocInfo): CoordGrid? =
+        when (loc.id) {
+            in HunterTrapStates.netTrapTreeLocIds -> loc.coords
+            in HunterTrapStates.netTrapNetLocIds -> {
+                val anchor = netTrapTreeCoords(loc.coords, loc.angle)
+                anchor.takeIf { netTrapTree(it) != null }
+            }
+            else -> null
+        }
+
     // Deliberately never resets an idle trap's duration: unattended traps decay toward collapse.
     fun Controller.hunterTrapTick() {
         val family = TrapFamily.entries.getOrNull(trapFamily)
@@ -201,6 +349,11 @@ constructor(
         val loc = findTrapLoc(family, coords)
         if (loc == null) {
             check(mapClock > creationCycle + 1) { "Hunter trap loc deleted faster than expected." }
+            // Losing the net still has to put the tree back, or a permanent map loc is left bent
+            // over with nothing left alive to unbend it.
+            if (family == TrapFamily.NETTRAP) {
+                revertNetTrapTree(coords)
+            }
             conRepo.del(this)
             return
         }
@@ -378,9 +531,16 @@ constructor(
             return false
         }
 
+        // The one family whose failure drops the materials on the ground: the tree reverts, the
+        // pair drops, the controller ends - so the leftover wreck owes the player nothing.
+        if (family == TrapFamily.NETTRAP && trapCreature == CREATURE_FAILED) {
+            endNetTrap(owner)
+            return false
+        }
+
         val settled =
             if (trapCreature == CREATURE_FAILED) {
-                HunterTrapStates.failedLoc(family)
+                HunterTrapStates.failedLoc(family, netTrapCreature(family, coords))
             } else {
                 val creature = HunterCreatures.all.getOrNull(trapCreature) ?: return true
                 HunterTrapStates.fullLoc(creature)
@@ -403,7 +563,27 @@ constructor(
             conRepo.del(this)
             return
         }
+        if (family == TrapFamily.NETTRAP) {
+            endNetTrap(owner)
+            return
+        }
         spawnTrapLoc(coords, HunterTrapStates.failedLoc(family), TRAP_COLLAPSE_LINGER_CYCLES)
+        conRepo.del(this)
+    }
+
+    // The pair drops on the *trap's* tile - the only position that always exists - with [owner]
+    // as receiver so the drop is private to them first, like a kill's loot (docs/hunter.md).
+    private fun Controller.endNetTrap(owner: Player?) {
+        val creature = netTrapCreature(TrapFamily.NETTRAP, coords)
+        changeNetLoc(
+            coords,
+            HunterTrapStates.failedLoc(TrapFamily.NETTRAP, creature),
+            TRAP_COLLAPSE_LINGER_CYCLES,
+        )
+        revertNetTrapTree(coords)
+        for (obj in NET_TRAP_COMPONENTS) {
+            objRepo.add(obj, coords, NET_TRAP_DROP_CYCLES, receiver = owner)
+        }
         conRepo.del(this)
     }
 
@@ -459,25 +639,96 @@ constructor(
     private fun findTrapLoc(family: TrapFamily, coords: CoordGrid): LocInfo? =
         when (family) {
             TrapFamily.SNARE,
-            TrapFamily.BOX -> locRepo.findExact(coords, LocShape.CentrepieceStraight)
+            TrapFamily.BOX,
+            TrapFamily.MAGICBOX -> locRepo.findExact(coords, LocShape.CentrepieceStraight)
             TrapFamily.DEADFALL ->
                 locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.deadfallLocIds }
+            TrapFamily.NETTRAP -> findNetLoc(coords)
         }
 
     private fun advanceTrapLoc(family: TrapFamily, coords: CoordGrid, internal: String) {
         when (family) {
             TrapFamily.SNARE,
-            TrapFamily.BOX -> spawnTrapLoc(coords, internal)
+            TrapFamily.BOX,
+            TrapFamily.MAGICBOX -> spawnTrapLoc(coords, internal)
             TrapFamily.DEADFALL -> changeDeadfallLoc(coords, internal)
+            TrapFamily.NETTRAP -> changeNetLoc(coords, internal)
         }
     }
 
     private fun endTrapLoc(family: TrapFamily, coords: CoordGrid) {
         when (family) {
             TrapFamily.SNARE,
-            TrapFamily.BOX -> clearTrapLoc(coords)
+            TrapFamily.BOX,
+            TrapFamily.MAGICBOX -> clearTrapLoc(coords)
             TrapFamily.DEADFALL -> changeDeadfallLoc(coords, HunterTrapStates.DEADFALL_BOULDER)
+            TrapFamily.NETTRAP -> {
+                delNetLoc(coords)
+                revertNetTrapTree(coords)
+            }
         }
+    }
+
+    private fun netTrapTree(coords: CoordGrid): LocInfo? =
+        locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.netTrapTreeLocIds }
+
+    // Read off the tree, not off what was caught: the failure and collapse paths need the
+    // salamander while `trapCreature` still says "nothing caught".
+    private fun netTrapCreature(family: TrapFamily, coords: CoordGrid): HunterCreature? =
+        if (family != TrapFamily.NETTRAP) {
+            null
+        } else {
+            netTrapTree(coords)?.let { HunterCreatures.byNetTrapLoc(it.id) }
+        }
+
+    private fun findNetLoc(treeCoords: CoordGrid): LocInfo? {
+        val tree = netTrapTree(treeCoords) ?: return null
+        val netCoords = netTrapCoords(treeCoords, tree.angle)
+        return locRepo.findAll(netCoords).firstOrNull {
+            it.id in HunterTrapStates.netTrapNetLocIds
+        }
+    }
+
+    // `locRepo.change` so the angle carries across: the net is the only record of where its tree
+    // is, and a state change that reset the angle would strand every later op on the net.
+    private fun changeNetLoc(
+        treeCoords: CoordGrid,
+        internal: String,
+        duration: Int = Int.MAX_VALUE,
+    ) {
+        val current = findNetLoc(treeCoords) ?: return
+        val into =
+            ServerCacheManager.getObject(internal.asRSCM(RSCMType.LOC))
+                ?: error("Missing net trap loc type: $internal")
+        locRepo.change(current, into, duration)
+    }
+
+    // The *only* delete anywhere in the net trap, and checked: a tree id fails outright.
+    private fun delNetLoc(treeCoords: CoordGrid) {
+        val net = findNetLoc(treeCoords) ?: return
+        check(net.id in HunterTrapStates.netTrapNetLocIds) {
+            "Refusing to delete net trap loc ${net.id} at ${net.coords}: it is not a spawned net."
+        }
+        locRepo.del(net, Int.MAX_VALUE)
+    }
+
+    private fun revertNetTrapTree(coords: CoordGrid) {
+        val creature = netTrapCreature(TrapFamily.NETTRAP, coords) ?: return
+        changeNetTrapTreeLoc(coords, HunterTrapStates.upLoc(creature))
+    }
+
+    // The one and only way a young tree changes state; [changeDeadfallLoc]'s argument applies
+    // word for word, with "boulder" read as "tree".
+    private fun changeNetTrapTreeLoc(
+        coords: CoordGrid,
+        internal: String,
+        duration: Int = Int.MAX_VALUE,
+    ) {
+        val current = netTrapTree(coords) ?: return
+        val into =
+            ServerCacheManager.getObject(internal.asRSCM(RSCMType.LOC))
+                ?: error("Missing net trap tree loc type: $internal")
+        locRepo.change(current, into, duration)
     }
 
     /**
@@ -503,8 +754,13 @@ constructor(
 
     private fun clearTrapLoc(coords: CoordGrid) {
         val loc = locRepo.findExact(coords, LocShape.CentrepieceStraight) ?: return
-        // A permanent delete of a map loc is never respawned; see [changeDeadfallLoc].
-        check(loc.id !in HunterTrapStates.deadfallLocIds) {
+        // A permanent delete of a map loc is never respawned; see [changeDeadfallLoc]. All forty
+        // sapling ids are refused, nets included: a net id arriving on this path means the trap's
+        // two halves have desynced, and that is worth a thrown tick.
+        check(
+            loc.id !in HunterTrapStates.deadfallLocIds &&
+                loc.id !in HunterTrapStates.netTrapLocIds
+        ) {
             "Refusing to delete hunter loc ${loc.id} at $coords: it is a permanent map loc."
         }
         locRepo.del(loc, Int.MAX_VALUE)
@@ -535,15 +791,19 @@ constructor(
             when (family) {
                 TrapFamily.SNARE -> "obj.hunting_ojibway_bird_snare"
                 TrapFamily.BOX -> "obj.hunting_box_trap"
-                TrapFamily.DEADFALL -> null
+                TrapFamily.MAGICBOX -> "obj.magic_imp_box"
+                TrapFamily.DEADFALL,
+                TrapFamily.NETTRAP -> null
             }
 
         // What a successful collect hands back alongside the catch.
         private fun trapComponents(family: TrapFamily): List<String> =
             when (family) {
                 TrapFamily.SNARE,
-                TrapFamily.BOX -> listOfNotNull(trapObj(family))
+                TrapFamily.BOX,
+                TrapFamily.MAGICBOX -> listOfNotNull(trapObj(family))
                 TrapFamily.DEADFALL -> emptyList()
+                TrapFamily.NETTRAP -> NET_TRAP_COMPONENTS
             }
     }
 }

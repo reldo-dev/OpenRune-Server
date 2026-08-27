@@ -43,6 +43,24 @@ object HunterTables {
         const val COL_FULL_LOC = 10
     }
 
+    /**
+     * Net trap only, and unlike the other three techniques *every* state is a column: see
+     * [netTrapCreatures] for why none of the eight can be a shared constant.
+     */
+    private object NetTrap {
+        const val COL_UP_LOC = 8
+        const val COL_SETTING_LOC = 9
+        const val COL_SET_LOC = 10
+        const val COL_NET_SET_LOC = 11
+        const val COL_CATCHING_LOC = 12
+        const val COL_FULL_LOC = 13
+        const val COL_FAILING_LOC = 14
+        const val COL_FAILED_LOC = 15
+    }
+
+    // The magic box, a one-creature technique, needs no nested block: its loc states are shared by
+    // construction and live content-side.
+
     /** Columns 0-7, shared verbatim by every creature table. */
     private fun DBTableBuilder.creatureColumns() {
         column("npc", COL_NPC, VarType.NPC)
@@ -287,6 +305,146 @@ object HunterTables {
                 columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_fennec")
                 columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_fennec_m")
                 columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_fennec")
+            }
+        }
+
+    /**
+     * The net trap drives two locs per creature and *every* state is a column - the cache holds a
+     * full 5x8 grid of `hunting_sapling_*` locs with no unsuffixed member of any state. All forty
+     * were resolved individually against `config/loc`, never derived from a suffix: the swamp
+     * lizard's are inconsistent. The five `(low, high)` pairs are published outright and each is
+     * pinned to a single integer pair. No bait column. See docs/hunter.md.
+     */
+    fun netTrapCreatures(): DBTable =
+        dbTable("dbtable.hunter_nettrap_creatures", serverOnly = true) {
+            creatureColumns()
+            column("up_loc", NetTrap.COL_UP_LOC, VarType.LOC)
+            column("setting_loc", NetTrap.COL_SETTING_LOC, VarType.LOC)
+            column("set_loc", NetTrap.COL_SET_LOC, VarType.LOC)
+            column("net_set_loc", NetTrap.COL_NET_SET_LOC, VarType.LOC)
+            column("catching_loc", NetTrap.COL_CATCHING_LOC, VarType.LOC)
+            column("full_loc", NetTrap.COL_FULL_LOC, VarType.LOC)
+            column("failing_loc", NetTrap.COL_FAILING_LOC, VarType.LOC)
+            column("failed_loc", NetTrap.COL_FAILED_LOC, VarType.LOC)
+
+            // The mixed-suffix creature. Six `_swamp` states, two `_green` ones.
+            row("dbrow.hunter_swamp_lizard") {
+                columnRSCM(COL_NPC, "npc.salamander_green")
+                column(COL_LEVEL, 29)
+                column(COL_XP, 1520)
+                column(COL_SUCCESS_LOW, 52)
+                column(COL_SUCCESS_HIGH, 360)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.green_salamander")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(NetTrap.COL_UP_LOC, "loc.hunting_sapling_up_swamp")
+                columnRSCM(NetTrap.COL_SETTING_LOC, "loc.hunting_sapling_setting_swamp")
+                columnRSCM(NetTrap.COL_SET_LOC, "loc.hunting_sapling_set_swamp")
+                columnRSCM(NetTrap.COL_NET_SET_LOC, "loc.hunting_sapling_net_set_swamp")
+                columnRSCM(NetTrap.COL_CATCHING_LOC, "loc.hunting_sapling_catching_green")
+                columnRSCM(NetTrap.COL_FULL_LOC, "loc.hunting_sapling_full_green")
+                columnRSCM(NetTrap.COL_FAILING_LOC, "loc.hunting_sapling_failing_swamp")
+                columnRSCM(NetTrap.COL_FAILED_LOC, "loc.hunting_sapling_failed_swamp")
+            }
+
+            row("dbrow.hunter_orange_salamander") {
+                columnRSCM(COL_NPC, "npc.salamander_orange")
+                column(COL_LEVEL, 47)
+                column(COL_XP, 2240)
+                column(COL_SUCCESS_LOW, 16)
+                column(COL_SUCCESS_HIGH, 288)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.orange_salamander")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(NetTrap.COL_UP_LOC, "loc.hunting_sapling_up_orange")
+                columnRSCM(NetTrap.COL_SETTING_LOC, "loc.hunting_sapling_setting_orange")
+                columnRSCM(NetTrap.COL_SET_LOC, "loc.hunting_sapling_set_orange")
+                columnRSCM(NetTrap.COL_NET_SET_LOC, "loc.hunting_sapling_net_set_orange")
+                columnRSCM(NetTrap.COL_CATCHING_LOC, "loc.hunting_sapling_catching_orange")
+                columnRSCM(NetTrap.COL_FULL_LOC, "loc.hunting_sapling_full_orange")
+                columnRSCM(NetTrap.COL_FAILING_LOC, "loc.hunting_sapling_failing_orange")
+                columnRSCM(NetTrap.COL_FAILED_LOC, "loc.hunting_sapling_failed_orange")
+            }
+
+            row("dbrow.hunter_red_salamander") {
+                columnRSCM(COL_NPC, "npc.salamander_red")
+                column(COL_LEVEL, 59)
+                column(COL_XP, 2720)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 240)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.red_salamander")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(NetTrap.COL_UP_LOC, "loc.hunting_sapling_up_red")
+                columnRSCM(NetTrap.COL_SETTING_LOC, "loc.hunting_sapling_setting_red")
+                columnRSCM(NetTrap.COL_SET_LOC, "loc.hunting_sapling_set_red")
+                columnRSCM(NetTrap.COL_NET_SET_LOC, "loc.hunting_sapling_net_set_red")
+                columnRSCM(NetTrap.COL_CATCHING_LOC, "loc.hunting_sapling_catching_red")
+                columnRSCM(NetTrap.COL_FULL_LOC, "loc.hunting_sapling_full_red")
+                columnRSCM(NetTrap.COL_FAILING_LOC, "loc.hunting_sapling_failing_red")
+                columnRSCM(NetTrap.COL_FAILED_LOC, "loc.hunting_sapling_failed_red")
+            }
+
+            // 319.2 xp - the row that makes the x10 column mandatory rather than defensive.
+            row("dbrow.hunter_black_salamander") {
+                columnRSCM(COL_NPC, "npc.salamander_black")
+                column(COL_LEVEL, 67)
+                column(COL_XP, 3192)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 212)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.black_salamander")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(NetTrap.COL_UP_LOC, "loc.hunting_sapling_up_black")
+                columnRSCM(NetTrap.COL_SETTING_LOC, "loc.hunting_sapling_setting_black")
+                columnRSCM(NetTrap.COL_SET_LOC, "loc.hunting_sapling_set_black")
+                columnRSCM(NetTrap.COL_NET_SET_LOC, "loc.hunting_sapling_net_set_black")
+                columnRSCM(NetTrap.COL_CATCHING_LOC, "loc.hunting_sapling_catching_black")
+                columnRSCM(NetTrap.COL_FULL_LOC, "loc.hunting_sapling_full_black")
+                columnRSCM(NetTrap.COL_FAILING_LOC, "loc.hunting_sapling_failing_black")
+                columnRSCM(NetTrap.COL_FAILED_LOC, "loc.hunting_sapling_failed_black")
+            }
+
+            row("dbrow.hunter_tecu_salamander") {
+                columnRSCM(COL_NPC, "npc.salamander_mountain")
+                column(COL_LEVEL, 79)
+                column(COL_XP, 3440)
+                // Not (0, 212): the two pairs differ at exactly L83 (docs/hunter.md).
+                column(COL_SUCCESS_LOW, 1)
+                column(COL_SUCCESS_HIGH, 212)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.mountain_salamander")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                columnRSCM(NetTrap.COL_UP_LOC, "loc.hunting_sapling_up_mountain")
+                columnRSCM(NetTrap.COL_SETTING_LOC, "loc.hunting_sapling_setting_mountain")
+                columnRSCM(NetTrap.COL_SET_LOC, "loc.hunting_sapling_set_mountain")
+                columnRSCM(NetTrap.COL_NET_SET_LOC, "loc.hunting_sapling_net_set_mountain")
+                columnRSCM(NetTrap.COL_CATCHING_LOC, "loc.hunting_sapling_catching_mountain")
+                columnRSCM(NetTrap.COL_FULL_LOC, "loc.hunting_sapling_full_mountain")
+                columnRSCM(NetTrap.COL_FAILING_LOC, "loc.hunting_sapling_failing_mountain")
+                columnRSCM(NetTrap.COL_FAILED_LOC, "loc.hunting_sapling_failed_mountain")
+            }
+        }
+
+    /**
+     * The magic box's one creature, the imp. Its own table because the *family* decides the laid
+     * obj and every loc state, and the imp cannot participate in the box trap's naming from either
+     * end - filing it under BOX would resolve to loc names that do not exist. The rate is the
+     * creature page's own published parameter. See docs/hunter.md.
+     */
+    fun magicBoxCreatures(): DBTable =
+        dbTable("dbtable.hunter_magicbox_creatures", serverOnly = true) {
+            creatureColumns()
+
+            row("dbrow.hunter_imp") {
+                columnRSCM(COL_NPC, "npc.imp")
+                column(COL_LEVEL, 71)
+                column(COL_XP, 4500)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 197)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.magic_imp_box_full")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
             }
         }
 }

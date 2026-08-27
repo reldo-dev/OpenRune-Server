@@ -9,5 +9,7 @@ class HunterPluginPack : PluginPack() {
             HunterTables.snareCreatures(),
             HunterTables.boxCreatures(),
             HunterTables.deadfallCreatures(),
+            HunterTables.netTrapCreatures(),
+            HunterTables.magicBoxCreatures(),
         )
 }

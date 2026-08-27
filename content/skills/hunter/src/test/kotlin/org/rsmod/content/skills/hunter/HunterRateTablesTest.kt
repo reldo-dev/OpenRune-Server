@@ -32,7 +32,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(402, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(605, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -184,6 +184,8 @@ class HunterRateTablesTest {
                 "birdsnare-chance.tsv",
                 "boxtrap-chance.tsv",
                 "deadfall-chance.tsv",
+                "magicbox-chance.tsv",
+                "nettrap-chance.tsv",
             )
 
         private val CHARTED =
@@ -200,6 +202,12 @@ class HunterRateTablesTest {
                 Charted("prickly_kebbit", "npc.huntingbeast_spiky"),
                 Charted("sabretoothed_kebbit", "npc.huntingbeast_sabreteeth"),
                 Charted("pyre_fox", "npc.varlamore_fennecfox"),
+                Charted("swamp_lizard", "npc.salamander_green"),
+                Charted("orange_salamander", "npc.salamander_orange"),
+                Charted("red_salamander", "npc.salamander_red"),
+                Charted("black_salamander", "npc.salamander_black"),
+                Charted("tecu_salamander", "npc.salamander_mountain"),
+                Charted("imp", "npc.imp"),
             )
 
         /** The published `{{Skilling success chart}}` parameters, keyed by page and series label. */
@@ -221,6 +229,12 @@ class HunterRateTablesTest {
                     "npc.huntingbeast_sabreteeth",
                 ),
                 Published("Pyre fox", "Pyre fox", "npc.varlamore_fennecfox"),
+                Published("Net trap", "Swamp lizard", "npc.salamander_green"),
+                Published("Net trap", "Orange salamander", "npc.salamander_orange"),
+                Published("Net trap", "Red salamander", "npc.salamander_red"),
+                Published("Net trap", "Black salamander", "npc.salamander_black"),
+                Published("Net trap", "Tecu salamander", "npc.salamander_mountain"),
+                Published("Imp", "Imp", "npc.imp"),
             )
 
         /**

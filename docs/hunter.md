@@ -311,3 +311,125 @@ changes which of two boulder models shows for a couple of cycles.
 Deadfall is also the one family the wiki exempts from the standing-on-trap
 rule: "Deadfall traps are not prone to failure by standing where they are
 set."
+
+## Net trap and magic box
+
+### The net trap's two locs
+
+The net trap is a fixed map loc like the deadfall, but it drives *two* locs:
+the young tree the player sets, and a "Net trap" loc that appears on the tile
+beside it. The split is the cache's, not ours: `up`, `setting` and `set` are
+all `name=Young tree` on the tree's tile; `net_set`, `catching`, `full`,
+`failing` and `failed` are all `name=Net trap` beside it. The tree is a
+permanent map loc and follows the deadfall's never-delete rule word for word;
+the net is an ordinary spawn, and its delete path is checked so only
+`name=Net trap` ids can ever pass it. Every op that lands on the net walks
+back to the tree the controller is anchored to, and the *only* record of the
+pairing is the tree's angle, which the net is spawned carrying — so net-state
+changes are `locRepo.change` too, to keep the angle across.
+
+All eight states are table columns, and all forty were resolved individually
+against `config/loc` rather than derived from a suffix, because the swamp
+lizard's are inconsistent: six `_swamp` states but
+`hunting_sapling_{catching,full}_green` for the other two. Its npc is
+`salamander_green`, the wiki calls it a Swamp lizard, and its caught obj
+`green_salamander` is *named* "Swamp lizard" — three words for one creature.
+The tecu mirrors this: npc `salamander_mountain`, obj `mountain_salamander`
+named "Tecu salamander".
+
+### The net-tile offset convention
+
+Which tile each tree angle puts its net on is not recoverable offline — no
+cs2 script or loc field states it. That the offset comes from the tree loc's
+*own angle* (not where the player stood) is structural and matches the one
+reference implementation. Reading `LocAngle` names as compass directions is a
+convention, corroborated three ways (2026-08-26):
+
+1. Every `hunting_sapling_up_*` carries `forceapproach` blocking exactly the
+   side this mapping picks (measured in-game: an East-angle tree walks the
+   setter around to its south — the protected side is the east tile the
+   mapping names).
+2. The map keeps exactly this tile clear: rotating the mapping one step
+   counter-clockwise was tried, and the same tree's net tile landed on map
+   scenery, refusing every set.
+3. The pairing survives either way: `netTrapTreeCoords` is defined as the
+   negation of `netTrapCoords`, so tree → net → tree is the identity
+   whichever four tiles are picked.
+
+How the models join visually — the bent trunk does not obviously arc over the
+net — is unverified against live and may simply be what the trap looks like.
+
+### Net trap behaviour
+
+- **An occupied net tile refuses the set outright** rather than shuffling to
+  another neighbour: a fallback tile would need state nothing else keeps, and
+  half a trap would consume the rope and net for something that can never
+  spring. Refusing costs a walk to the next tree and nothing else.
+- **The level gate is the creature's own**, read off the tree clicked — every
+  young tree belongs to exactly one salamander, and the family spans level 29
+  to 79.
+- **Failure drops the materials on the ground**: "If not successful, the tree
+  will snap back to its original position, and the small fishing net and rope
+  will appear on the ground" (*Net trap*, oldid=15272929) — the one family
+  whose failure returns materials as ground objs. They drop on the *trap's*
+  tile (the only position that always exists; the owner may be elsewhere or
+  logged out), private to the owner first like kill loot. A collapse shares
+  the failure path deliberately, so a timed-out trap cannot silently swallow
+  the pair; the sprung-and-empty wreck accordingly owes the player nothing.
+- The rope and net are charged as a pair after the set delay (same reasoning
+  as the deadfall log); losing the net mid-set refunds the rope.
+
+### Salamander rates
+
+The consolidated "Salamander catch chance" chart on the *Net trap* page
+publishes all five `(low, high)` pairs outright. They were fit anyway against
+the 174 server-rendered chart points, and each of the five is pinned to a
+single integer pair. The tecu is `(1, 212)`, *not* the `(0, 212)` its
+near-identical black-salamander curve suggests: the two differ at exactly one
+charted level, L83, where the chart reads 179/256 and `(0, 212)` yields 178.
+The black salamander's 319.2 xp is the first value the ×10 storage is
+load-bearing for. Levels and xp are from the page's Creatures table
+(oldid=15272929). No bait column, as with the deadfall; the tecu is the only
+Hunter creature that accepts no bait and cannot be smoked at all.
+
+### The magic box
+
+One creature: the imp. It gets its own table rather than a sixth box-trap row
+because the *family* decides the laid obj and every loc state:
+`HunterCreatures` derives the family from which table a row came out of, and
+the imp cannot participate in the box trap's naming from either end — its npc
+is the bare `npc.imp` with no prefix to strip, its states are the unsuffixed
+`hunting_imptrap_*` set, and it is laid from `obj.magic_imp_box`. Filing it
+under BOX would resolve to loc names that do not exist and throw at the first
+catch. With one creature, every loc state is shared by construction, so the
+four states are content-side constants and the table is the shared 0–7 block
+alone. The held op is `Activate`, not `Lay`.
+
+**The rate is published.** The *Magic box* page carries no chart, but the
+imp's own creature page does: `{{Skilling success chart}}` "Imp catch
+chance", `low=0 high=197 req=71`, 29 server-rendered points that fit exactly.
+The fit is not unique — `(0, 197)`, `(1, 197)` and `(2, 197)` all reproduce
+every charted level — so the published `low` ships. Note 198/256 at level 99:
+no level makes an imp catch certain. Level 71 / 45 xp from the imp's infobox
+(oldid=15271036), agreeing with the *Magic box* page (oldid=15185581).
+
+The catch yields the 2-charge `obj.magic_imp_box_full` ("Imp-in-a-box(2)");
+the 1-charge `_half` is what *using* the box leaves behind, and the banking
+mechanic that consumes it is out of scope. The magic box has no mid-failure
+frame in the cache (`empty`, `trapping`, `full`, `failed` and nothing between
+the last two), so a failed catch shows its wreck immediately and the settle
+step is a no-op.
+
+### Tuning
+
+| constant | value | source |
+|---|---|---|
+| `NET_TRAP_TRIGGER_DISTANCE` | 1 | unsourced; measured from the **net** — the tile the wiki treats as the business end ("not standing on the net") |
+| `NET_TRAP_ATTEMPT_CYCLES` | 3 | unsourced; borrowed from the box trap for the deadfall's reason |
+| `NET_TRAP_SET_CYCLES` | 3 | unsourced placeholder, as the deadfall's |
+| `NET_TRAP_DROP_CYCLES` | 100 | sourced: the dropped pair "will eventually disappear in approximately a minute" (*Net trap*, oldid=15272929) |
+| `MAGIC_BOX_TRIGGER_DISTANCE` | 1 | unsourced; deliberately *not* borrowed from the box trap — the only reason to think they agree is that both are boxes |
+| `MAGIC_BOX_ATTEMPT_CYCLES` | 3 | unsourced; borrowed from the box trap on the deadfall's reasoning |
+
+`obj.net` is the cache symbol for the Small fishing net; `obj.small_fishing_net`
+does not exist.

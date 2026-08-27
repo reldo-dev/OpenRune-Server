@@ -14,7 +14,20 @@ enum class TrapFamily {
      * Not a carried trap: the boulder is a permanent map loc, armed in place, so the portable-only
      * paths reject it and every state it moves through is a `locRepo.change`, never a delete.
      */
-    DEADFALL;
+    DEADFALL,
+
+    /**
+     * The only family that is two locs: a young tree (a permanent map loc, deadfall rules) plus a
+     * spawned net on the tile the tree's own angle points at. Ops landing on the net walk back to
+     * the tree, where the controller is anchored. See docs/hunter.md.
+     */
+    NETTRAP,
+
+    /**
+     * Portable, reusing the [SNARE]/[BOX] path wholesale - but not a [BOX]: filing the imp there
+     * would resolve to `hunting_boxtrap_*` loc names that do not exist and throw at first catch.
+     */
+    MAGICBOX;
 
     /**
      * True for families laid from an inventory item onto an empty tile, false for ones armed in
@@ -24,8 +37,10 @@ enum class TrapFamily {
         get() =
             when (this) {
                 SNARE,
-                BOX -> true
-                DEADFALL -> false
+                BOX,
+                MAGICBOX -> true
+                DEADFALL,
+                NETTRAP -> false
             }
 
     /** Sourced per family, and *not* the same split as [portable] (docs/hunter.md). */
@@ -33,7 +48,9 @@ enum class TrapFamily {
         get() =
             when (this) {
                 SNARE,
-                BOX -> true
+                BOX,
+                MAGICBOX,
+                NETTRAP -> true
                 DEADFALL -> false
             }
 
@@ -43,7 +60,9 @@ enum class TrapFamily {
             when (this) {
                 SNARE -> SNARE_TRIGGER_DISTANCE
                 BOX -> BOX_TRAP_TRIGGER_DISTANCE
+                MAGICBOX -> MAGIC_BOX_TRIGGER_DISTANCE
                 DEADFALL -> DEADFALL_TRIGGER_DISTANCE
+                NETTRAP -> NET_TRAP_TRIGGER_DISTANCE
             }
 
     /** How often an armed trap rolls for a catch, in cycles. Only the box trap's is sourced. */
@@ -52,7 +71,9 @@ enum class TrapFamily {
             when (this) {
                 SNARE -> SNARE_ATTEMPT_CYCLES
                 BOX -> BOX_TRAP_ATTEMPT_CYCLES
+                MAGICBOX -> MAGIC_BOX_ATTEMPT_CYCLES
                 DEADFALL -> DEADFALL_ATTEMPT_CYCLES
+                NETTRAP -> NET_TRAP_ATTEMPT_CYCLES
             }
 }
 
@@ -97,4 +118,10 @@ data class HunterCreature(
     val trappingLoc: String? = null,
     val trappingLocM: String? = null,
     val fullLoc: String? = null,
+    val upLoc: String? = null,
+    val settingLoc: String? = null,
+    val setLoc: String? = null,
+    val netSetLoc: String? = null,
+    val failingLoc: String? = null,
+    val failedLoc: String? = null,
 )
