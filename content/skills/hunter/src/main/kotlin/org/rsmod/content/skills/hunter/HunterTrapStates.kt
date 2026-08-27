@@ -31,19 +31,19 @@ fun deadfallApproachLoc(creature: HunterCreature, dx: Int, dy: Int): String {
 /**
  * How far the "Net trap" half of a net trap sits from its young tree, as an (x, z) step.
  *
- * **Partly unsourced.** That the offset comes from the *tree loc's own angle* rather than from
- * where the player stood is structural, and is how the one available reference implementation
- * threads it. Which tile each of the four angles picks is not recoverable offline: the placement is
- * server-side, so no cs2 script or loc field states it, and the wiki describes the pair only in
- * prose ("the tree will snap back", "not standing on the net"). Reading [LocAngle]'s own names as
- * compass directions is the convention here, and it is not a source.
- *
- * There is one piece of corroboration worth recording: every `hunting_sapling_up_*` carries
- * `forceapproach=north`, i.e. one side of the tree cannot be walked up to - which is what a net
- * strung out from it would do, and which rotates with the loc exactly as this does.
- *
- * What the exact mapping cannot get wrong is the pairing itself: [netTrapTreeCoords] is defined as
- * the negation of this, so tree -> net -> tree is the identity whichever four tiles are picked.
+ * That the offset comes from the *tree loc's own angle* rather than from where the player stood is
+ * structural, and is how the one available reference implementation threads it. Which tile each
+ * angle picks is not recoverable offline - no cs2 script or loc field states it - and reading
+ * [LocAngle]'s names as compass directions is a convention, but a corroborated one, three ways:
+ * every `hunting_sapling_up_*` carries `forceapproach` blocking exactly this side (measured
+ * in-game 2026-08-26: an East-angle tree walks the setter around to its south, opposite nothing -
+ * the net side it protects is the east tile this mapping picks); the map keeps exactly this tile
+ * clear (rotating the mapping one step counter-clockwise was tried and the same tree's net tile
+ * landed on map scenery, refusing every set - the map's own clearances rule that rotation out);
+ * and the pairing survives either way, since [netTrapTreeCoords] is defined as the negation of
+ * this, so tree -> net -> tree is the identity whichever four tiles are picked. How the *models*
+ * join visually - the bent trunk does not obviously arc over the net - is unverified against live
+ * and may simply be what the trap looks like.
  */
 private fun netTrapOffset(angle: LocAngle): Pair<Int, Int> =
     when (angle) {

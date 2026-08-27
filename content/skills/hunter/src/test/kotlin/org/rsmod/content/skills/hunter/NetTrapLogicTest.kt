@@ -21,10 +21,10 @@ class NetTrapLogicTest {
     private val tree = CoordGrid(3204, 3204, 0)
 
     /**
-     * The offset is the tree loc's own angle read as a compass direction, so each of the four gives
-     * a different, orthogonally adjacent tile. Whether live picks the same four is unverified - see
-     * the KDoc on [netTrapCoords] - but that they are four *distinct* neighbours is what makes the
-     * inverse below well defined.
+     * The offset is derived from the tree loc's own angle - one step counter-clockwise of its
+     * compass name, the side the bent trunk leans over; see the KDoc on `netTrapOffset` for the
+     * in-game measurement. That the four angles give four *distinct*, orthogonally adjacent tiles
+     * is what makes the inverse below well defined.
      */
     @Test
     fun `each tree angle puts the net on a different adjacent tile`() {
