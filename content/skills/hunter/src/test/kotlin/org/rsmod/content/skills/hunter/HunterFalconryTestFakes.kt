@@ -1,0 +1,257 @@
+package org.rsmod.content.skills.hunter
+
+import dev.openrune.ServerCacheManager
+import dev.openrune.rscm.RSCM
+import dev.openrune.rscm.RSCM.asRSCM
+import dev.openrune.rscm.RSCMType
+import dev.openrune.util.Wearpos
+import kotlin.coroutines.startCoroutine
+import org.rsmod.api.player.protect.ProtectedAccess
+import org.rsmod.api.player.protect.ProtectedAccessContextFactory
+import org.rsmod.api.registry.controller.ControllerRegistry
+import org.rsmod.api.registry.npc.NpcRegistry
+import org.rsmod.api.registry.player.PlayerRegistry
+import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
+import org.rsmod.api.repo.controller.ControllerRepository
+import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.coroutine.GameCoroutine
+import org.rsmod.coroutine.suspension.GameCoroutineSimpleCompletion
+import org.rsmod.events.EventBus
+import org.rsmod.game.MapClock
+import org.rsmod.game.entity.Controller
+import org.rsmod.game.entity.ControllerList
+import org.rsmod.game.entity.Npc
+import org.rsmod.game.entity.NpcList
+import org.rsmod.game.entity.Player
+import org.rsmod.game.entity.PlayerList
+import org.rsmod.game.inv.Inventory
+import org.rsmod.map.CoordGrid
+import org.rsmod.map.zone.ZoneKey
+import org.rsmod.routefinder.collision.CollisionFlagMap
+
+/**
+ * A world for falconry, built the way [HunterTrapTestWorld] is but smaller: falconry touches no
+ * locs, so none of that world's loc plumbing exists here.
+ *
+ * @param hunterXpBonus Added to every `stat.hunter` award; see [hunterXpModifiers].
+ */
+class HunterFalconryTestWorld(hunterXpBonus: Double = 0.0) {
+    val mapClock: MapClock = MapClock()
+    val random: ScriptedRandom = ScriptedRandom()
+
+    val playerList: PlayerList = PlayerList()
+    private val npcList: NpcList = NpcList()
+    private val controllerList: ControllerList = ControllerList()
+
+    private val collision = CollisionFlagMap()
+    private val eventBus = EventBus()
+    private val zoneActivity = ZonePlayerActivityBitSet()
+
+    private val conRegistry = ControllerRegistry(mapClock, controllerList)
+    private val npcRegistry = NpcRegistry(npcList, collision, eventBus)
+    private val playerRegistry = PlayerRegistry(playerList, collision, zoneActivity, eventBus)
+
+    val conRepo: ControllerRepository = ControllerRepository(conRegistry, controllerList)
+    val npcRepo: NpcRepository = NpcRepository(mapClock, npcRegistry, npcList)
+
+    val falconry: HunterFalconry =
+        HunterFalconry(
+            conRepo = conRepo,
+            npcRepo = npcRepo,
+            playerList = playerList,
+            gameRandom = random,
+            xpMods = hunterXpModifiers(hunterXpBonus),
+        )
+
+    fun advance(cycles: Int = 1) {
+        repeat(cycles) { mapClock.tick() }
+    }
+
+    /** Runs one cycle of [controller]'s falcon, exactly as `onAiConTimer(FALCON_CONTROLLER)` would. */
+    fun tickFalcon(controller: Controller) {
+        with(falconry) { controller.falconTick() }
+    }
+
+    /**
+     * One whole cycle for the falcon on [coords]. The duration decrement is **replicated, not
+     * called** - `ControllerRepository.processDurations` is internal to `api:repo`, and without
+     * the decrement a timeout test written the obvious way passes vacuously.
+     *
+     * @return false once there is no falcon left on [coords].
+     */
+    fun advanceFalconCycle(coords: CoordGrid): Boolean {
+        val controller = falconControllerAt(coords) ?: return false
+        advance()
+        controller.duration--
+        tickFalcon(controller)
+        return true
+    }
+
+    /**
+     * Advances until the falcon on [coords] gives up, or fails if it outlives its timeout.
+     *
+     * Bounded rather than looping until the controller vanishes: a timeout that never fires is the
+     * bug these tests exist to catch, and an unbounded loop would hang instead of failing.
+     */
+    fun tickFalconUntilGone(coords: CoordGrid, maxCycles: Int = FALCON_TIMEOUT_CYCLES + 5) {
+        repeat(maxCycles) {
+            if (!advanceFalconCycle(coords)) return
+        }
+        check(falconControllerAt(coords) == null) {
+            "Falcon at $coords outlived $maxCycles cycles without timing out."
+        }
+    }
+
+    /* Players */
+
+    private var nextUuid: Long = 1L
+
+    fun addPlayer(coords: CoordGrid, hunterLvl: Int = 99, hitpoints: Int = 10): Player {
+        val player = Player()
+        player.coords = coords
+        player.slotId = playerList.nextFreeSlot() ?: error("No free player slot.")
+        player.uuid = nextUuid++
+        player.observerUUID = player.uuid
+        playerRegistry.add(player)
+        playerRegistry.change(player, ZoneKey.NULL, ZoneKey.from(coords))
+        player.statMap.setBaseLevel("stat.hunter", hunterLvl.toByte())
+        player.statMap.setCurrentLevel("stat.hunter", hunterLvl.toByte())
+        player.statMap.setBaseLevel("stat.hitpoints", hitpoints.toByte())
+        player.statMap.setCurrentLevel("stat.hitpoints", hitpoints.toByte())
+        player.inv = Inventory.create("inv.inv")
+        player.inv.owner = player
+        // `InvMapInit` builds this at login on a real player. Both glove objs are equipable, so
+        // every glove check in `HunterFalconry` reads it; a world without one throws on the first.
+        player.worn = Inventory.create("inv.worn")
+        player.worn.owner = player
+        return player
+    }
+
+    /** Drops [player] out of the world the way a logout does, orphaning any falcon they sent. */
+    fun removePlayer(player: Player) {
+        playerRegistry.del(player)
+    }
+
+    /**
+     * A [ProtectedAccess] over [player] backed by [ProtectedAccessContextFactory.empty], whose every
+     * dependency throws on first touch - enough for inventory work and nothing else. See the note on
+     * [HunterTrapTestWorld.protectedAccess].
+     */
+    fun protectedAccess(player: Player): ProtectedAccess =
+        ProtectedAccess(player, GameCoroutine(), ProtectedAccessContextFactory.empty())
+
+    fun giveItem(player: Player, obj: String, count: Int = 1) {
+        protectedAccess(player).invAdd(player.inv, obj, count)
+    }
+
+    fun giveCoins(player: Player, amount: Int) {
+        giveItem(player, "obj.coins", amount)
+    }
+
+    /**
+     * Equips [obj], which is what the client's own `Wear` option on either glove does.
+     *
+     * Placed at the obj's `wearpos` rather than the first free slot, exactly as `HeldEquipOp` would;
+     * both gloves are `wearpos=righthand`.
+     */
+    fun wear(player: Player, obj: String) {
+        protectedAccess(player).invAdd(player.worn, obj, 1, slot = Wearpos.RightHand.slot)
+    }
+
+    /** Leaves exactly zero free slots, so any award has to be refused. */
+    fun fillInventory(player: Player) {
+        val access = protectedAccess(player)
+        while (player.inv.freeSpace() > 0) {
+            access.invAdd(player.inv, "obj.oak_logs", 1)
+        }
+    }
+
+    fun <T> runProtected(
+        player: Player,
+        maxCycles: Int = 30,
+        op: suspend HunterFalconry.(ProtectedAccess) -> T,
+    ): T {
+        val coroutine = GameCoroutine()
+        val access = ProtectedAccess(player, coroutine, ProtectedAccessContextFactory.empty())
+        var outcome: Result<T>? = null
+        val body: suspend GameCoroutine.() -> Unit = {
+            outcome = runCatching { falconry.op(access) }
+        }
+        syncPlayerClock(player)
+        player.activeCoroutine = coroutine
+        body.startCoroutine(coroutine, GameCoroutineSimpleCompletion)
+
+        var cycles = 0
+        while (outcome == null && cycles++ < maxCycles) {
+            advance()
+            syncPlayerClock(player)
+            coroutine.advance()
+        }
+        val result = checkNotNull(outcome) { "Falconry op did not finish in $maxCycles cycles." }
+        player.activeCoroutine = null
+        return result.getOrThrow()
+    }
+
+    private fun syncPlayerClock(player: Player) {
+        player.currentMapClock = mapClock.cycle
+        player.processedMapClock = mapClock.cycle
+    }
+
+    /* Npcs */
+
+    fun addNpc(internal: String, coords: CoordGrid): Npc {
+        val type =
+            ServerCacheManager.getNpc(internal.asRSCM(RSCMType.NPC))
+                ?: error("Missing npc type: $internal")
+        val npc = Npc(type, coords)
+        npcRegistry.add(npc)
+        return npc
+    }
+
+    /** See [HunterTrapTestWorld.npcIsSpawned]: the hidden flag, not zone membership, is the test. */
+    fun npcIsSpawned(npc: Npc): Boolean =
+        npc.isVisible && npcRepo.findAll(ZoneKey.from(npc.coords)).any { it === npc }
+
+    /** The internal name of the first visible npc on [coords], if any. */
+    fun npcNameAt(coords: CoordGrid): String? =
+        npcRepo
+            .findAll(coords)
+            .filter { it.isVisible }
+            .firstNotNullOfOrNull { RSCM.getReverseMapping(RSCMType.NPC, it.visType.id) }
+
+    /* Falcons */
+
+    fun falconControllerAt(coords: CoordGrid): Controller? =
+        conRepo.findExact(coords, FALCON_CONTROLLER)
+
+    /**
+     * Puts a falcon-with-prey on [coords] the way a successful [HunterFalconry.catchKebbit] does:
+     * the creature's own falcon npc, plus a controller carrying the owner.
+     *
+     * Split out because `catchKebbit` needs a live kebbit and a rented bird, and most of the cases
+     * that matter here - timeout, a stranger's retrieve, a full inventory - start from a catch that
+     * has already happened.
+     */
+    fun placeCaughtFalcon(
+        coords: CoordGrid,
+        owner: Player,
+        creature: FalconryCreature,
+    ): Npc {
+        val falcon = addNpc(creature.falconNpc, coords)
+        falconry.anchorFalcon(falcon, owner.uid.packed)
+        return falcon
+    }
+
+    /**
+     * Walks [npc] to [to], the way `NpcMainProcess`'s wander mode eventually does.
+     *
+     * Movement proper is a `PathingEntity` concern this world has no processor for, and the only
+     * part of it falconry cares about is that the npc leaves the tile it was caught on: the zone
+     * entry moves, so a coord lookup on the old tile stops finding it.
+     */
+    fun moveNpc(npc: Npc, to: CoordGrid) {
+        npcRegistry.change(npc, ZoneKey.from(npc.coords), ZoneKey.from(to))
+        npc.coords = to
+        npc.lastProcessedZone = ZoneKey.from(to)
+    }
+}

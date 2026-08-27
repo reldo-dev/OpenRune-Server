@@ -12,14 +12,17 @@ import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.rsmod.api.controller.events.ControllerAIEvents
+import org.rsmod.api.player.events.EngineQueueEvents
 import org.rsmod.api.player.events.interact.HeldObjEvents
 import org.rsmod.api.player.events.interact.LocContentEvents
 import org.rsmod.api.player.events.interact.LocEvents
+import org.rsmod.api.player.events.interact.NpcEvents
 import org.rsmod.events.EventBus
 import org.rsmod.game.cheat.CheatCommandMap
 import org.rsmod.game.interact.HeldOp
 import org.rsmod.game.interact.InteractionOp
 import org.rsmod.game.queue.EngineQueueCache
+import org.rsmod.game.queue.EngineQueueType
 import org.rsmod.game.type.hasInvOp
 import org.rsmod.game.type.hasOp
 import org.rsmod.plugin.scripts.PluginScript
@@ -120,6 +123,37 @@ class HunterWiringTest {
         assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "the trap tick belongs to BirdSnareEvents")
     }
 
+    /**
+     * Falconry is registered per npc rather than by content group, so "the right key" here means one
+     * registration per npc id and none on any other.
+     */
+    @Test
+    fun `falconry registers Matthias, every kebbit, every falcon, the tick and the area exit`() {
+        val bus = Wiring().start(scripts.falconry)
+
+        // `op3=Quick-falcon` on npc 1340, and no op1 - his `Talk-to` goes through a dialogue tree
+        // that is out of scope, so claiming op1 would replace it with a rental.
+        assertTrue(bus.hasOpNpc3(FALCONER_NPC), "`Quick-falcon` on $FALCONER_NPC")
+        assertFalse(bus.hasOpNpc1(FALCONER_NPC), "`Talk-to` is not implemented here")
+
+        val creatures = FalconryCreatures.all
+        assertEquals(3, creatures.size, "three falconry kebbits ship today")
+        for (creature in creatures) {
+            assertTrue(bus.hasOpNpc1(creature.npc), "`Catch` on ${creature.npc}")
+            assertTrue(bus.hasOpNpc1(creature.falconNpc), "`Retrieve` on ${creature.falconNpc}")
+        }
+
+        assertTrue(bus.hasAiConTimer(FALCON_CONTROLLER), "the falcon tick on $FALCON_CONTROLLER")
+        assertTrue(bus.hasAreaExit(FALCONRY_AREA), "the glove strip on exiting $FALCONRY_AREA")
+        // The bus is only half of an engine-queue registration; the cache is what makes the engine
+        // bother to publish the event at all.
+        assertTrue(bus.areaExitIsCached(FALCONRY_AREA), "$FALCONRY_AREA in the engine queue cache")
+
+        // A different controller type from the trap's, deliberately: a falcon arriving at the trap
+        // tick would be read as a trap with a corrupt family.
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "falconry must not claim $TRAP_CONTROLLER")
+    }
+
     /* The once-only invariant. */
 
     /**
@@ -139,12 +173,13 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all five scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all six scripts share one bus at startup. */
     @Test
-    fun `all five scripts start together on one bus without a duplicate key`() {
+    fun `all six scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
+        assertTrue(bus.hasAiConTimer(FALCON_CONTROLLER))
         for (group in ALL_TRAP_GROUPS) {
             assertTrue(bus.hasOpContentLoc1(group), "op1 on $group")
             assertTrue(bus.hasOpContentLoc2(group), "op2 on $group")
@@ -168,6 +203,22 @@ class HunterWiringTest {
             assertFalse(bus.eventBus.contains(LocContentEvents.Op3::class.java, id), "op3 on $group")
             assertFalse(bus.eventBus.contains(LocContentEvents.Op4::class.java, id), "op4 on $group")
             assertFalse(bus.eventBus.contains(LocContentEvents.Op5::class.java, id), "op5 on $group")
+        }
+    }
+
+    @Test
+    fun `no npc handler is registered on an op index the hunter npcs do not carry`() {
+        val bus = Wiring().start(scripts.falconry)
+
+        val catchTargets =
+            FalconryCreatures.all.map { it.npc } +
+                FalconryCreatures.all.map { it.falconNpc }
+        for (npc in catchTargets) {
+            val id = npc.asRSCM(RSCMType.NPC)
+            assertFalse(bus.eventBus.contains(NpcEvents.Op2::class.java, id), "op2 on $npc")
+            assertFalse(bus.eventBus.contains(NpcEvents.Op3::class.java, id), "op3 on $npc")
+            assertFalse(bus.eventBus.contains(NpcEvents.Op4::class.java, id), "op4 on $npc")
+            assertFalse(bus.eventBus.contains(NpcEvents.Op5::class.java, id), "op5 on $npc")
         }
     }
 
@@ -238,6 +289,25 @@ class HunterWiringTest {
             val type = checkNotNull(ServerCacheManager.getObject(loc.asRSCM(RSCMType.LOC)))
             assertFalse(type.hasOp(InteractionOp.Op1), "$loc must carry no op1")
             assertFalse(type.hasOp(InteractionOp.Op2), "$loc must carry no op2")
+        }
+    }
+
+    /** Every npc a handler is registered on really draws that op in the packed cache. */
+    @Test
+    fun `every registered npc op exists on the packed npc definition`() {
+        val expected = buildList {
+            add(FALCONER_NPC to InteractionOp.Op3)
+            for (creature in FalconryCreatures.all) {
+                add(creature.npc to InteractionOp.Op1)
+                add(creature.falconNpc to InteractionOp.Op1)
+            }
+        }
+
+        for ((npc, op) in expected) {
+            val type =
+                ServerCacheManager.getNpc(npc.asRSCM(RSCMType.NPC))
+                    ?: error("No packed npc definition for $npc")
+            assertTrue(type.hasOp(op.slot), "$npc must carry ${op.name} (${type.actions})")
         }
     }
 
@@ -347,17 +417,19 @@ class HunterWiringTest {
      */
     private class HunterScripts {
         private val trapWorld = HunterTrapTestWorld()
+        private val falconWorld = HunterFalconryTestWorld()
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
         val deadfall = DeadfallEvents(trapWorld.trap, trapWorld.conRepo)
         val netTrap = NetTrapEvents(trapWorld.trap)
         val magicBox = MagicBoxEvents(trapWorld.trap, trapWorld.conRepo)
+        val falconry = FalconryEvents(falconWorld.falconry)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
-        val all: List<PluginScript> = trapFamily
+        val all: List<PluginScript> = trapFamily + listOf(falconry)
     }
 
     /**
@@ -383,6 +455,12 @@ class HunterWiringTest {
         fun hasOpContentLoc2(content: String): Boolean =
             eventBus.contains(LocContentEvents.Op2::class.java, content.asRSCM(RSCMType.CONTENT))
 
+        fun hasOpNpc1(npc: String): Boolean =
+            eventBus.contains(NpcEvents.Op1::class.java, npc.asRSCM(RSCMType.NPC))
+
+        fun hasOpNpc3(npc: String): Boolean =
+            eventBus.contains(NpcEvents.Op3::class.java, npc.asRSCM(RSCMType.NPC))
+
         fun hasOpHeld1(obj: String): Boolean =
             eventBus.contains(HeldObjEvents.Op1::class.java, obj.asRSCM(RSCMType.OBJ))
 
@@ -395,6 +473,15 @@ class HunterWiringTest {
         fun hasAiConTimer(controller: String): Boolean =
             eventBus.keyed[
                 ControllerAIEvents.Timer::class.java, controller.asRSCM(RSCMType.CONTROLLER)] != null
+
+        fun hasAreaExit(area: String): Boolean =
+            eventBus.contains(EngineQueueEvents.Labelled::class.java, areaExitKey(area))
+
+        fun areaExitIsCached(area: String): Boolean =
+            engineQueue.hasScript(EngineQueueType.AreaExit, area.asRSCM(RSCMType.AREA))
+
+        private fun areaExitKey(area: String): Long =
+            EventBus.composeLongKey(area.asRSCM(RSCMType.AREA), EngineQueueType.AreaExit.id)
     }
 
     private companion object {
@@ -413,5 +500,8 @@ class HunterWiringTest {
         private const val SNARE_OBJ = "obj.hunting_ojibway_bird_snare"
         private const val BOX_OBJ = "obj.hunting_box_trap"
         private const val MAGIC_BOX_OBJ = "obj.magic_imp_box"
+
+        private const val FALCONER_NPC = "npc.hunting_npc_falconer"
+        private const val FALCONRY_AREA = "area.piscatoris_falconry"
     }
 }

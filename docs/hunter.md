@@ -486,3 +486,102 @@ creature (the claws pattern again); the jerboa is
 like every box-trap creature) — *not* `npc.varlamore_jerboa`, which is
 ambient scenery named plain "Jerboa". Large jerboa tail is 1/50 and
 rumour-conditional, so omitted.
+
+## Falconry
+
+Not a trap, and it deliberately shares no code with `HunterTrap` — it borrows
+the controller-anchored-at-a-coord idea and a varcon as the only persisted
+state, and nothing else: falconry has no trap item, no cap and no loc. Its
+creatures are a separate record (`FalconryCreature`), not `HunterCreature`
+rows: widening that record would have meant either a sixth `TrapFamily` entry
+(corrupting the trap cap and the controller-per-trap model) or a nullable
+family every existing `when` grows a branch for. It also gets its own
+controller type — `onAiConTimer` dispatches on the type, and a falcon
+arriving at the trap tick would read as a trap with a corrupt family — and
+its own varcon ids, since sharing names across controller types would let a
+rename in one feature silently retarget the other.
+
+### Rental and the glove
+
+"For a fee of 500 coins, hunters can rent a gyr falcon and a falconer's glove
+from the falcon expert Matthias" (*Falconry*, oldid=14840978), wired to his
+real `op3=Quick-falcon`. The Talk-to dialogue tree, and the 500,000-coin
+permanent unlock behind it, are out of scope, so every rental is charged. The
+fee is charged *before* the space check: paying with an exact coin stack
+frees the slot the glove takes, so checking first would refuse a player who
+can afford it; if there is still no room the fee is refunded.
+
+The glove is *equipment* — both states carry `iop2=Wear` with
+`wearpos=righthand`, and the engine equips them with no code in this module —
+so every glove check reads the worn slot as well as the backpack, and the
+bird leaves and returns on the hand it was on (the swap transforms the obj in
+its slot). Leaving the enclosure strips both glove states, walking or
+teleporting alike (`PlayerAreaProcessor` recomputes areas from coords alone)
+— but **not on logout**: that processor deliberately fires area-exits on the
+logout cycle, so the handler guards on `pendingLogout || forceDisconnect`, and
+the activity re-arms at next login instead.
+
+### One falcon npc per kebbit
+
+OSRS ships three distinct falcon-with-prey npcs, one per kebbit (all
+`name=Gyr Falcon`, all `op1=Retrieve`), where thinner reference dumps use one
+generic falcon plus a side-channel prey attribute. Encoding the prey in the
+npc means a retrieve recovers the whole reward from the thing it clicked, and
+the controller only remembers *who* owns the catch. The npc id order is not
+the level order: `onspeedy2` (1343) is the dashing kebbit's, `onsilent`
+(1344) the dark's.
+
+The falcon–controller pairing is by **identity** (`IdentityHashMap`), never
+by tile: falcon npcs take wander defaults, and a tile-keyed lookup voids the
+catch the moment the bird steps off it (tick deletes the controller, retrieve
+finds nothing, an `Int.MAX_VALUE` npc stays in the world). The three npcs are
+additionally pinned in `.data/raw-cache/server/npcs.toml`
+(`moveRestrict=NoMove`, `wanderRange=0`) so the bird also *looks* right;
+the identity link removes the defect, the pinning removes the trigger.
+
+### Rates
+
+All three pairs are pinned to a single integer solution — the strongest fit
+of any hunter table — with two independent cross-checks each: a
+`{{Skilling success chart}}` whose every y value is an exact 256th, plus
+prose endpoints. Spotted (oldid=15225548, 38 points): `(26, 310)`, prose "10%
+at lvl 1 and 121% at lvl 99" (Mod Ash). Dark (oldid=15288973, 43 points):
+`(0, 253)`, prose "0% … 99%". Dashing (oldid=15225549, 31 points):
+`(0, 205)`, prose "0% … 80%". The spotted kebbit's `high=310` exceeds 256 on
+purpose and must not be clamped: certainty from L80 is what the chart shows,
+and clamping would move it to L99. Extraction note: the offline wiki sqlite's
+chunks truncate at ~1KB and silently yield 2 of the spotted kebbit's 38
+points; the 112-point extract came through the `osrs-cache` MCP
+`get_wiki_section`, whole.
+
+Rewards are infobox "Always" drops (Kebbity tuft omitted: 1/10 and
+rumour-conditional); only the dashing kebbit has a third line (its meat).
+
+### Behaviour and tuning
+
+- **No proximity rate term.** "Although the success rate is supposedly not
+  affected by proximity, running up to the target before catching it may
+  improve success rate" (*Falconry*) — which the page itself explains as a
+  timing artefact of flight time. Distance costs time here and nothing else:
+  the flight delay is Chebyshev distance × `FALCON_CYCLES_PER_TILE` (1,
+  unsourced — walking speed as the conservative reading), floored at 1 cycle
+  so a point-blank catch cannot resolve on the input tick.
+- **Timeout**: `FALCON_TIMEOUT_CYCLES` = 100 (~1 minute). The behaviour and
+  the message are sourced ("Your falcon has left its prey…", and "no
+  experience is given for the lost prey"); the duration is not. The timeout
+  runs with the owner logged out — unlike a trap, a falcon has already
+  rolled, so it has no live-level dependency, and one that only expired while
+  watched would sit on the map until restart.
+- **A miss leaves the kebbit in place** — despawning it would be an
+  invention, and the cost of guessing wrong is a creature that vanishes on
+  every miss. The empty-handed "kebbit will escape" line is likewise not
+  modelled: despawning on a gloveless click would let a player clear the
+  enclosure for free.
+- **XP is awarded at retrieve, not at catch**, which is what the timeout
+  depends on: a falcon that paid on landing would pay for prey never
+  collected.
+
+The enclosure area (`area.piscatoris_falconry` = 59, the next free id above
+fishing's `fishing_guild = 58`) needs both the gameval id *and* the polygon
+in `.data/raw-cache/map/area/` — an area name without the polygon resolves
+and then matches no tile.

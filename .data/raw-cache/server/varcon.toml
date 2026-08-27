@@ -21,3 +21,9 @@ id = "varcon.hunter_trap_creature"
 
 [[varcon]]
 id = "varcon.hunter_trap_deadfall_log"
+
+[[varcon]]
+id = "varcon.hunter_falcon_owner"
+
+[[varcon]]
+id = "varcon.hunter_falcon_creature"

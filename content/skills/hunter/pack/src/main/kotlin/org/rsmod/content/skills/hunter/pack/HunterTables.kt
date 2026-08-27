@@ -13,7 +13,8 @@ import dev.openrune.definition.util.VarType
  * Row order is load-bearing: a sprung trap persists its creature as an index into the combined
  * creature list, read back sorted by dbrow id - a new technique's rows must sort after every row
  * already shipped, never between them. The wagtail, ferret and jerboa rows carry deliberately late
- * ids for the same reason (docs/hunter.md).
+ * ids for the same reason (docs/hunter.md). [falconryCreatures] sits outside that combined list
+ * (`FalconryCreatures.all` is its own list); its ids sort last only to keep one ascending run.
  */
 object HunterTables {
     // Column ids must form a dense 0..n-1 set per table: the encoder writes columns sorted by id
@@ -61,6 +62,14 @@ object HunterTables {
 
     // The magic box, a one-creature technique, needs no nested block: its loc states are shared by
     // construction and live content-side.
+
+    /**
+     * Falconry only, and the one family with no loc column at all: nothing is laid, nothing is
+     * transformed. What a falconry row needs instead is the npc the successful catch *becomes*.
+     */
+    private object Falconry {
+        const val COL_FALCON_NPC = 8
+    }
 
     /** Columns 0-7, shared verbatim by every creature table. */
     private fun DBTableBuilder.creatureColumns() {
@@ -499,6 +508,63 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.magic_imp_box_full")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+            }
+        }
+
+    /**
+     * The three falconry kebbits - not a trap table: the one extra column is the per-kebbit
+     * "falcon holding prey" npc a catch spawns, which is what lets a retrieve recover the whole
+     * reward from the npc it clicked. All three pairs are pinned to a single integer solution,
+     * cross-checked twice (chart + prose endpoints). The spotted kebbit's `high` of 310 exceeds
+     * 256 on purpose and must not be clamped. Sourcing and extraction notes: docs/hunter.md.
+     */
+    fun falconryCreatures(): DBTable =
+        dbTable("dbtable.hunter_falconry_creatures", serverOnly = true) {
+            creatureColumns()
+            column("falcon_npc", Falconry.COL_FALCON_NPC, VarType.NPC)
+
+            row("dbrow.hunter_spotted_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_speedy")
+                column(COL_LEVEL, 43)
+                column(COL_XP, 1040)
+                column(COL_SUCCESS_LOW, 26)
+                // Above 256, and correct - do not clamp (docs/hunter.md).
+                column(COL_SUCCESS_HIGH, 310)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_speedy_fur")
+                column(COL_CAUGHT_MIN, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1)
+                columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onspeedy")
+            }
+
+            row("dbrow.hunter_dark_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_silent")
+                column(COL_LEVEL, 57)
+                column(COL_XP, 1320)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 253)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_silent_fur")
+                column(COL_CAUGHT_MIN, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1)
+                // The falcon npc ids do not ascend with creature level.
+                columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onsilent")
+            }
+
+            // The only three-reward falconry row: dashing kebbits always drop meat as well.
+            row("dbrow.hunter_dashing_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_speedy2")
+                column(COL_LEVEL, 69)
+                column(COL_XP, 1560)
+                column(COL_SUCCESS_LOW, 0)
+                column(COL_SUCCESS_HIGH, 205)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.huntingbeast_speedy2_fur",
+                    "obj.huntingbeast_speedy2_meat",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1, 1)
+                columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onspeedy2")
             }
         }
 }

@@ -4496,3 +4496,22 @@ contentGroup = "content.dark_crab_fishing_spot"
 moveRestrict = "NoMove"
 wanderRange = 0
 
+
+[[npc]]
+id = "npc.hunting_falcon_onspeedy"
+inherit = "npc.hunting_falcon_onspeedy"
+moveRestrict = "NoMove"
+wanderRange = 0
+
+[[npc]]
+id = "npc.hunting_falcon_onspeedy2"
+inherit = "npc.hunting_falcon_onspeedy2"
+moveRestrict = "NoMove"
+wanderRange = 0
+
+[[npc]]
+id = "npc.hunting_falcon_onsilent"
+inherit = "npc.hunting_falcon_onsilent"
+moveRestrict = "NoMove"
+wanderRange = 0
+

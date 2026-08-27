@@ -32,7 +32,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(648, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(760, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -185,7 +185,10 @@ class HunterRateTablesTest {
         }
 
     private fun allShippedRates(): List<ShippedRate> =
-        HunterCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) }
+        HunterCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) } +
+            FalconryCreatures.all.map {
+                ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
+            }
 
     private fun firstCertainLevel(rate: ShippedRate): Int =
         (1..99).first { charted(rate.low, rate.high, it) == 256 }
@@ -233,6 +236,7 @@ class HunterRateTablesTest {
                 "boxtrap-chance.tsv",
                 "butterfly-chance.tsv",
                 "deadfall-chance.tsv",
+                "falconry-chance.tsv",
                 "magicbox-chance.tsv",
                 "nettrap-chance.tsv",
             )
@@ -258,6 +262,9 @@ class HunterRateTablesTest {
                 Charted("black_salamander", "npc.salamander_black"),
                 Charted("tecu_salamander", "npc.salamander_mountain"),
                 Charted("imp", "npc.imp"),
+                Charted("spotted_kebbit", "npc.huntingbeast_speedy"),
+                Charted("dark_kebbit", "npc.huntingbeast_silent"),
+                Charted("dashing_kebbit", "npc.huntingbeast_speedy2"),
             )
 
         /** The published `{{Skilling success chart}}` parameters, keyed by page and series label. */
@@ -286,6 +293,9 @@ class HunterRateTablesTest {
                 Published("Net trap", "Black salamander", "npc.salamander_black"),
                 Published("Net trap", "Tecu salamander", "npc.salamander_mountain"),
                 Published("Imp", "Imp", "npc.imp"),
+                Published("Spotted kebbit", "Spotted kebbit", "npc.huntingbeast_speedy"),
+                Published("Dark kebbit", "Dark kebbit", "npc.huntingbeast_silent"),
+                Published("Dashing kebbit", "Dashing kebbit", "npc.huntingbeast_speedy2"),
             )
 
         /**

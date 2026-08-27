@@ -1,0 +1,23 @@
+[[area]]
+name = "Piscatoris falconry area"
+area_id = "area.piscatoris_falconry"
+levels = [0]
+
+# Derived from this repo's own map data, not traced from the enclosure fence: the rectangle is the
+# bounding box of every falconry npc spawn in
+# `.data/raw-cache/map/npcs/kingdom_of_kandarin_region.toml` - the seven `huntingbeast_speedy`, seven
+# `huntingbeast_silent` and three `huntingbeast_speedy2` spawns (x 2365-2391, z 3575-3598) plus
+# `hunting_npc_falconer` at (2376, 3606) - padded one tile on every side.
+#
+# The pad is the unsourced part. The spawn extents are exact and are a real source; where the fence
+# actually stands is not recoverable offline, so the boundary is at best a tile or two tight in
+# places. That is the conservative direction for the only rule this area carries: a player who
+# crosses the real fence but is still inside this box keeps a glove they should have lost, which
+# costs nothing, where an over-wide box would strip the glove of someone still legitimately hunting.
+[[area.polygons]]
+vertices = [
+    [2364, 3574],
+    [2392, 3574],
+    [2392, 3608],
+    [2364, 3608],
+]

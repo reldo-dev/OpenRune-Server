@@ -11,5 +11,6 @@ class HunterPluginPack : PluginPack() {
             HunterTables.deadfallCreatures(),
             HunterTables.netTrapCreatures(),
             HunterTables.magicBoxCreatures(),
+            HunterTables.falconryCreatures(),
         )
 }
