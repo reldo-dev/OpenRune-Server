@@ -15,6 +15,7 @@ import org.rsmod.api.controller.events.ControllerAIEvents
 import org.rsmod.api.player.events.EngineQueueEvents
 import org.rsmod.api.player.events.PlayerQueueEvents
 import org.rsmod.api.player.events.interact.HeldObjEvents
+import org.rsmod.api.player.events.interact.HeldUEvents
 import org.rsmod.api.player.events.interact.LocContentEvents
 import org.rsmod.api.player.events.interact.LocEvents
 import org.rsmod.api.player.events.interact.NpcEvents
@@ -254,6 +255,84 @@ class HunterWiringTest {
         }
     }
 
+    /**
+     * Bird houses register **four** loc ops, which is the most of any technique here.
+     *
+     * The op indices line up across the four states even though the labels do not - op1 is
+     * `Build`/`Interact`, op2 is `Seeds`, op3 is `Dismantle`/`Empty`, op4 is `Reset` - so one group
+     * and four handlers cover all 28 children. Missing any one of the four leaves that transaction
+     * unreachable with every other test in the module still green: nothing else in this suite goes
+     * through the event bus.
+     */
+    @Test
+    fun `bird houses register all four loc ops, the fill queue and the login re-arm`() {
+        val bus = Wiring().start(scripts.birdHouse)
+
+        assertTrue(bus.hasOpContentLoc1(BIRD_HOUSE_GROUP), "op1 (`Build`/`Interact`)")
+        assertTrue(bus.hasOpContentLoc2(BIRD_HOUSE_GROUP), "op2 (`Seeds`)")
+        assertTrue(bus.hasOpContentLoc3(BIRD_HOUSE_GROUP), "op3 (`Dismantle`/`Empty`)")
+        assertTrue(bus.hasOpContentLoc4(BIRD_HOUSE_GROUP), "op4 (`Reset`)")
+        assertTrue(bus.hasSoftQueue(BIRDHOUSE_FILL_QUEUE), "the fill on $BIRDHOUSE_FILL_QUEUE")
+        assertTrue(bus.hasPlayerLogin(), "the deadline re-arm")
+
+        // No child carries an op5, and nothing of a bird house exists in the world to tick.
+        assertFalse(bus.hasOpContentLoc5(BIRD_HOUSE_GROUP), "no bird house loc draws an op5")
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAiConTimer(FALCON_CONTROLLER), "no controller is created")
+        for (group in ALL_TRAP_GROUPS + CRAB_GROUP) {
+            assertFalse(bus.hasOpContentLoc1(group), "bird houses must not claim $group")
+        }
+    }
+
+    /**
+     * The nine `clockwork on logs` pairs, which are how a bird house enters the game at all.
+     *
+     * Walked off [BirdHouseTypes] rather than listed, the way the trap families' loc states are: a
+     * tenth tier joins this assertion on its own. The pair is asserted in *registration* order,
+     * because that is the only order `onOpHeldU` stores - see [Wiring.hasOpHeldU].
+     */
+    @Test
+    fun `bird houses register a craft pair on every tier's logs`() {
+        val bus = Wiring().start(scripts.birdHouse)
+
+        assertEquals(9, BirdHouseTypes.all.size, "nine tiers ship")
+        for (type in BirdHouseTypes.all) {
+            assertTrue(
+                bus.hasOpHeldU(HunterBirdHouse.CLOCKWORK, type.logs),
+                "a clockwork on ${type.logs} makes ${type.obj}",
+            )
+        }
+
+        // The tools are held and read, never used on anything, so neither carries a pair of its own.
+        assertFalse(
+            bus.hasOpHeldU(HunterBirdHouse.CLOCKWORK, HunterBirdHouse.CHISEL),
+            "the chisel is a held tool, not a material",
+        )
+        assertFalse(
+            bus.hasOpHeldU(HunterBirdHouse.CLOCKWORK, HunterBirdHouse.HAMMER),
+            "and so is the hammer",
+        )
+    }
+
+    /**
+     * The **space** locs are not registered, and must not be.
+     *
+     * The same shadowing hazard the crab trap sites have, and the same reasoning: the four spaces are
+     * `multiloc` parents with no ops, and `LocInteractions.opTrigger` tries the type-level
+     * `LocEvents.OpN` before it reaches the content handler.
+     */
+    @Test
+    fun `no bird house space loc is registered by id`() {
+        val bus = Wiring().start(*scripts.all.toTypedArray())
+
+        for (space in BirdHouseSpaces.all) {
+            assertFalse(
+                bus.eventBus.contains(LocEvents.Op1::class.java, space.locId.toLong()),
+                "op1 shadow on ${space.loc}",
+            )
+        }
+    }
+
     /* The once-only invariant. */
 
     /**
@@ -273,9 +352,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all nine scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all ten scripts share one bus at startup. */
     @Test
-    fun `all nine scripts start together on one bus without a duplicate key`() {
+    fun `all ten scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -530,6 +609,7 @@ class HunterWiringTest {
         private val falconWorld = HunterFalconryTestWorld()
         private val butterflyWorld = HunterButterflyTestWorld()
         private val crabWorld = HunterCrabTrapTestWorld()
+        private val birdHouseWorld = HunterBirdHouseTestWorld()
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
@@ -540,12 +620,13 @@ class HunterWiringTest {
         val butterfly = ButterflyEvents(butterflyWorld.butterfly)
         val crabTrap = CrabTrapEvents(crabWorld.crabTrap)
         val impling = ImplingEvents(butterflyWorld.impling, butterflyWorld.implingSpawner)
+        val birdHouse = BirdHouseEvents(birdHouseWorld.birdHouse)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
         val all: List<PluginScript> =
-            trapFamily + listOf(falconry, butterfly, crabTrap, impling)
+            trapFamily + listOf(falconry, butterfly, crabTrap, impling, birdHouse)
     }
 
     /**
@@ -571,6 +652,15 @@ class HunterWiringTest {
         fun hasOpContentLoc2(content: String): Boolean =
             eventBus.contains(LocContentEvents.Op2::class.java, content.asRSCM(RSCMType.CONTENT))
 
+        fun hasOpContentLoc3(content: String): Boolean =
+            eventBus.contains(LocContentEvents.Op3::class.java, content.asRSCM(RSCMType.CONTENT))
+
+        fun hasOpContentLoc4(content: String): Boolean =
+            eventBus.contains(LocContentEvents.Op4::class.java, content.asRSCM(RSCMType.CONTENT))
+
+        fun hasOpContentLoc5(content: String): Boolean =
+            eventBus.contains(LocContentEvents.Op5::class.java, content.asRSCM(RSCMType.CONTENT))
+
         fun hasOpNpc1(npc: String): Boolean =
             eventBus.contains(NpcEvents.Op1::class.java, npc.asRSCM(RSCMType.NPC))
 
@@ -579,6 +669,18 @@ class HunterWiringTest {
 
         fun hasOpHeld1(obj: String): Boolean =
             eventBus.contains(HeldObjEvents.Op1::class.java, obj.asRSCM(RSCMType.OBJ))
+
+        /**
+         * `onOpHeldU` composes the two obj ids into one long key, in **registration** order.
+         *
+         * Order matters here and nowhere else in this class: the API refuses the reversed pair at
+         * boot, so asserting the wrong way round would fail against a correct registration.
+         */
+        fun hasOpHeldU(first: String, second: String): Boolean =
+            eventBus.contains(
+                HeldUEvents.Type::class.java,
+                EventBus.composeLongKey(first.asRSCM(RSCMType.OBJ), second.asRSCM(RSCMType.OBJ)),
+            )
 
         /**
          * `onAiConTimer` subscribes a [org.rsmod.events.KeyedEvent], not a suspending one, so
@@ -623,6 +725,7 @@ class HunterWiringTest {
         private const val NET_TRAP_GROUP = "content.hunter_net_trap"
         private const val MAGIC_BOX_GROUP = "content.hunter_magic_box"
         private const val CRAB_GROUP = "content.hunter_crab_trap"
+        private const val BIRD_HOUSE_GROUP = "content.hunter_bird_house"
 
         private val ALL_TRAP_GROUPS =
             listOf(SNARE_GROUP, BOX_GROUP, DEADFALL_GROUP, NET_TRAP_GROUP, MAGIC_BOX_GROUP)

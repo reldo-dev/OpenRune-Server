@@ -840,3 +840,103 @@ would quietly defeat the tier roll forever.
 
 Imp defenders, Puro-Puro retaliation, and crop circles — their own features,
 not branches of this one.
+
+## Bird houses
+
+The crab trap's shape one step on: the four Fossil Island spaces are
+`multiloc` parents rendered from a **varp** (1626–1629, one per space,
+holding 0..27 — the bare space plus three states for each of nine tiers,
+`tier = (varp - 1) / 3`). A varp rather than a varbit is what makes the
+technique nearly free server-side: varps default `Perm` and the account
+repository saves them, so a filling house survives logout with nothing
+authored. `locRepo` is never touched; houses are private per player.
+
+### Wall-clock time
+
+The first technique on wall-clock time: the owner is expected to seed four
+houses and log out. The deadline is an **epoch minute in a saved varp**
+(`hunter_birdhouse_ready_a..d`); the soft queue is only the in-session half,
+re-armed at login and re-checked on every interaction — lose the queue and
+nothing breaks, lose the varp and the house never fills. A house that
+finished while nobody watched matures lazily on the next interaction (after
+`arriveDelay`, so one that matures during the walk is full by the time the op
+reads it). Zero is a safe sentinel because a real deadline is an epoch minute
+(~29.6M and rising). Fill time is 50 minutes — stated on five pages, never
+qualified, tier-independent; the wiki hedges "around", so it is the round
+number every source uses.
+
+**The login-transmit trap**: `VarPlayerIntMapSetter` skips its transmit
+branch entirely while `processedMapClock == 0`, which is exactly the state
+during the login event — a varp written from an `onPlayerLogin` handler
+updates the server and leaves the client drawing the old value. The re-arm
+therefore queues an already-elapsed house for the next cycle rather than
+writing at login. (Measured 2026-08-25; the same applies to any content
+writing varps at login.)
+
+### The five transactions
+
+Craft (clockwork on the tier's logs; chisel + hammer held; Crafting xp; the
+only source of a bird house; a `HeldU` pair rather than a make menu since the
+pair names the product — the menu exists for quantity), Build (places the
+*best* carried house the effective Hunter level allows — published 18 April
+2019 behaviour; no xp, since no source gives a Hunter figure for building —
+an absence across four pages, not a stated zero), Seeds (greedy, "insert as
+many as possible"; high-value first is ours — unsourced either way), Dismantle
+(the early abort: clockwork back, nothing else — published), Empty/Reset
+(the payout; Reset re-places in one action, the clockwork reuse falling out
+of ordering). `Interact` on a full house reports status and does not act: the
+cache carries the op and nothing says what it does, and making the left-click
+harvest would be the guess with a cost.
+
+### Seeds
+
+The per-seed 5-or-10 column is published and transcribed as a test resource;
+the *unit* model (house capacity 10 units, high-value seed = 2) is inferred —
+the only single model consistent with "10 barley", "5 ranarr" and mixing —
+and flagged: if a measured mixed case ever disagrees, one constant changes.
+Naming traps: `obj.hammerstone_hop_seed` displays "Hammerstone seed" while
+`obj.barley_seed` is a hop with no infix, and `marigold_seed_2..5` are
+grow-stage sprites no player can hold — hence 41 literals, nothing derived.
+Seeds are cosmetic to the loot ("All seeds give the exact same rewards", Mod
+Ash).
+
+### The harvest: two rolls, and which halves are sourced
+
+- **Seed nest** (at most one): a plain published curve `low=0, high=200,
+  req=5` — the exact template parameters, so it reuses `SkillingSuccessRate`
+  and needs no column. Checks out against Mod Ash's endpoints; unaffected by
+  tier and by the strung rabbit foot (both published).
+- **Ten rolls on the nest table**: *not* a /256 curve (10.0% at 99 is not a
+  multiple of 1/256). Mod Ash gives the nine level-99 endpoints (shipped as
+  `nest_permille`) and "these scale down by half at level 50"; the linear
+  50→99 ramp between is the **wiki's own model** — the single largest piece
+  of unsourced arithmetic in the feature. The whole curve collapses to one
+  exact rational, `high × (max(L,50) − 1) / 98,000`, continuous at the knee.
+- A successful roll pre-rolls a clue first, then the ring/egg/empty table —
+  folding clues in as a sixth slot would drift the other rates by ~2.7%. The
+  type table is rolled as an **index** (0..99, or 0..94 with the strung
+  rabbit foot removing five *empty* slots), which is how Mod Ash described
+  the woodcutting original; "+5% ring/egg" would be slightly wrong for every
+  row. Twitcher's gloves are deliberately not checked (published as not
+  applying). Clue nests: the published ~1/~2/~3/~4/~30-out-of-1500 rates ship,
+  in a section the wiki itself marks unconfirmed; at most one clue per house
+  (Mod Ash, 19 June 2020 — the dated developer statement wins over the
+  wiki's self-contradicting prose). X Marks the Spot substitutes a scroll box
+  plus an empty nest on the ground, through `content/drops`' own helper.
+- Raw bird meat is "always dropped to the ground, even if there is space" —
+  published twice; the feather count is 30/40/50/60. An overflowing payout
+  drops rather than refuses: the space is already cleared, so a rejected item
+  would cease to exist.
+
+### Sourcing notes
+
+Levels and both xp values are published per tier *and* in the client's own
+skill guide (`data=skill,23,<lvl>,11` Hunter, `skill,11,<lvl>,9` Crafting).
+Varp order is not the wiki's touring order — the packed map and RuneLite's
+enum agree on which space is which. The multiloc chain is read from the first
+space (all four are byte-identical, asserted); state indices are read off the
+packed loc, not computed. `obj.poh_clockwork_mechanism` is the Clockwork;
+`seq.birdhouse_make` names its own held materials, independent confirmation
+of the tools. The `epochMinute` import is aliased because an unaliased call
+inside a same-named method compiles into silent infinite recursion — the
+falconry shadowing shape again.
