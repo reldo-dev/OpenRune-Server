@@ -38,4 +38,17 @@ class TrapLadderTest {
         assertEquals(5, TrapLadder.cap(80))
         assertEquals(5, TrapLadder.cap(99))
     }
+
+    /**
+     * The crab trap's ladder is a different table and must stay one.
+     *
+     * It starts at 2 with no below-20 rung, because its lowest site is level 21. Folding it into
+     * [TrapLadder] would give crab trapping a `1` its published table does not have, and the two
+     * are close enough to look like a duplicate to the next reader.
+     */
+    @Test
+    fun `the crab trap ladder is deliberately not this one`() {
+        assertEquals(1, TrapLadder.cap(19))
+        assertEquals(2, HunterCrabTrap.crabTrapCap(19))
+    }
 }

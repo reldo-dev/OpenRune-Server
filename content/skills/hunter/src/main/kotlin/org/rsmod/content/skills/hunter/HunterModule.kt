@@ -7,5 +7,6 @@ class HunterModule : PluginModule() {
         bindInstance<HunterTrap>()
         bindInstance<HunterFalconry>()
         bindInstance<HunterButterfly>()
+        bindInstance<HunterCrabTrap>()
     }
 }

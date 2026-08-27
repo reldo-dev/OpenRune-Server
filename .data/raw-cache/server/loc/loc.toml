@@ -2389,3 +2389,64 @@ contentGroup = "content.hunter_box_trap"
 id = "loc.hunting_boxtrap_full_jerboa"
 inherit = "loc.hunting_boxtrap_full_jerboa"
 contentGroup = "content.hunter_box_trap"
+
+[[object]]
+id = "loc.crab_trap_unbuilt"
+inherit = "loc.crab_trap_unbuilt"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_built"
+inherit = "loc.crab_trap_built"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_active"
+inherit = "loc.crab_trap_active"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_active_fine_offcuts"
+inherit = "loc.crab_trap_active_fine_offcuts"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_red"
+inherit = "loc.crab_trap_full_red"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_blue"
+inherit = "loc.crab_trap_full_blue"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_rainbow_a"
+inherit = "loc.crab_trap_full_rainbow_a"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_rainbow_b"
+inherit = "loc.crab_trap_full_rainbow_b"
+contentGroup = "content.hunter_crab_trap"
+
+[[object]]
+id = "loc.crab_trap_full_rainbow_c"
+inherit = "loc.crab_trap_full_rainbow_c"
+contentGroup = "content.hunter_crab_trap"
+
+# Bird house trapping. These 28 are the `multiloc` children of the four map-placed
+# `birdhouse_1`..`_4` spaces (30565-30568), which carry no ops of their own: the client picks a
+# child from the space's own varp - 1626-1629, one per space, holding 0..27 - and
+# `LocInteractions.opTrigger` resolves that child before it looks for a handler. So the group
+# belongs on the children, exactly as it does for the crab trap above.
+#
+# One group covers all four states because the op *indices* are consistent across them: op1 is
+# `Build` on the bare space and `Interact` on a full one, op2 is `Seeds` everywhere it appears,
+# op3 is `Dismantle` on a filling house and `Empty` on a full one, and op4 is `Reset`. Four
+# handlers dispatch the whole family off the varp. Splitting it into four groups would buy
+# nothing and would put the same `when` in four places.
+#
+# `_full` is full of *seeds*, not of birds; `_bird` is the harvestable state. The symbols read
+# the other way round and this is the one place that ordering matters, since a group missing
+# from one state makes the bird house unclickable in exactly that state.

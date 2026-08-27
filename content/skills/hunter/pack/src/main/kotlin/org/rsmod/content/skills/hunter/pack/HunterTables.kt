@@ -71,6 +71,21 @@ object HunterTables {
         const val COL_FALCON_NPC = 8
     }
 
+    /**
+     * Crab trapping shares none of [creatureColumns] and starts its own dense ids at 0: crabs can
+     * never fail to be caught, so there is no success pair to store, and their npcs are never
+     * touched, so there is no npc column. [COL_CAUGHT_ITEMS] and [COL_FULL_LOC] are parallel
+     * lists: entry `i` of each is the same colourway of the same crab. See docs/hunter.md.
+     */
+    private object Crab {
+        const val COL_LEVEL = 0
+        const val COL_XP = 1
+        const val COL_BAIT = 2
+        const val COL_CAUGHT_ITEMS = 3
+        const val COL_FULL_LOC = 4
+        const val COL_CATCH_DELAY = 5
+    }
+
     /** Columns 0-7, shared verbatim by every creature table. */
     private fun DBTableBuilder.creatureColumns() {
         column("npc", COL_NPC, VarType.NPC)
@@ -637,6 +652,63 @@ object HunterTables {
                 columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_sunmoth")
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
+            }
+        }
+
+    /**
+     * The three crabs - the one technique with no catch rate at all. Levels and the Construction
+     * gate are sourced twice (wiki table + the cache's own `skill_feature` rows); the fill delay
+     * is sourced exactly, hence a column. The rainbow crab is one creature in three colourways,
+     * pinned to each other by byte-identical recolour tables, so its two reward columns are
+     * parallel lists. Full sourcing and the not-modelled list: docs/hunter.md.
+     */
+    fun crabCreatures(): DBTable =
+        dbTable("dbtable.hunter_crab_creatures", serverOnly = true) {
+            column("level", Crab.COL_LEVEL, VarType.INT)
+            // Stored x10.
+            column("xp", Crab.COL_XP, VarType.INT)
+            column("bait", Crab.COL_BAIT, VarType.OBJ)
+            column("caught_items", Crab.COL_CAUGHT_ITEMS, VarType.OBJ)
+            column("full_loc", Crab.COL_FULL_LOC, VarType.LOC)
+            column("catch_delay", Crab.COL_CATCH_DELAY, VarType.INT)
+
+            row("dbrow.hunter_red_crab") {
+                column(Crab.COL_LEVEL, 21)
+                column(Crab.COL_XP, 640)
+                columnRSCM(Crab.COL_BAIT, "obj.brut_fish_cuts")
+                columnRSCM(Crab.COL_CAUGHT_ITEMS, "obj.red_crab")
+                columnRSCM(Crab.COL_FULL_LOC, "loc.crab_trap_full_red")
+                column(Crab.COL_CATCH_DELAY, 15)
+            }
+
+            row("dbrow.hunter_blue_crab") {
+                column(Crab.COL_LEVEL, 48)
+                column(Crab.COL_XP, 1360)
+                columnRSCM(Crab.COL_BAIT, "obj.brut_fish_cuts")
+                columnRSCM(Crab.COL_CAUGHT_ITEMS, "obj.blue_crab")
+                columnRSCM(Crab.COL_FULL_LOC, "loc.crab_trap_full_blue")
+                column(Crab.COL_CATCH_DELAY, 15)
+            }
+
+            // Order is load-bearing: entry `i` of both lists is the same colourway, pinned by
+            // recolour-table identity, not the alphabet (docs/hunter.md).
+            row("dbrow.hunter_rainbow_crab") {
+                column(Crab.COL_LEVEL, 77)
+                column(Crab.COL_XP, 2160)
+                columnRSCM(Crab.COL_BAIT, "obj.sailing_fine_fish_offcuts")
+                columnRSCM(
+                    Crab.COL_CAUGHT_ITEMS,
+                    "obj.rainbow_crab_a",
+                    "obj.rainbow_crab_b",
+                    "obj.rainbow_crab_c",
+                )
+                columnRSCM(
+                    Crab.COL_FULL_LOC,
+                    "loc.crab_trap_full_rainbow_a",
+                    "loc.crab_trap_full_rainbow_b",
+                    "loc.crab_trap_full_rainbow_c",
+                )
+                column(Crab.COL_CATCH_DELAY, 25)
             }
         }
 }

@@ -656,3 +656,99 @@ Chart extraction went through the `osrs-cache` MCP `get_wiki_section` (the
 sqlite route truncates); note the page and cache spell "Sunlight Moth" with a
 capital M, so a case-sensitive search for "Sunlight moth" wrongly reports no
 chart.
+
+## Crab trapping
+
+Structurally unlike every other technique: **a crab trap is not an object in
+the world**. The map places a `crab_trap_<site>_<n>` loc carrying no ops and a
+`multivar`; the client draws whichever `multiloc` child the *viewing player's*
+varbit selects. The server's whole job is a varbit write, so:
+
+- `locRepo` is never touched — the never-delete invariant the deadfall and net
+  trap enforce with hard checks is satisfied structurally here.
+- Traps are private per player; two players baiting one hole never contend, so
+  there is no owner, no controller, no tile key.
+- **There is no roll.** "Unlike other methods, players cannot fail to catch a
+  crab" (*Crab trapping*, oldid=15264574), restated in its Strategy section as
+  the reason the guild hunter outfit and anti-odour salt have no effect. No
+  `(low, high)` pair exists, and the only random draw picks the rainbow crab's
+  colourway. This is also why the table has no npc column: the three crab npcs
+  carry no ops, are never touched, and `.data` holds one red spawn, two blue
+  and zero rainbow while the technique works identically for all three.
+
+Filing it as a `TrapFamily` would have meant placeholder answers to that
+enum's questions (laid obj, radius, cadence, failure state) and dead branches
+in six `when`s.
+
+### Sites, derived not retyped
+
+The twenty sites (five holes each on The Pandemonium, two Great Conch shores,
+The Crown Jewel) are the only hand-written list; everything else comes off
+the packed cache: the varbit is the loc's own `multiVarBit` (so the server
+writes exactly the var the client renders from), the state ordinals are
+positions in the `multiloc` child list looked up by id (hard-coded 0/1/2/3
+would silently show the wrong model after a cache reorder), and the site's
+creature is matched by which full-trap locs appear among its children — never
+by parsing `pandemonium` out of a symbol. Child ids are masked to 16 bits the
+way `LocInteractions.multiLoc` masks them; padding slots read 65535. The op
+dispatch reads the *varbit*, not the resolved child loc, since that is the
+value the client rendered from and the server is about to overwrite.
+
+### Levels, xp, bait, delay — all sourced twice where possible
+
+Levels 21/48/77 appear both in the wiki's Overview table and in the cache's
+own `skill_feature_hunter_*_crab` rows (`data=skill,23,<level>,9`); the same
+rows carry `data=skill,22,10,-1` — the 10 Construction build gate, which
+lives as one constant since all three rows agree. XP 64/136/216, stored ×10.
+Bait is mandatory and per-site: red/blue take Fish offcuts
+(`obj.brut_fish_cuts` — the plausible `sailing_fish_offcuts` does not exist),
+rainbow takes Fine fish offcuts; the cache itself renders two different
+baited locs, which is why bait is a lifecycle step here and not an unmodelled
+`+%`. The fill delay is sourced exactly ("Red and blue crabs: 15 ticks;
+Rainbow crabs: 25 ticks"), hence a column, not a guess.
+
+The rainbow crab's three colourways are **one creature seen three ways**: the
+three objs share name/description/cost/params and differ only in a 13-pair
+recolour table that is byte-identical to the loc and npc of the same letter —
+that identity, not the alphabet, pins the a/b/c triples. The row's reward and
+full-loc columns are parallel lists; entry *i* of each is the same colourway.
+
+### Item-symbol traps met along the way
+
+`obj.woodplank` is the Plank (no `obj.plank`); `obj.bucket_empty` is the
+Bucket (plain `obj.bucket` is a milk bucket); `obj.nails` is real steel nails
+while `obj.any_nails` — literally `name=Steel nails` — is a display-only
+duplicate no player can hold. The crystal and Amy's saws are accepted
+alongside the plain saw: unsourced for this technique specifically, but
+refusing them would make this the one build in the game they do not work
+for, and accepting is the recoverable direction. Nail choice is
+first-by-slot-order (ours), but requires the stack to cover both nails — one
+leftover bronze nail must not refuse a build the steel stack below could pay
+for.
+
+### Behaviour
+
+- **Build** is permanent ("Built traps remain there permanently"), level-free
+  in Hunter, and unwinds its charges on a partial failure.
+- **Bait** is where the Hunter level and cap are checked. The cap is its own
+  ladder — 2/3/4/5 at 21/40/60/80 ("active (baited or full)") — written out
+  rather than delegated to `TrapLadder`: it is a different table from a
+  different source that happens to agree everywhere crab trapping is
+  reachable, and delegating would grant a below-20 rung its source lacks.
+- **The wait is a soft queue on the player**, not a controller: nothing of a
+  crab trap lives in the world, and the arrival must not interrupt whatever
+  its owner is doing. The queue's body re-checks the trap is still baited — a
+  matured catch landing on an emptied trap would mint a crab from nothing.
+- **Login re-arms pending catches**: the varbit persists, the queue does not.
+  Re-queuing the full delay is the honest reading of "after a set period of
+  time"; maturing on login would invent a rule that offline time counts.
+- **Emptying a baited trap returns the bait** — unsourced, the recoverable
+  half of that uncertainty, and what keeps a trap baited across logout from
+  being stuck.
+
+### Not modelled
+
+The automatic re-bait ("after 3 ticks... reduced to just one tick by
+immediately clicking again") — an ergonomic accelerator whose second half has
+no state to hang off yet; and the crab visibly walking to the trap (the trap
+simply fills).
