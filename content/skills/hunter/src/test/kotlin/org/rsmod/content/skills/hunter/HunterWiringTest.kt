@@ -59,6 +59,7 @@ class HunterWiringTest {
 
         // Its three op1 states share one group, so nothing may leak onto another family's.
         assertFalse(bus.hasOpContentLoc1(BOX_GROUP), "the snare must not claim $BOX_GROUP")
+        assertFalse(bus.hasOpContentLoc1(DEADFALL_GROUP), "the snare must not claim $DEADFALL_GROUP")
     }
 
     @Test
@@ -72,6 +73,22 @@ class HunterWiringTest {
         // Deliberate: registering it here as well would run every laid trap's tick twice a cycle.
         assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "the trap tick belongs to BirdSnareEvents")
         assertFalse(bus.hasOpContentLoc1(SNARE_GROUP), "the box trap must not claim $SNARE_GROUP")
+    }
+
+    /**
+     * The deadfall registers nothing held, because nothing is carried: a boulder is armed in place
+     * with a log and a knife, both of which are `Use`-free inventory reads rather than ops.
+     */
+    @Test
+    fun `deadfall registers both loc ops and nothing held`() {
+        val bus = Wiring().start(scripts.deadfall)
+
+        assertTrue(bus.hasOpContentLoc1(DEADFALL_GROUP), "op1 (`Set-trap`/`Dismantle`/`Check`)")
+        assertTrue(bus.hasOpContentLoc2(DEADFALL_GROUP), "op2 (`Investigate`)")
+
+        assertFalse(bus.hasOpHeld1(SNARE_OBJ), "nothing is laid from the inventory")
+        assertFalse(bus.hasOpHeld1(BOX_OBJ), "nothing is laid from the inventory")
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "the trap tick belongs to BirdSnareEvents")
     }
 
     /* The once-only invariant. */
@@ -93,9 +110,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: both scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all three scripts share one bus at startup. */
     @Test
-    fun `both scripts start together on one bus without a duplicate key`() {
+    fun `all three scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -237,6 +254,14 @@ class HunterWiringTest {
         for (creature in creatures(TrapFamily.BOX)) {
             put(HunterTrapStates.fullLoc(creature), BOX_GROUP, Op1)
         }
+
+        // Deadfall: `Set-trap` and `Dismantle` are opposite transactions on one group, which is why
+        // `DeadfallEvents.op1` dispatches on the loc id rather than reusing `takeTrap`.
+        put(HunterTrapStates.DEADFALL_BOULDER, DEADFALL_GROUP, Op1)
+        put(HunterTrapStates.DEADFALL_ARMED, DEADFALL_GROUP, Op1, Op2)
+        for (creature in HunterCreatures.deadfall) {
+            put(HunterTrapStates.fullLoc(creature), DEADFALL_GROUP, Op1)
+        }
     }
 
     /**
@@ -247,6 +272,8 @@ class HunterWiringTest {
      * Every other family ignores the offsets, so the set collapses on its own.
      */
     private fun transientLocStates(): Set<String> = buildSet {
+        add(HunterTrapStates.DEADFALL_SETTING)
+        add(HunterTrapStates.DEADFALL_FAILING)
         add(HunterTrapStates.failingLoc(TrapFamily.SNARE))
         add(HunterTrapStates.failingLoc(TrapFamily.BOX))
 
@@ -272,9 +299,10 @@ class HunterWiringTest {
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
+        val deadfall = DeadfallEvents(trapWorld.trap, trapWorld.conRepo)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
-        val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap)
+        val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall)
 
         val all: List<PluginScript> = trapFamily
     }
@@ -322,8 +350,9 @@ class HunterWiringTest {
 
         private const val SNARE_GROUP = "content.hunter_bird_snare"
         private const val BOX_GROUP = "content.hunter_box_trap"
+        private const val DEADFALL_GROUP = "content.hunter_deadfall"
 
-        private val ALL_TRAP_GROUPS = listOf(SNARE_GROUP, BOX_GROUP)
+        private val ALL_TRAP_GROUPS = listOf(SNARE_GROUP, BOX_GROUP, DEADFALL_GROUP)
 
         private const val SNARE_OBJ = "obj.hunting_ojibway_bird_snare"
         private const val BOX_OBJ = "obj.hunting_box_trap"

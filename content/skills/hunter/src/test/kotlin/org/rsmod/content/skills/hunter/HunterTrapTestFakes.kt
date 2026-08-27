@@ -337,6 +337,10 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
     fun locNameAt(coords: CoordGrid): String? =
         locAt(coords)?.let { RSCM.getReverseMapping(RSCMType.LOC, it.id) }
 
+    /** True when [coords] still carries a deadfall boulder in any of its nineteen states. */
+    fun deadfallPresent(coords: CoordGrid): Boolean =
+        locRepo.findAll(coords).any { it.id in HunterTrapStates.deadfallLocIds }
+
     /* Ground objs */
 
     /** Every obj currently lying on [coords], by internal name. */
@@ -362,6 +366,26 @@ class HunterTrapTestWorld(hunterXpBonus: Double = 0.0) {
             LocShape.CentrepieceStraight,
         )
         return addTrapController(family, coords, owner)
+    }
+
+    /**
+     * Arms a boulder the way [HunterTrap.setDeadfall] does: the map loc is changed - never deleted
+     * and respawned - into the armed state, and a controller recording the log is added.
+     */
+    fun armDeadfall(coords: CoordGrid, owner: Player, log: String? = "obj.logs"): Controller {
+        val boulder =
+            locRepo.findAll(coords).firstOrNull { it.id in HunterTrapStates.deadfallLocIds }
+                ?: error("No deadfall boulder registered on $coords.")
+        val into =
+            ServerCacheManager.getObject(HunterTrapStates.DEADFALL_ARMED.asRSCM(RSCMType.LOC))
+                ?: error("Missing loc type: ${HunterTrapStates.DEADFALL_ARMED}")
+        locRepo.change(boulder, into, Int.MAX_VALUE)
+
+        val controller = addTrapController(TrapFamily.DEADFALL, coords, owner)
+        if (log != null) {
+            controller.trapDeadfallLog = log.asRSCM(RSCMType.OBJ)
+        }
+        return controller
     }
 
     private fun addTrapController(

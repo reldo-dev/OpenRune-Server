@@ -8,5 +8,6 @@ class HunterPluginPack : PluginPack() {
         listOf(
             HunterTables.snareCreatures(),
             HunterTables.boxCreatures(),
+            HunterTables.deadfallCreatures(),
         )
 }

@@ -207,3 +207,107 @@ catch of the one affected creature, not at boot.
 - **Investigate wording is ours.** The text is server-sent, so it is in
   neither the cache nor the wiki; what it reports is the real controller
   state.
+
+## Deadfall
+
+Not a carried trap: the boulder is a permanent *map* loc, armed in place with a
+log and a knife. That single fact drives the family's whole shape.
+
+- **A map loc must never be deleted.** `LocRepository` only schedules a respawn
+  for a delete with a *finite* duration (`LocRepository.kt:98-131`), so one
+  `locRepo.del` on a boulder takes that spot out of the world until the next
+  restart — no error, no log line. Every deadfall transition therefore goes
+  through one function (`changeDeadfallLoc`), which is a `locRepo.change`, and
+  the portable-family teardown (`clearTrapLoc`) carries a hard check that
+  throws rather than delete a deadfall id: a loud tick is recoverable by
+  restarting, a silent permanent delete is not. A `change` with a finite
+  duration reverts to the map loc underneath, which is what makes the setting
+  frame's logout safety-net possible at all.
+- **Set mechanics.** "Clicking a boulder with a knife or fletching knife and
+  any type of log in the inventory (or a banana when hunting maniacal monkeys)
+  will set the trap." (*Deadfall*, oldid=15201193). The knife is kept; the log
+  is consumed and its obj id recorded in `varcon.hunter_trap_deadfall_log`,
+  because dismantling hands that exact log back. Maniacal monkeys are
+  quest-gated on Monkey Madness II, not modelled. The log is charged *after*
+  the set delay, past the last path that can refuse: two players can start on
+  the same boulder (mid-set there is only an op-less `SETTING` loc, no
+  controller), and a logout mid-delay reverts the boulder without resuming the
+  coroutine — charging up front loses a log for nothing in both cases.
+- **That dismantling returns the log is unsourced.** No source says what it
+  gives back; the portable families return their trap item and the log is the
+  only equivalent. Silently consuming it would cost an item with no notice.
+- **A failed catch has no collectible state.** The cache holds no
+  `hunting_deadfall_failed`; the boulder unsets and the log is lost. The
+  collapse message is ours (server-sent text, recoverable from neither cache
+  nor wiki).
+
+### Log eligibility
+
+"Any type of log" is read off the packed firemaking logs table, not retyped as
+a list, so a log added to firemaking becomes deadfall fuel automatically. Two
+exclusions, one sourced and one protective:
+
+- "Redwood logs and arctic pine logs cannot be used for deadfall traps."
+  (*Deadfall*, oldid=15201193). The cache spells `obj.arctic_pine_log` in the
+  singular where every other log is plural; the plural resolves to nothing.
+- The five Treasure Trails logs (`blue_logs`, `green_logs`, `red_logs`,
+  `trail_logs_purple`, `trail_logs_white`) are real firemaking input rows, so
+  the table read sweeps them in — and the set path picks the first usable log
+  by slot order, so a clue step's log carried above ordinary ones would be
+  destroyed to arm a boulder. Whether live accepts them is unsourced; refusing
+  is the recoverable half of that uncertainty, and they are excluded outright
+  rather than ranked last so a player holding *only* coloured logs is refused
+  instead of quietly charged. Which log live picks when several are held is
+  also unstated; slot order is ours.
+
+### Rates and rows
+
+No deadfall creature states its `P(L)` formula. Each pair was fit against the
+creature's full per-level chart under *Drops → Hunting chance*, reproducing
+every charted point exactly — 102 points across the five creatures. The wild
+kebbit (42 points) and prickly kebbit (45) fits are mathematically pinned:
+exactly one integer pair satisfies every point. Barb-tailed (6 charted levels,
+25 pairs fit), sabre-toothed (5 levels, 19 pairs) and pyre fox (4 levels)
+cannot be pinned by fitting, so those three ship the wiki template's own
+published parameters, read from Parsoid transclusion metadata. Revisions:
+wild kebbit oldid=15196478, barb-tailed oldid=15196228, prickly
+oldid=15196260, sabre-toothed oldid=15196422, pyre fox oldid=15197087.
+Negative lows are the honest fit for the steeper curves and must not be
+clamped — these creatures are only catchable from level 23+, so the
+sub-requirement end of the interpolation is never evaluated.
+
+Loc-suffix map, read off `config/loc` and cross-checked against each npc's
+recolours: claw = wild kebbit, barbed = barb-tailed, sabre = sabre-toothed,
+fennec = pyre fox (whose cache symbols all still say "Fennec fox"), spike =
+prickly by elimination. Two near-name traps: `obj.huntingbeast_claws` is the
+item Kebbit claws while `npc.huntingbeast_claws` is the creature, and
+`obj.huntingbeast_sabreteeth` is Kebbit teeth while `_dust` is the dust.
+Rewards are the infobox "Always" drops only — Kebbity tuft and Fox fluff are
+1/15 *and* conditional on an active Hunter's Rumour, which is not implemented;
+bait (+3/256) and smoke (+2/256) are real but out of scope and deliberately
+get no column. Prickly and sabre-toothed drop no meat, so their reward lists
+are two lines, not three. XP is the creature infobox's, agreeing with the
+parent page.
+
+### Tuning
+
+| constant | value | source |
+|---|---|---|
+| `DEADFALL_TRIGGER_DISTANCE` | 1 | unsourced; adjacency is the conservative reading — the boulder falls on what walks under it |
+| `DEADFALL_ATTEMPT_CYCLES` | 3 | unsourced; borrowed from the box trap rather than the snare's every-cycle roll, since rolling 3× as often would quietly triple the slow family's rate |
+| `DEADFALL_SET_CYCLES` | 3 | unsourced placeholder; `seq.human_laytrap` outlasts the state change either way |
+| `DEADFALL_LEVEL_REQ` | 23 | the wild kebbit's, the lowest deadfall creature |
+| `MAX_LAID_DEADFALLS` | 1 | "only one deadfall trap can be set up at once" (*Deadfall*), on top of the shared cap |
+
+### The mirrored trapping loc
+
+Every deadfall creature has a mirrored `_m` variant of its `_trapping_` loc,
+plainly encoding an approach side, but what live keys the choice on is not
+recoverable offline — the catch is server-side, and the two emulator
+references that implement deadfall pick a side without agreeing on the axis
+test. West-or-south-picks-the-mirror is our convention, not a source; it only
+changes which of two boulder models shows for a couple of cycles.
+
+Deadfall is also the one family the wiki exempts from the standing-on-trap
+rule: "Deadfall traps are not prone to failure by standing where they are
+set."

@@ -3,6 +3,7 @@
 # 55535-55537 - with 55538-55542 left clear for the fletching tables.
 hunter_snare_creatures = 55543
 hunter_box_creatures = 55544
+hunter_deadfall_creatures = 55545
 
 # Append-only block, clear of the 555xx and 56[0-2]xx dbrow runs with headroom. Ids ascend in the
 # order the creatures appear in the combined list, which a sprung trap persists an index into, so
@@ -15,6 +16,11 @@ hunter_polar_bird = 56303
 hunter_chinchompa = 56304
 hunter_carnivorous_chinchompa = 56305
 hunter_black_chinchompa = 56306
+hunter_wild_kebbit = 56310
+hunter_barbtailed_kebbit = 56311
+hunter_prickly_kebbit = 56312
+hunter_sabretoothed_kebbit = 56313
+hunter_pyre_fox = 56314
 
 [gamevals.controller]
 hunter_trap = 2
@@ -23,10 +29,16 @@ hunter_trap = 2
 hunter_trap_owner = 4
 hunter_trap_family = 5
 hunter_trap_creature = 6
+# Deadfall consumes a log to arm, and dismantling gives it back, so the controller has to remember
+# which one went in.
+hunter_trap_deadfall_log = 7
 
 [gamevals.content]
 hunter_bird_snare = 54
 hunter_box_trap = 55
+# One group for every op-carrying deadfall boulder state; the transient setting/trapping/failing
+# frames carry no ops and so need no group.
+hunter_deadfall = 56
 
 # Custom varp ids grow downward from the low-water mark of the server-authored block: 65481-65501
 # is already claimed by runecrafting, sandstorm, slayer, instances, herblore and prayer, so hunter

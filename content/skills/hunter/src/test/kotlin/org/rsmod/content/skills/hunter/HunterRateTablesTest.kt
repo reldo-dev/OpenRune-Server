@@ -32,7 +32,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(300, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(402, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -183,6 +183,7 @@ class HunterRateTablesTest {
             listOf(
                 "birdsnare-chance.tsv",
                 "boxtrap-chance.tsv",
+                "deadfall-chance.tsv",
             )
 
         private val CHARTED =
@@ -194,6 +195,11 @@ class HunterRateTablesTest {
                 Charted("chinchompa", "npc.hunting_chinchompa"),
                 Charted("carnivorous_chinchompa", "npc.hunting_chinchompa_big"),
                 Charted("black_chinchompa", "npc.hunting_chinchompa_black"),
+                Charted("wild_kebbit", "npc.huntingbeast_claws"),
+                Charted("barbtailed_kebbit", "npc.huntingbeast_barbedtail"),
+                Charted("prickly_kebbit", "npc.huntingbeast_spiky"),
+                Charted("sabretoothed_kebbit", "npc.huntingbeast_sabreteeth"),
+                Charted("pyre_fox", "npc.varlamore_fennecfox"),
             )
 
         /** The published `{{Skilling success chart}}` parameters, keyed by page and series label. */
@@ -206,6 +212,15 @@ class HunterRateTablesTest {
                 Published("Chinchompa (Hunter)", "Grey", "npc.hunting_chinchompa"),
                 Published("Chinchompa (Hunter)", "Red", "npc.hunting_chinchompa_big"),
                 Published("Chinchompa (Hunter)", "Black", "npc.hunting_chinchompa_black"),
+                Published("Wild kebbit", "Wild kebbit", "npc.huntingbeast_claws"),
+                Published("Barb-tailed kebbit", "Barb-tailed kebbit", "npc.huntingbeast_barbedtail"),
+                Published("Prickly kebbit", "Prickly kebbit", "npc.huntingbeast_spiky"),
+                Published(
+                    "Sabre-toothed kebbit",
+                    "Sabre-toothed kebbit",
+                    "npc.huntingbeast_sabreteeth",
+                ),
+                Published("Pyre fox", "Pyre fox", "npc.varlamore_fennecfox"),
             )
 
         /**

@@ -35,6 +35,204 @@ class HunterTrapOpsTest {
         world = HunterTrapTestWorld()
     }
 
+    /* setDeadfall. */
+
+    @Test
+    fun `arming a deadfall consumes the log, keeps the knife and records both`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        val armed = world.runProtected(player) { it.setDeadfall(boulder) }
+
+        assertTrue(armed)
+        assertEquals(HunterTrapStates.DEADFALL_ARMED, world.locNameAt(TRAP_TILE))
+        assertTrue(player.inv.contains("obj.knife"), "The knife is a tool and is kept.")
+        assertFalse(player.inv.contains("obj.logs"), "The log is consumed.")
+
+        val controller = checkNotNull(world.controllerAt(TRAP_TILE))
+        assertEquals(TrapFamily.DEADFALL.ordinal, controller.trapFamily)
+        assertEquals(objId("obj.logs"), controller.trapDeadfallLog, "Dismantling hands this back.")
+        assertEquals(listOf(TRAP_TILE.packed), player.hunterTrapCoords)
+    }
+
+    /**
+     * The log is charged only once the boulder is armed. The set delay is the only window where
+     * the difference exists, so this steps the op cycle by cycle rather than awaiting it.
+     */
+    @Test
+    fun `the deadfall log is not charged until after the set delay`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        val run = world.startProtected(player) { it.setDeadfall(boulder) }
+
+        repeat(DEADFALL_SET_CYCLES) {
+            assertFalse(run.isFinished, "Still setting.")
+            assertTrue(player.inv.contains("obj.logs"), "The log is still the player's, cycle $it.")
+            assertEquals(HunterTrapStates.DEADFALL_SETTING, world.locNameAt(TRAP_TILE))
+            run.advanceCycle()
+        }
+
+        assertTrue(run.await())
+        assertFalse(player.inv.contains("obj.logs"))
+    }
+
+    /** Losing the log during the set earns a refusal, not a boulder armed for free. */
+    @Test
+    fun `a deadfall set whose log is gone by the end is refused`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        val run = world.startProtected(player) { it.setDeadfall(boulder) }
+        world.protectedAccess(player).invDel(player.inv, "obj.logs", 1)
+
+        assertFalse(run.await())
+        assertNull(world.controllerAt(TRAP_TILE))
+        assertFalse(world.locNameAt(TRAP_TILE) == HunterTrapStates.DEADFALL_ARMED)
+    }
+
+    @Test
+    fun `a deadfall needs the level, a knife and a log`() {
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        val underLevelled =
+            hunter(level = DEADFALL_LEVEL_REQ - 1, carrying = listOf("obj.knife", "obj.logs"))
+        assertFalse(world.runProtected(underLevelled) { it.setDeadfall(boulder) }, "level")
+
+        val knifeless = hunter(level = 99, carrying = listOf("obj.logs"))
+        assertFalse(world.runProtected(knifeless) { it.setDeadfall(boulder) }, "knife")
+
+        val logless = hunter(level = 99, carrying = listOf("obj.knife"))
+        assertFalse(world.runProtected(logless) { it.setDeadfall(boulder) }, "log")
+
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(TRAP_TILE))
+        assertNull(world.controllerAt(TRAP_TILE))
+    }
+
+    /**
+     * A fletching knife is the other accepted tool, and is the one a player training Fletching is
+     * likely to be carrying instead of a plain knife.
+     */
+    @Test
+    fun `a fletching knife arms a deadfall too`() {
+        val player = hunter(level = 99, carrying = listOf("obj.fletching_knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        assertTrue(world.runProtected(player) { it.setDeadfall(boulder) })
+    }
+
+    /**
+     * The exclusion against the *packed* table rather than against itself: `usableLogIds` really
+     * must leave these two out, or a player carrying only redwood is quietly charged one.
+     */
+    @Test
+    fun `redwood and arctic pine logs cannot arm a deadfall`() {
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        for (log in listOf("obj.redwood_logs", "obj.arctic_pine_log")) {
+            val player = hunter(level = 99, carrying = listOf("obj.knife", log))
+            assertFalse(world.runProtected(player) { it.setDeadfall(boulder) }, log)
+            assertTrue(player.inv.contains(log), "$log must not be consumed.")
+        }
+    }
+
+    /**
+     * The protective half: real firemaking rows the table read sweeps in, whose consumption would
+     * destroy a clue step's log.
+     */
+    @Test
+    fun `a clue step's coloured logs cannot arm a deadfall`() {
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        val trailLogs =
+            listOf(
+                "obj.blue_logs",
+                "obj.green_logs",
+                "obj.red_logs",
+                "obj.trail_logs_purple",
+                "obj.trail_logs_white",
+            )
+        for (log in trailLogs) {
+            val player = hunter(level = 99, carrying = listOf("obj.knife", log))
+            assertFalse(world.runProtected(player) { it.setDeadfall(boulder) }, log)
+            assertTrue(player.inv.contains(log), "$log must not be consumed.")
+        }
+    }
+
+    /**
+     * A clue log ranked *above* an ordinary one must not be picked - it holds only because clue
+     * logs are excluded outright, not sorted last.
+     */
+    @Test
+    fun `an ordinary log below a clue log is the one that gets used`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.red_logs", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.boundLocAt(TRAP_TILE)!!
+
+        assertTrue(world.runProtected(player) { it.setDeadfall(boulder) })
+
+        assertTrue(player.inv.contains("obj.red_logs"), "The clue log is untouched.")
+        assertFalse(player.inv.contains("obj.logs"))
+    }
+
+    /** "Unlike most hunter traps, only one deadfall trap can be set up at once." (wiki.) */
+    @Test
+    fun `only one deadfall can be set at a time`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs", "obj.logs"))
+        val second = TRAP_TILE.translate(2, 0)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        world.addMapLoc(second, HunterTrapStates.DEADFALL_BOULDER)
+
+        assertTrue(world.runProtected(player) { it.setDeadfall(world.boundLocAt(TRAP_TILE)!!) })
+        assertFalse(world.runProtected(player) { it.setDeadfall(world.boundLocAt(second)!!) })
+
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(second))
+    }
+
+    /* dismantleDeadfall. */
+
+    /**
+     * Dismantling is a `locRepo.change` back to the boulder, never a delete - the same invariant the
+     * tick tests cover, reached through the op a player actually clicks.
+     */
+    @Test
+    fun `dismantling an armed deadfall hands the log back and unsets the boulder`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        world.runProtected(player) { it.setDeadfall(world.boundLocAt(TRAP_TILE)!!) }
+
+        val armed = world.boundLocAt(TRAP_TILE)!!
+        assertTrue(world.runProtected(player) { it.dismantleDeadfall(armed) })
+
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(TRAP_TILE))
+        assertTrue(world.deadfallPresent(TRAP_TILE), "The boulder is changed, never deleted.")
+        assertTrue(player.inv.contains("obj.logs"), "The log comes back.")
+        assertNull(world.controllerAt(TRAP_TILE))
+        assertEquals(emptyList<Int>(), player.hunterTrapCoords)
+    }
+
+    @Test
+    fun `dismantling someone else's deadfall is refused and changes nothing`() {
+        val owner = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        world.runProtected(owner) { it.setDeadfall(world.boundLocAt(TRAP_TILE)!!) }
+
+        val thief = hunter(level = 99, carrying = emptyList())
+        val armed = world.boundLocAt(TRAP_TILE)!!
+        assertFalse(world.runProtected(thief) { it.dismantleDeadfall(armed) })
+
+        assertEquals(HunterTrapStates.DEADFALL_ARMED, world.locNameAt(TRAP_TILE))
+        assertFalse(thief.inv.contains("obj.logs"))
+        assertNotNull(world.controllerAt(TRAP_TILE))
+    }
+
     /* layTrap. */
 
     @Test
@@ -208,6 +406,36 @@ class HunterTrapOpsTest {
 
         assertTrue(player.inv.contains("obj.chinchompa_captured"))
         assertTrue(player.inv.contains("obj.hunting_box_trap"))
+    }
+
+    /**
+     * The boulder invariant once more, through the collect op: a deadfall's teardown is
+     * `endTrapLoc`, which changes rather than deletes, and the deadfall contributes no trap item.
+     */
+    @Test
+    fun `collecting a deadfall returns the boulder unset and hands back no trap item`() {
+        val player = hunter(level = 99, carrying = listOf("obj.knife", "obj.logs"))
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        world.runProtected(player) { it.setDeadfall(world.boundLocAt(TRAP_TILE)!!) }
+
+        world.addNpc("npc.huntingbeast_claws", TRAP_TILE.translate(1, 0))
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+        val controller = world.controllerAt(TRAP_TILE)!!
+        world.tick(controller)
+        world.advance(TRAP_SPRING_CYCLES)
+        world.tick(controller)
+
+        val full = world.boundLocAt(TRAP_TILE)!!
+        assertTrue(world.runProtected(player) { it.collectTrap(full) })
+
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(TRAP_TILE))
+        assertTrue(world.deadfallPresent(TRAP_TILE), "The boulder is changed, never deleted.")
+        assertTrue(player.inv.contains("obj.huntingbeast_claws"), "The catch.")
+        assertFalse(
+            player.inv.contains("obj.hunting_box_trap") ||
+                player.inv.contains("obj.hunting_ojibway_bird_snare"),
+            "A deadfall has no trap item to hand back.",
+        )
     }
 
     /* Helpers. */

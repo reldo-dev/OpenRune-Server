@@ -19,11 +19,20 @@ internal const val CREATURE_FAILED: Int = -2
 /** An unwritten coord varp reads back 0; `CoordGrid.ZERO` is off-map, so no collision. */
 private const val EMPTY_TRAP_COORD: Int = 0
 
+/**
+ * The value an unwritten `varcon.hunter_trap_deadfall_log` reads back as: every usable log has a
+ * positive obj id, so zero unambiguously means "no log recorded".
+ */
+internal const val NO_TRAP_LOG: Int = 0
+
 var Controller.trapOwner: Int by intVarCon("varcon.hunter_trap_owner")
 
 var Controller.trapFamily: Int by intVarCon("varcon.hunter_trap_family")
 
 var Controller.trapCreature: Int by intVarCon("varcon.hunter_trap_creature")
+
+/** Recorded because dismantling hands the exact log back; "any type of log" is not derivable. */
+var Controller.trapDeadfallLog: Int by intVarCon("varcon.hunter_trap_deadfall_log")
 
 private var Player.trapCoord1: Int by intVarp("varp.hunter_trap_coord_1")
 private var Player.trapCoord2: Int by intVarp("varp.hunter_trap_coord_2")

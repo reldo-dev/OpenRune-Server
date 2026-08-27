@@ -36,6 +36,13 @@ object HunterTables {
         const val COL_LOC_KEY = 8
     }
 
+    /** Deadfall only. */
+    private object Deadfall {
+        const val COL_TRAPPING_LOC = 8
+        const val COL_TRAPPING_LOC_M = 9
+        const val COL_FULL_LOC = 10
+    }
+
     /** Columns 0-7, shared verbatim by every creature table. */
     private fun DBTableBuilder.creatureColumns() {
         column("npc", COL_NPC, VarType.NPC)
@@ -173,6 +180,113 @@ object HunterTables {
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
                 column(LocKeyed.COL_LOC_KEY, "chinchompa_black")
+            }
+        }
+
+    /**
+     * Each deadfall creature also names its three per-creature boulder states; the shared states
+     * are content-side constants. Wild and prickly kebbit pairs are uniquely-pinned chart fits;
+     * the other three are the wiki template's own published parameters. Negative lows are the
+     * honest fit and must not be clamped. Sourcing, suffix map and reward scope: docs/hunter.md.
+     */
+    fun deadfallCreatures(): DBTable =
+        dbTable("dbtable.hunter_deadfall_creatures", serverOnly = true) {
+            creatureColumns()
+            column("trapping_loc", Deadfall.COL_TRAPPING_LOC, VarType.LOC)
+            column("trapping_loc_m", Deadfall.COL_TRAPPING_LOC_M, VarType.LOC)
+            column("full_loc", Deadfall.COL_FULL_LOC, VarType.LOC)
+
+            // `obj.huntingbeast_claws` is the item Kebbit claws; `npc.huntingbeast_claws` is the
+            // creature - the cache reuses the symbol across the two namespaces.
+            row("dbrow.hunter_wild_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_claws")
+                column(COL_LEVEL, 23)
+                column(COL_XP, 1280)
+                column(COL_SUCCESS_LOW, 29)
+                column(COL_SUCCESS_HIGH, 385)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.huntingbeast_claws",
+                    "obj.huntingbeast_wild_meat",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1, 1)
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_claw")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_claw_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_claw")
+            }
+
+            row("dbrow.hunter_barbtailed_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_barbedtail")
+                column(COL_LEVEL, 33)
+                column(COL_XP, 1680)
+                // Published parameters (oldid=15196228): six charted levels, a fit cannot pin.
+                column(COL_SUCCESS_LOW, -220)
+                column(COL_SUCCESS_HIGH, 1037)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.hunting_barbed_harpoon",
+                    "obj.huntingbeast_barbed_meat",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1, 1)
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_barbed")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_barbed_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_barbed")
+            }
+
+            // Prickly and sabre-toothed drop no meat - two reward lines, not three.
+            row("dbrow.hunter_prickly_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_spiky")
+                column(COL_LEVEL, 37)
+                column(COL_XP, 2040)
+                column(COL_SUCCESS_LOW, -70)
+                column(COL_SUCCESS_HIGH, 331)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_spike")
+                column(COL_CAUGHT_MIN, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1)
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_spike")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_spike_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_spike")
+            }
+
+            row("dbrow.hunter_sabretoothed_kebbit") {
+                columnRSCM(COL_NPC, "npc.huntingbeast_sabreteeth")
+                column(COL_LEVEL, 51)
+                column(COL_XP, 2000)
+                // Published parameters (oldid=15196422): five charted levels, a fit cannot pin.
+                column(COL_SUCCESS_LOW, -434)
+                column(COL_SUCCESS_HIGH, 820)
+                // Kebbit teeth - not the near-name `_dust`, which is Kebbit teeth dust.
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.bones", "obj.huntingbeast_sabreteeth")
+                column(COL_CAUGHT_MIN, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1)
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_sabre")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_sabre_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_sabre")
+            }
+
+            // The pyre fox's cache symbols all still read "fennec".
+            row("dbrow.hunter_pyre_fox") {
+                columnRSCM(COL_NPC, "npc.varlamore_fennecfox")
+                column(COL_LEVEL, 57)
+                column(COL_XP, 2220)
+                // Published parameters; four charted levels, a fit cannot pin.
+                column(COL_SUCCESS_LOW, -475)
+                column(COL_SUCCESS_HIGH, 750)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.hunting_fennecfox_fur",
+                    "obj.hunting_fennecfox_meat",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 1)
+                column(COL_CAUGHT_MAX, 1, 1, 1)
+                columnRSCM(Deadfall.COL_TRAPPING_LOC, "loc.hunting_deadfall_trapping_fennec")
+                columnRSCM(Deadfall.COL_TRAPPING_LOC_M, "loc.hunting_deadfall_trapping_fennec_m")
+                columnRSCM(Deadfall.COL_FULL_LOC, "loc.hunting_deadfall_full_fennec")
             }
         }
 }

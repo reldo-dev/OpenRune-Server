@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -34,6 +35,98 @@ class HunterTrapTickTest {
     fun setUp() {
         HunterTestCache.load()
         world = HunterTrapTestWorld()
+    }
+
+    /* The deadfall's boulder invariant. */
+
+    /**
+     * The highest-consequence rule in the feature: one `locRepo.del` takes the boulder spot out of
+     * the world until restart, silently. Asserted on the effect - after every transition the tile
+     * must still carry a deadfall loc - and [a deleted boulder really does disappear] proves this
+     * assertion can tell the difference.
+     */
+    @Test
+    fun `a deadfall boulder survives every state of a successful catch`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = 99)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val controller = world.armDeadfall(TRAP_TILE, owner)
+        assertTrue(world.deadfallPresent(TRAP_TILE), "armed")
+
+        world.addNpc("npc.huntingbeast_claws", TRAP_TILE.translate(1, 0))
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        world.tick(controller)
+        assertTrue(world.deadfallPresent(TRAP_TILE), "mid-catch")
+
+        world.advance(TRAP_SPRING_CYCLES)
+        world.tick(controller)
+        assertTrue(world.deadfallPresent(TRAP_TILE), "settled")
+
+        // The collect path is a `ProtectedAccess` extension, so the lifecycle is ended here the way
+        // an uncollected trap ends: the lifetime runs out and the boulder is reclaimed.
+        controller.duration = 1
+        world.tick(controller)
+        assertTrue(world.deadfallPresent(TRAP_TILE), "collapsed")
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(TRAP_TILE))
+    }
+
+    /** The same invariant down the failure branch, which ends the trap a cycle earlier. */
+    @Test
+    fun `a deadfall boulder survives a failed catch and comes back unset`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = WILD_KEBBIT_LEVEL)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val controller = world.armDeadfall(TRAP_TILE, owner)
+
+        world.addNpc("npc.huntingbeast_claws", TRAP_TILE.translate(1, 0))
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+
+        world.tick(controller)
+        assertEquals(TRAP_CREATURE_FAILED, controller.trapCreature)
+        assertEquals(HunterTrapStates.DEADFALL_FAILING, world.locNameAt(TRAP_TILE))
+
+        world.advance(TRAP_SPRING_CYCLES)
+        world.tick(controller)
+
+        // "A deadfall that sprang and caught nothing has no collectible failed state" - the boulder
+        // goes straight back to unset and the controller has no reason to outlive the spring.
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(TRAP_TILE))
+        assertNull(world.controllerAt(TRAP_TILE))
+    }
+
+    /**
+     * The teardown path that *does* delete must refuse a boulder: a loud tick is recoverable by
+     * restarting, a silent permanent delete is not.
+     */
+    @Test
+    fun `the portable teardown path refuses to delete a deadfall boulder`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = 99)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val controller = world.armDeadfall(TRAP_TILE, owner)
+
+        controller.trapFamily = TrapFamily.entries.size
+
+        val error = assertThrows<IllegalStateException> { world.tick(controller) }
+        assertTrue(
+            error.message.orEmpty().contains("permanent map loc"),
+            "Expected the boulder guard, got: ${error.message}",
+        )
+        assertTrue(world.deadfallPresent(TRAP_TILE))
+    }
+
+    /**
+     * The control for the two invariant tests above: proves a delete really is observable, so their
+     * passing is not an artefact of the harness reporting a loc that is no longer registered.
+     */
+    @Test
+    fun `a deleted boulder really does disappear`() {
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val boulder = world.locAt(TRAP_TILE)
+        assertNotNull(boulder)
+
+        world.locRepo.del(boulder!!, Int.MAX_VALUE)
+
+        assertFalse(world.deadfallPresent(TRAP_TILE))
+        assertNull(world.locRepo.findExact(TRAP_TILE, LocShape.CentrepieceStraight))
     }
 
     /** A corrupt ordinal on a portable trap is tidied away instead, which is the whole contrast. */
@@ -79,6 +172,24 @@ class HunterTrapTickTest {
         world.tick(controller)
 
         assertEquals(TRAP_CREATURE_NONE, controller.trapCreature)
+    }
+
+    /** "Deadfall traps are not prone to failure by standing where they are set." (wiki.) */
+    @Test
+    fun `a player standing on a deadfall does not suppress the catch`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = 99)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val controller = world.armDeadfall(TRAP_TILE, owner)
+        world.addNpc("npc.huntingbeast_claws", TRAP_TILE.translate(1, 0))
+        world.addPlayer(TRAP_TILE, hunterLvl = 99)
+        world.random.nextDouble = ScriptedRandom.ALWAYS_CATCH
+
+        world.tick(controller)
+
+        assertEquals(
+            HunterCreatures.all.indexOfFirst { it.npc == "npc.huntingbeast_claws" },
+            controller.trapCreature,
+        )
     }
 
     /**
@@ -204,6 +315,28 @@ class HunterTrapTickTest {
         assertEquals(0, world.random.doubleDraws)
     }
 
+    /**
+     * `SkillingSuccessRate` is *not* clamped to 1.0, so a `successHigh` above 256 reaches
+     * certainty below level 99 - consistent with the wiki's charts. Pinned because a future clamp
+     * would silently reintroduce failures at 99 across every hunter creature.
+     */
+    @Test
+    fun `a maxed hunter catches whatever the draw`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = 99)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val controller = world.armDeadfall(TRAP_TILE, owner)
+        world.addNpc("npc.huntingbeast_claws", TRAP_TILE.translate(1, 0))
+        world.random.nextDouble = ScriptedRandom.HIGHEST_DRAW
+
+        world.tick(controller)
+
+        assertTrue(
+            controller.trapCreature >= 0,
+            "The wild kebbit's rate at 99 is 386/256, above any legal draw.",
+        )
+        assertEquals(1, world.random.doubleDraws, "The draw is still taken, just never decisive.")
+    }
+
     /* Cadence and range. */
 
     /**
@@ -293,6 +426,20 @@ class HunterTrapTickTest {
         world.tick(controller)
 
         assertEquals("loc.hunting_boxtrap_failed", world.locNameAt(TRAP_TILE))
+        assertNull(world.controllerAt(TRAP_TILE))
+    }
+
+    /** A deadfall leaves nothing behind: the boulder is simply unset again. */
+    @Test
+    fun `an expiring deadfall unsets its boulder and deletes its controller`() {
+        val owner = world.addPlayer(TRAP_TILE.translate(3, 3), hunterLvl = 99)
+        world.addMapLoc(TRAP_TILE, HunterTrapStates.DEADFALL_BOULDER)
+        val controller = world.armDeadfall(TRAP_TILE, owner)
+
+        controller.duration = 1
+        world.tick(controller)
+
+        assertEquals(HunterTrapStates.DEADFALL_BOULDER, world.locNameAt(TRAP_TILE))
         assertNull(world.controllerAt(TRAP_TILE))
     }
 

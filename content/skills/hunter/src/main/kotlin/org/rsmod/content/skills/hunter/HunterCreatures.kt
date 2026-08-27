@@ -3,6 +3,7 @@ package org.rsmod.content.skills.hunter
 import dev.openrune.rscm.RSCM.asRSCM
 import dev.openrune.rscm.RSCMType
 import org.rsmod.api.table.hunter.HunterBoxCreaturesRow
+import org.rsmod.api.table.hunter.HunterDeadfallCreaturesRow
 import org.rsmod.api.table.hunter.HunterSnareCreaturesRow
 
 /**
@@ -19,8 +20,13 @@ object HunterCreatures {
     val all: List<HunterCreature> by lazy {
         val rows =
             HunterSnareCreaturesRow.all().map { it.rowId to snare(it) } +
-                HunterBoxCreaturesRow.all().map { it.rowId to box(it) }
+                HunterBoxCreaturesRow.all().map { it.rowId to box(it) } +
+                HunterDeadfallCreaturesRow.all().map { it.rowId to deadfall(it) }
         rows.sortedBy { it.first }.map { it.second }
+    }
+
+    val deadfall: List<HunterCreature> by lazy {
+        all.filter { it.family == TrapFamily.DEADFALL }
     }
 
     private val byNpc: Map<String, HunterCreature> by lazy { all.associateBy { it.npc } }
@@ -63,5 +69,26 @@ object HunterCreatures {
             successLow = row.successLow,
             successHigh = row.successHigh,
             locKey = row.locKey,
+        )
+
+    // The raggedest table: two creatures drop no meat - [parallelCatches] guards the width.
+    private fun deadfall(row: HunterDeadfallCreaturesRow): HunterCreature =
+        HunterCreature(
+            family = TrapFamily.DEADFALL,
+            npc = row.npc.internalName,
+            level = row.level,
+            xp = row.xp,
+            caught =
+                parallelCatches(
+                    row.rowId,
+                    row.caughtItems.map { it.internalName },
+                    row.caughtMin,
+                    row.caughtMax,
+                ),
+            successLow = row.successLow,
+            successHigh = row.successHigh,
+            trappingLoc = row.trappingLoc.internalName,
+            trappingLocM = row.trappingLocM.internalName,
+            fullLoc = row.fullLoc.internalName,
         )
 }
