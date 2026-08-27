@@ -567,4 +567,76 @@ object HunterTables {
                 columnRSCM(Falconry.COL_FALCON_NPC, "npc.hunting_falcon_onspeedy2")
             }
         }
+
+    /**
+     * The four butterflies and the sunlight moth - not a trap: the shared 0-7 block and no more,
+     * read into `ButterflyCreatures.all`. Only the black warlock and sunlight moth are charted;
+     * both fit the identical single pair (20, 296), and the three uncharted rows ship it as a
+     * flagged guess. The moonlight moth (unshipped: zero spawns) is the published counterexample
+     * that bounds that guess. Full derivation: docs/hunter.md.
+     */
+    fun butterflyCreatures(): DBTable =
+        dbTable("dbtable.hunter_butterfly_creatures", serverOnly = true) {
+            creatureColumns()
+
+            row("dbrow.hunter_ruby_harvest") {
+                columnRSCM(COL_NPC, "npc.butterfly_ruby")
+                column(COL_LEVEL, 15)
+                column(COL_XP, 240)
+                // Derived guess, not published - see docs/hunter.md.
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_ruby")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            row("dbrow.hunter_sapphire_glacialis") {
+                columnRSCM(COL_NPC, "npc.butterfly_glacialis")
+                column(COL_LEVEL, 25)
+                column(COL_XP, 340)
+                // Derived guess, not published - see docs/hunter.md.
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_glacialis")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            row("dbrow.hunter_snowy_knight") {
+                columnRSCM(COL_NPC, "npc.butterfly_snowy")
+                column(COL_LEVEL, 35)
+                column(COL_XP, 440)
+                // Derived guess, not published - see docs/hunter.md.
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_snowy")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            // Published; fit pinned to this single pair.
+            row("dbrow.hunter_black_warlock") {
+                columnRSCM(COL_NPC, "npc.butterfly_warlock")
+                column(COL_LEVEL, 45)
+                column(COL_XP, 540)
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_warlock")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+
+            // Published, same pair. The cache and wiki spell "Sunlight Moth" with a capital M.
+            row("dbrow.hunter_sunlight_moth") {
+                columnRSCM(COL_NPC, "npc.moth_sunlight")
+                column(COL_LEVEL, 65)
+                column(COL_XP, 740)
+                column(COL_SUCCESS_LOW, 20)
+                column(COL_SUCCESS_HIGH, 296)
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.butterfly_jar_sunmoth")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+            }
+        }
 }

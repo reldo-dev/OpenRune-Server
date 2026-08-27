@@ -585,3 +585,74 @@ The enclosure area (`area.piscatoris_falconry` = 59, the next free id above
 fishing's `fishing_guild = 58`) needs both the gameval id *and* the polygon
 in `.data/raw-cache/map/area/` — an area name without the polygon resolves
 and then matches no tile.
+
+## Butterfly netting
+
+Structurally the simplest technique: click the creature, roll once, done. No
+loc, no controller, no varcon, no timeout, no cap — so no `TrapFamily` entry,
+and its rows are read into `ButterflyCreatures.all`, never
+`HunterCreatures.all`. There is no delay and no lock (a net swing lands where
+the player stands, and no source describes a wait), so nothing re-checks the
+target afterwards the way falconry must.
+
+The mechanic, from *Butterfly (Hunter)* (oldid=15242004): catchable wielding
+a butterfly net or magic butterfly net, or barehanded at +10 levels. Read the
+jar sentence carefully — the *reward* does not depend on the net. It depends
+on whether an empty jar is carried; barehanded is a level gate and nothing
+else. (void's 80/85/90/95 barehanded levels are the RS3 rule; the wiki's flat
++10 ships.) Jarring never needs a free slot: both jars are non-stackable, so
+the swap frees exactly the slot it takes, and a full inventory can still jar
+a catch.
+
+### The shared pair, the guesses, and the moonlight moth bound
+
+Only two of the five shipped creatures carry a published chart: black warlock
+(oldid=15288148, 41 points) and sunlight moth (oldid=15197088, 21 points).
+The two curves are **pointwise identical over the levels they share**, and
+both fit the same single integer pair, `(20, 296)`. The load-bearing
+observation: the sunlight moth (req 65) starts at 201/256 — exactly what the
+warlock's curve reads at 65, not a fresh curve anchored at its own
+requirement. For these two, the requirement only decides where you join a
+shared curve.
+
+That is *not* the same as catch chance being species-independent. The
+moonlight moth is a third published member (oldid=15208105) and does **not**
+sit on the shared curve: it fits `(0, 276)` plain and `(20, 286)` magic, each
+a unique exact fit, reading 209/256 at its requirement of 75 where the shared
+curve reads 229. It is not shipped — zero spawns in `.data`, like Letvek —
+but it is the counterexample that bounds the claim, and
+`HunterRateTablesTest` asserts the disagreement so the stronger claim cannot
+creep back.
+
+The three unpublished rows (ruby harvest, sapphire glacialis, snowy knight)
+therefore ship `(20, 296)` as a **guess — an extrapolation, not an
+interpolation**: all three sit below the lower of the two agreeing
+requirements, so no charted point brackets them. void independently fits
+`[20, 296]` for its black warlock (confirming the engine formula maps onto
+the wiki template) but guesses differently for the same three creatures —
+guesses that predate the sunlight moth (Varlamore content), so they could not
+be checked against the second curve and are not adopted.
+
+### The magic net's +20
+
+Both published charts carry a second series fitting `(40, 316)` — exactly
+`+20` on each coefficient — and void reaches the same `+20` independently.
+It is applied content-side as one constant (`HunterButterfly.NET_BONUS`)
+rather than a second column pair, so the three guessed rows do not each need
+a second guess. Barehanded rides the faster curve on two of three sources:
+the warlock chart labels its series "Butterfly net" / "Barehanded or Magic
+butterfly net", and void applies its `+20` to "Barehanded or magic net"; the
+sunlight moth chart's labels disagree, but its points are identical, so the
+uncorroborated label is read as stale. "Wielding" means *worn*: both nets are
+`wearpos=righthand` `iop2=Wield`, so a net in the backpack is barehanded.
+
+### Not modelled
+
+The stat boost of a jarless catch (and the `Release` op on the six filled
+jars). Each creature grants a different boost, and shipping six half-wired
+stat effects — or refusing a jarless catch outright — were both worse than a
+stated gap: a jarless catch awards the xp, removes the creature, and says so.
+Chart extraction went through the `osrs-cache` MCP `get_wiki_section` (the
+sqlite route truncates); note the page and cache spell "Sunlight Moth" with a
+capital M, so a case-sensitive search for "Sunlight moth" wrongly reports no
+chart.

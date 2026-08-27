@@ -129,7 +129,7 @@ class HunterWiringTest {
      */
     @Test
     fun `falconry registers Matthias, every kebbit, every falcon, the tick and the area exit`() {
-        val bus = Wiring().start(scripts.falconry)
+        val bus = Wiring().start(scripts.falconry, scripts.butterfly)
 
         // `op3=Quick-falcon` on npc 1340, and no op1 - his `Talk-to` goes through a dialogue tree
         // that is out of scope, so claiming op1 would replace it with a rental.
@@ -154,6 +154,27 @@ class HunterWiringTest {
         assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "falconry must not claim $TRAP_CONTROLLER")
     }
 
+    @Test
+    fun `butterfly netting registers one catch per creature and nothing else`() {
+        val bus = Wiring().start(scripts.butterfly)
+
+        val creatures = ButterflyCreatures.all
+        assertEquals(5, creatures.size, "four butterflies and the sunlight moth")
+        for (creature in creatures) {
+            assertTrue(bus.hasOpNpc1(creature.npc), "`Catch` on ${creature.npc}")
+        }
+
+        // Nothing is laid, nothing is rented and no controller is ever created, so there is nothing
+        // else to register. Asserting the absence is the point: a stray timer here would tick a
+        // controller type this feature never creates.
+        assertFalse(bus.hasAiConTimer(TRAP_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAiConTimer(FALCON_CONTROLLER), "no controller is created")
+        assertFalse(bus.hasAreaExit(FALCONRY_AREA), "nothing is rented")
+        for (group in ALL_TRAP_GROUPS) {
+            assertFalse(bus.hasOpContentLoc1(group), "butterflies touch no locs ($group)")
+        }
+    }
+
     /* The once-only invariant. */
 
     /**
@@ -173,9 +194,9 @@ class HunterWiringTest {
         )
     }
 
-    /** The same invariant, seen from the boot path: all six scripts share one bus at startup. */
+    /** The same invariant, seen from the boot path: all seven scripts share one bus at startup. */
     @Test
-    fun `all six scripts start together on one bus without a duplicate key`() {
+    fun `all seven scripts start together on one bus without a duplicate key`() {
         val bus = Wiring().start(*scripts.all.toTypedArray())
 
         assertTrue(bus.hasAiConTimer(TRAP_CONTROLLER))
@@ -208,11 +229,12 @@ class HunterWiringTest {
 
     @Test
     fun `no npc handler is registered on an op index the hunter npcs do not carry`() {
-        val bus = Wiring().start(scripts.falconry)
+        val bus = Wiring().start(scripts.falconry, scripts.butterfly)
 
         val catchTargets =
             FalconryCreatures.all.map { it.npc } +
-                FalconryCreatures.all.map { it.falconNpc }
+                FalconryCreatures.all.map { it.falconNpc } +
+                ButterflyCreatures.all.map { it.npc }
         for (npc in catchTargets) {
             val id = npc.asRSCM(RSCMType.NPC)
             assertFalse(bus.eventBus.contains(NpcEvents.Op2::class.java, id), "op2 on $npc")
@@ -300,6 +322,9 @@ class HunterWiringTest {
             for (creature in FalconryCreatures.all) {
                 add(creature.npc to InteractionOp.Op1)
                 add(creature.falconNpc to InteractionOp.Op1)
+            }
+            for (creature in ButterflyCreatures.all) {
+                add(creature.npc to InteractionOp.Op1)
             }
         }
 
@@ -418,6 +443,7 @@ class HunterWiringTest {
     private class HunterScripts {
         private val trapWorld = HunterTrapTestWorld()
         private val falconWorld = HunterFalconryTestWorld()
+        private val butterflyWorld = HunterButterflyTestWorld()
 
         val birdSnare = BirdSnareEvents(trapWorld.trap, trapWorld.conRepo)
         val boxTrap = BoxTrapEvents(trapWorld.trap, trapWorld.conRepo)
@@ -425,11 +451,12 @@ class HunterWiringTest {
         val netTrap = NetTrapEvents(trapWorld.trap)
         val magicBox = MagicBoxEvents(trapWorld.trap, trapWorld.conRepo)
         val falconry = FalconryEvents(falconWorld.falconry)
+        val butterfly = ButterflyEvents(butterflyWorld.butterfly)
 
         /** The five families that share [TRAP_CONTROLLER], in declaration order. */
         val trapFamily: List<PluginScript> = listOf(birdSnare, boxTrap, deadfall, netTrap, magicBox)
 
-        val all: List<PluginScript> = trapFamily + listOf(falconry)
+        val all: List<PluginScript> = trapFamily + listOf(falconry, butterfly)
     }
 
     /**

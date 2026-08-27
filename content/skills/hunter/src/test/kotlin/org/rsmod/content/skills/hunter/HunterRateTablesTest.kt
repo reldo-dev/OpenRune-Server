@@ -1,6 +1,7 @@
 package org.rsmod.content.skills.hunter
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -32,7 +33,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(760, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(870, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -112,6 +113,43 @@ class HunterRateTablesTest {
         }
     }
 
+    /** The three guessed butterfly pairs are the published pair they were taken from, unchanged. */
+    @Test
+    fun theThreeGuessedButterflyPairsAreThePublishedPair() {
+        val published = shippedRate("npc.butterfly_warlock")
+        assertEquals(published.low to published.high, shippedRate("npc.moth_sunlight").let { it.low to it.high })
+        for (npc in listOf("npc.butterfly_ruby", "npc.butterfly_glacialis", "npc.butterfly_snowy")) {
+            val rate = shippedRate(npc)
+            assertEquals(
+                published.low to published.high,
+                rate.low to rate.high,
+                "$npc is guessed as the published butterfly pair; it should match it exactly",
+            )
+        }
+    }
+
+    /**
+     * The moonlight moth is charted and does **not** sit on the other butterflies' curve.
+     *
+     * It is not shipped - zero spawns - but it is the third published member of the family, and it
+     * bounds what [theThreeGuessedButterflyPairsAreThePublishedPair] may be read as meaning. Two
+     * published members agreeing licenses a guess; it does not establish that butterfly catch chance
+     * is a function of level alone, because this one is a counterexample. Asserted so that the
+     * weaker claim cannot quietly be promoted to the stronger one later.
+     */
+    @Test
+    fun theMoonlightMothIsNotOnTheOtherButterfliesCurve() {
+        val family = shippedRate("npc.butterfly_warlock")
+        val points = readCharts().getValue("moonlight_moth")
+        val disagreements =
+            points.count { charted(family.low, family.high, it.level) != it.chance256 }
+        assertNotEquals(
+            0,
+            disagreements,
+            "The moonlight moth now matches the family curve; the guessed rows' rationale changed.",
+        )
+    }
+
     /**
      * Every shipped pair is the chart template's **own published parameter**, exactly - strictly
      * stronger than reproducing the chart, which does not pin a pair (docs/hunter.md).
@@ -187,6 +225,9 @@ class HunterRateTablesTest {
     private fun allShippedRates(): List<ShippedRate> =
         HunterCreatures.all.map { ShippedRate(it.npc, it.level, it.successLow, it.successHigh) } +
             FalconryCreatures.all.map {
+                ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
+            } +
+            ButterflyCreatures.all.map {
                 ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
             }
 
@@ -265,6 +306,16 @@ class HunterRateTablesTest {
                 Charted("spotted_kebbit", "npc.huntingbeast_speedy"),
                 Charted("dark_kebbit", "npc.huntingbeast_silent"),
                 Charted("dashing_kebbit", "npc.huntingbeast_speedy2"),
+                Charted("black_warlock", "npc.butterfly_warlock"),
+                Charted("sunlight_moth", "npc.moth_sunlight"),
+                // The magic net's separate, faster curve, modelled as a flat bonus on both
+                // coefficients rather than a second column pair. See `HunterButterfly.NET_BONUS`.
+                Charted(
+                    "black_warlock_magicnet",
+                    "npc.butterfly_warlock",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("sunlight_moth_magicnet", "npc.moth_sunlight", HunterButterfly.NET_BONUS),
             )
 
         /** The published `{{Skilling success chart}}` parameters, keyed by page and series label. */
@@ -296,6 +347,20 @@ class HunterRateTablesTest {
                 Published("Spotted kebbit", "Spotted kebbit", "npc.huntingbeast_speedy"),
                 Published("Dark kebbit", "Dark kebbit", "npc.huntingbeast_silent"),
                 Published("Dashing kebbit", "Dashing kebbit", "npc.huntingbeast_speedy2"),
+                Published("Black warlock", "Butterfly net", "npc.butterfly_warlock"),
+                Published(
+                    "Black warlock",
+                    "Barehanded or Magic butterfly net",
+                    "npc.butterfly_warlock",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Sunlight Moth", "Barehanded or butterfly net", "npc.moth_sunlight"),
+                Published(
+                    "Sunlight Moth",
+                    "Magic butterfly net",
+                    "npc.moth_sunlight",
+                    HunterButterfly.NET_BONUS,
+                ),
             )
 
         /**
@@ -304,11 +369,14 @@ class HunterRateTablesTest {
          */
         private val UNSHIPPED_SERIES = setOf("moonlight_moth", "moonlight_moth_magicnet")
 
-        /** The two rows whose pair `HunterTables` annotates as a guess rather than a fit. */
+        /** The five rows whose pair `HunterTables` annotates as a guess rather than a fit. */
         private val GUESSED_NPCS =
             setOf(
                 "npc.hunting_ferret",
                 "npc.varlamore_hunterjerboa01",
+                "npc.butterfly_ruby",
+                "npc.butterfly_glacialis",
+                "npc.butterfly_snowy",
             )
 
         @JvmStatic
