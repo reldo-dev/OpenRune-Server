@@ -940,3 +940,79 @@ packed loc, not computed. `obj.poh_clockwork_mechanism` is the Clockwork;
 of the tools. The `epochMinute` import is aliased because an unaliased call
 inside a same-named method compiles into silent infinite recursion — the
 falconry shadowing shape again.
+
+## Kebbit tracking
+
+"Each player follows a unique track and does not compete with other players"
+(*Tracking*) — which is why tracking shares nothing with the trap engine or
+falconry: no controller, no cap, no spawned npc, no world state. A trail is
+the player's own segment varbits (what the client draws footprints from) plus
+one in-memory entry recording which segments the trail runs along and how far
+the player has got. **The catch is deterministic** — the technique page awards
+loot unconditionally and no tracking creature carries a Hunting-chance chart;
+the single random draw per trail picks which enumerated trail the player gets.
+
+### Keys: gameval vs coordinate
+
+Burrows and clues are matched on the loc *gameval*, never the coordinate:
+twenty of the clue locs are placed twice on the map and a segment records only
+its first placement's coordinates, so a coordinate match would silently refuse
+a legitimate click on the second placement. Catch spots are the deliberate
+exception, matched on coordinate: one catch gameval covers several placements
+per area (`hunting_trail_end_polar` is placed four times in Rellekka) and a
+trail ends at one specific tile. Ops are registered per loc gameval rather
+than by content group — a group would mean patching `loc.toml` for ~90
+client-cache loc types (the two-declaration rule, ninety times).
+
+### Varbit discipline
+
+Trail state is written **per named varbit, never a varp write and never a
+computed bit position**: the trail varps carry unrelated fields (varp 925 also
+holds `lumbridge_alchemy_high`, so zeroing it would reset another system), and
+nine of the packed state varbits are not 3 bits at offset 3i
+(`hunting_trail_state2_9` is 5 bits). The varps are `Perm`, so login hides all
+75 placed segments through a **soft queue, not the login event** — the
+`VarPlayerIntMapSetter` login-transmit trap again: a write during
+`SessionStateEvent.Login` clears the server value while the client keeps
+drawing the old footprints.
+
+### The trail geometry and how the junctions were derived
+
+`TrackingNetworks` is the only place that knows a coordinate, and a wrong one
+is silent in play — so none of the 119 stands on its own authority: all are
+checked by the local-only `hunterVerify` sweep against the packed map and by
+the integration boot test against a live `LocRegistry`. Networks are one entry
+per *area*, not per varp: four creatures span multiple varp blocks and varps
+922/924 are each split between two creatures. Only placed segments ship
+(`state2_9` is declared but never placed; the `state11/12` runs too); the
+Fossil Island herbiboar networks are deliberately absent.
+
+The packed-map sweep records each segment as a footprint run with two
+endpoints, so adjacency is derived by one uniform rule: each end takes the
+nearest bush/burrow within Chebyshev 4 (bush beats burrow at a tie); a
+same-node result recomputes `endB` to the next node out; an end with no
+bush/burrow in radius takes the nearest clue placement. Run against network 1
+this reproduces the sweep's independent 2009scape comparison on nine of ten
+segments (the tenth is a distance tie the packed map cannot resolve, taken
+from that table and marked). On the polar network the two sources disagree on
+five segments; those five are 2009scape's numbers rather than measurements,
+and the packed map's footprint runs win — the visible effect is both polar
+burrows anchoring on the burrow tile itself.
+
+### The ring of pursuit
+
+"The ring will provide 10 charges before disappearing" — and the charges are
+the **player's**, not the ring's: the varp stores charges *used* (an unwritten
+varp = full allowance), which is why `Break` is the only way to clear a
+part-spent allowance and why a fresh ring would otherwise inherit the used
+count. `Check` reports charges remaining (the subtraction lives at the
+message). Its reveal effect, the wording of `Check`, and the break message are
+unsourced in the transcripts; behaviour is the wiki's.
+
+### Known display issues, shipped as disclosed
+
+Trail length (this model enumerates fixed trails rather than live's
+variable-length ones) and footprint order/orientation (segment draw order does
+not always read as walking order, and the mid-segment orientation flip vs
+live is unverified) are known, disclosed display-level divergences — the
+catch, xp and loot are unaffected.

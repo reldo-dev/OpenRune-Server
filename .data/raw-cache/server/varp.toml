@@ -904,3 +904,9 @@ isServerOnly = true
 id = "varp.hunter_birdhouse_seeds_4"
 scope = "Perm"
 transmit = "Never"
+
+[[varp]]
+isServerOnly = true
+id = "varp.hunter_ring_of_pursuit_charges"
+scope = "Perm"
+transmit = "Never"

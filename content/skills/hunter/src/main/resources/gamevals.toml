@@ -133,6 +133,10 @@ hunter_crab_catch = 61
 # The in-session half of the wall-clock timer; the deadline lives in `hunter_birdhouse_ready_*`.
 hunter_birdhouse_fill = 62
 
+# Login-time trail reset; rides a soft queue because a varp written during the login event never
+# transmits (docs/hunter.md).
+hunter_tracking_reset = 63
+
 # Custom varp ids grow downward from the low-water mark of the server-authored block: 65481-65501
 # is already claimed by runecrafting, sandstorm, slayer, instances, herblore and prayer, so hunter
 # takes the next five below it. Coords rather than a counter: see docs/hunter.md.
@@ -161,3 +165,7 @@ hunter_birdhouse_seeds_1 = 65471
 hunter_birdhouse_seeds_2 = 65470
 hunter_birdhouse_seeds_3 = 65469
 hunter_birdhouse_seeds_4 = 65468
+
+# Ring of pursuit charges USED (0-9): the charges belong to the player, not the ring; unwritten
+# reads 0 = a full allowance.
+hunter_ring_of_pursuit_charges = 65467

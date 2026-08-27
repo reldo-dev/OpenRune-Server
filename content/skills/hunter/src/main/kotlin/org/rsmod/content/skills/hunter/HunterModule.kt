@@ -12,5 +12,6 @@ class HunterModule : PluginModule() {
         // Bird houses fill on wall-clock time, so the clock is a collaborator rather than a call.
         bindSingleton<BirdHouseClock>(SystemBirdHouseClock)
         bindInstance<HunterBirdHouse>()
+        bindInstance<HunterTracking>()
     }
 }
