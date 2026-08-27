@@ -89,6 +89,9 @@ constructor(
     override fun ScriptContext.startup() {
         onCommand("master", "Max out all stats", ::master)
         onCommand("reset", "Reset all stats", ::reset)
+        onCommand("setlvl", "Set one stat's level", ::setLvl) {
+            invalidArgs = "Use as ::setlvl statName level (ex: ::setlvl hunter 60)"
+        }
         onCommand("mypos", "Get current coordinates", ::mypos)
         onCommand("tele", "Teleport to coordgrid", ::tele) {
             invalidArgs = "Usage: ::tele mx mz [level](e.g. ::tele 3200 3200 0)"
@@ -289,6 +292,20 @@ constructor(
     private fun master(cheat: Cheat) = with(cheat) { player.setStatLevels(level = 99) }
 
     private fun reset(cheat: Cheat) = with(cheat) { player.setStatLevels(level = 1) }
+
+    private fun setLvl(cheat: Cheat) =
+        with(cheat) {
+            val statInternal = "stat.${args[0].lowercase()}"
+            val statId = runCatching { statInternal.asRSCM(RSCMType.STAT) }.getOrNull()
+            if (statId == null) {
+                player.mes("No such stat: '${args[0]}'")
+                return@with
+            }
+            val stat = checkNotNull(ServerCacheManager.getStats()[statId])
+            val level = args[1].toInt().coerceIn(1, 99)
+            player.setStatLevel(statInternal, stat.minLevel, level)
+            player.mes("${args[0].lowercase().replaceFirstChar(Char::uppercase)} set to $level.")
+        }
 
     private fun mypos(cheat: Cheat) =
         with(cheat) {
@@ -579,20 +596,24 @@ constructor(
 
     @OptIn(InternalApi::class)
     private fun Player.setStatLevels(level: Int) {
-        val xp = PlayerSkillXPTable.getXPFromLevel(level)
         for (stat in ServerCacheManager.getStats().values) {
             val statInternal = RSCM.getReverseMapping(RSCMType.STAT, stat.id)
-
-            val baseLevel = statMap.getBaseLevel(statInternal)
-            val targetLevel = max(stat.minLevel, level)
-            if (baseLevel > targetLevel) {
-                statRevert(statInternal, targetLevel, xp)
-                continue
-            }
-            val xpDelta = xp - statMap.getXP(statInternal)
-            statMap.setCurrentLevel(statInternal, targetLevel.toByte())
-            statAdvance(statInternal, xpDelta.toDouble(), rate = 1.0)
+            setStatLevel(statInternal, stat.minLevel, level)
         }
+    }
+
+    @OptIn(InternalApi::class)
+    private fun Player.setStatLevel(statInternal: String, minLevel: Int, level: Int) {
+        val xp = PlayerSkillXPTable.getXPFromLevel(level)
+        val baseLevel = statMap.getBaseLevel(statInternal)
+        val targetLevel = max(minLevel, level)
+        if (baseLevel > targetLevel) {
+            statRevert(statInternal, targetLevel, xp)
+            return
+        }
+        val xpDelta = xp - statMap.getXP(statInternal)
+        statMap.setCurrentLevel(statInternal, targetLevel.toByte())
+        statAdvance(statInternal, xpDelta.toDouble(), rate = 1.0)
     }
 
     // There is, by design, no helper function to decrease stat xp, as xp reduction is not a
