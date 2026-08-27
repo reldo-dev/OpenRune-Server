@@ -32,7 +32,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(605, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(648, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -60,6 +60,54 @@ class HunterRateTablesTest {
             assertTrue(
                 series in mapped || series in UNSHIPPED_SERIES,
                 "Chart series '$series' is mapped to no creature and not declared unshipped.",
+            )
+        }
+    }
+
+    /**
+     * The structural guard: a creature added with an invented pair and no source must fail here
+     * until it is either charted or explicitly declared a guess.
+     */
+    @Test
+    fun everyShippedRowIsEitherChartedOrDeclaredAGuess() {
+        val charted = CHARTED.map { it.npc }.toSet()
+        val accounted = charted + GUESSED_NPCS
+        val shipped = allShippedRates().map { it.npc }.toSet()
+        assertEquals(
+            emptySet<String>(),
+            shipped - accounted,
+            "Shipped creatures with no chart and no guess declaration.",
+        )
+        assertEquals(
+            emptySet<String>(),
+            accounted - shipped,
+            "Declared creatures that no longer ship a rate row.",
+        )
+        assertEquals(emptySet<String>(), charted intersect GUESSED_NPCS)
+    }
+
+    /**
+     * The two guessed box-trap pairs solve the anchors `HunterTables` says they were derived from:
+     * the regular chinchompa's curve translated to each creature's own requirement, i.e. 146/256 at
+     * the requirement and certainty exactly 41 levels later.
+     */
+    @Test
+    fun theTwoGuessedBoxTrapPairsSolveTheChinchompaAnchors() {
+        val chinchompa = shippedRate("npc.hunting_chinchompa")
+        assertEquals(146, charted(chinchompa.low, chinchompa.high, chinchompa.level))
+        assertEquals(chinchompa.level + 41, firstCertainLevel(chinchompa))
+
+        for (npc in listOf("npc.hunting_ferret", "npc.varlamore_hunterjerboa01")) {
+            val rate = shippedRate(npc)
+            assertEquals(
+                146,
+                charted(rate.low, rate.high, rate.level),
+                "$npc should read 146/256 at its own requirement, as the chinchompa does",
+            )
+            assertEquals(
+                rate.level + 41,
+                firstCertainLevel(rate),
+                "$npc should reach certainty 41 levels above its requirement, as the chinchompa does",
             )
         }
     }
@@ -183,6 +231,7 @@ class HunterRateTablesTest {
             listOf(
                 "birdsnare-chance.tsv",
                 "boxtrap-chance.tsv",
+                "butterfly-chance.tsv",
                 "deadfall-chance.tsv",
                 "magicbox-chance.tsv",
                 "nettrap-chance.tsv",
@@ -194,6 +243,7 @@ class HunterRateTablesTest {
                 Charted("golden_warbler", "npc.hunting_bird_desert"),
                 Charted("copper_longtail", "npc.hunting_bird_woodland"),
                 Charted("cerulean_twitch", "npc.hunting_bird_polar"),
+                Charted("tropical_wagtail", "npc.multicoloured_bird"),
                 Charted("chinchompa", "npc.hunting_chinchompa"),
                 Charted("carnivorous_chinchompa", "npc.hunting_chinchompa_big"),
                 Charted("black_chinchompa", "npc.hunting_chinchompa_black"),
@@ -217,6 +267,7 @@ class HunterRateTablesTest {
                 Published("Golden warbler", "Golden warbler", "npc.hunting_bird_desert"),
                 Published("Copper longtail", "Copper longtail", "npc.hunting_bird_woodland"),
                 Published("Cerulean twitch", "Cerulean twitch", "npc.hunting_bird_polar"),
+                Published("Tropical wagtail", "Tropical wagtail", "npc.multicoloured_bird"),
                 Published("Chinchompa (Hunter)", "Grey", "npc.hunting_chinchompa"),
                 Published("Chinchompa (Hunter)", "Red", "npc.hunting_chinchompa_big"),
                 Published("Chinchompa (Hunter)", "Black", "npc.hunting_chinchompa_black"),
@@ -242,6 +293,13 @@ class HunterRateTablesTest {
          * [theMoonlightMothIsNotOnTheOtherButterfliesCurve].
          */
         private val UNSHIPPED_SERIES = setOf("moonlight_moth", "moonlight_moth_magicnet")
+
+        /** The two rows whose pair `HunterTables` annotates as a guess rather than a fit. */
+        private val GUESSED_NPCS =
+            setOf(
+                "npc.hunting_ferret",
+                "npc.varlamore_hunterjerboa01",
+            )
 
         @JvmStatic
         @BeforeAll

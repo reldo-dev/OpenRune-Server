@@ -222,6 +222,55 @@ class MagicBoxTest {
             families.take(firstNetTrap).distinct(),
             "The order of the three shipped blocks is save data and must not change.",
         )
+        // The last three rows sit after the magic box despite being snare and box creatures:
+        // `HunterCreatures.all` sorts every table into one list by dbrow id, precisely so that
+        // "give it a higher id" is what appending to an already-indexed table means.
+        assertEquals(
+            listOf(TrapFamily.NETTRAP, TrapFamily.MAGICBOX, TrapFamily.SNARE, TrapFamily.BOX),
+            families.drop(firstNetTrap).distinct(),
+        )
+    }
+
+    /**
+     * The whole sequence, pinned literally. Edited **only by appending**: a diff that changes any
+     * existing line re-files someone's caught chinchompa as something else, and the failure it
+     * produces is the intended review gate, not a stale expectation to update.
+     */
+    @Test
+    fun `the full creature order is save data and is pinned literally`() {
+        assertEquals(
+            listOf(
+                // Snare, dbrow 56300-03.
+                "npc.hunting_bird_jungle",
+                "npc.hunting_bird_desert",
+                "npc.hunting_bird_woodland",
+                "npc.hunting_bird_polar",
+                // Box, dbrow 56304-06.
+                "npc.hunting_chinchompa",
+                "npc.hunting_chinchompa_big",
+                "npc.hunting_chinchompa_black",
+                // Deadfall, dbrow 56310-14.
+                "npc.huntingbeast_claws",
+                "npc.huntingbeast_barbedtail",
+                "npc.huntingbeast_spiky",
+                "npc.huntingbeast_sabreteeth",
+                "npc.varlamore_fennecfox",
+                // Net trap.
+                "npc.salamander_green",
+                "npc.salamander_orange",
+                "npc.salamander_red",
+                "npc.salamander_black",
+                "npc.salamander_mountain",
+                // Magic box.
+                "npc.imp",
+                // Appended by dbrow id, despite joining the snare and box tables.
+                "npc.multicoloured_bird",
+                "npc.hunting_ferret",
+                "npc.varlamore_hunterjerboa01",
+            ),
+            HunterCreatures.all.map { it.npc },
+            "HunterCreatures.all is indexed by save data; rows may be appended, never moved.",
+        )
     }
 
     /* Helpers. */

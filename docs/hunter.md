@@ -433,3 +433,56 @@ step is a no-op.
 
 `obj.net` is the cache symbol for the Small fishing net; `obj.small_fishing_net`
 does not exist.
+
+## Late additions: tropical wagtail, ferret, embertailed jerboa
+
+Three creatures joined tables that had already shipped, which is why their
+dbrow ids (56360–56362) sit above every id in use anywhere in the hunter
+block, not merely above their own table's: `HunterCreatures.all` sorts all
+trap tables into one list by dbrow id, and an id filed next to the other
+birds would sort ahead of the chinchompas and shift every trap index already
+written into a save.
+
+### Tropical wagtail
+
+The one bird a `hunting_bird_*` symbol search does not find — that prefix
+holds exactly four npcs, which reads as proof that nothing stands behind the
+otherwise-unused `hunting_ojibway_trap_full_coloured` state. The wagtail is
+`npc.multicoloured_bird` (`name=Tropical wagtail`), whose `model1` is the
+very model that trap state uses, otherwise byte-for-byte the shape of the
+other four birds, with 30 spawns in `.data`. Its loc key is `coloured`, not
+`multicoloured_bird`.
+
+Level 19 / 95.2 xp and a 43-point chart from its Hunter info box
+(oldid=15259195). The chart alone does not pin the pair — both `(74, 371)`
+and `(75, 370)` reproduce all 43 points. The page's prose decides it: "The
+catch rate is 29% at lvl 1 and 144% at lvl 99", and the engine evaluates
+`low+1` at L1 and `high+1` at L99 — `(75, 370)` gives 29.6% and 144.9%,
+truncating to the stated 29 and 144, while `(74, 371)` gives 145.3% → 145.
+`(75, 370)` also continues the snare family's own descending sequence
+((100,420), (92,400), (85,390), (82,380) as the requirement climbs).
+Tailfeathers is omitted from rewards: 1/20 *and* Hunter's-Rumour-conditional,
+like the deadfall's Kebbity tuft.
+
+### Ferret and embertailed jerboa
+
+The two genuinely rate-blocked creatures: a content search of the offline
+wiki snapshot for the `skillingSuccess` chart marker returns nothing on
+`Ferret`, `Ferret (Hunter)`, `Embertailed jerboa`, or the *Box trap* page,
+and neither page states endpoints in prose. Both pairs are therefore
+**derived guesses**: the regular chinchompa's `(6, 268)` — the only published
+box-trap curve that is not one of the two identical high-level ones — gives
+146/256 at its own requirement (53) and reaches certainty 41 levels later.
+Each pair solves the engine formula for those two anchors translated to the
+creature's own requirement (ferret 27 → `(75, 338)`, jerboa 39 → `(43, 306)`),
+reproducing the chinchompa's shape rather than inventing a new one; both
+anchors are reproduced to the integer. There was no prior guess to re-derive
+from — void ships no ferret or jerboa pair at all. A later in-game
+measurement should be checked against this derivation.
+
+Symbol traps: `obj.hunting_ferret` is the item and `npc.hunting_ferret` the
+creature (the claws pattern again); the jerboa is
+`npc.varlamore_hunterjerboa01` (`name=Embertailed jerboa`, `category_374`
+like every box-trap creature) — *not* `npc.varlamore_jerboa`, which is
+ambient scenery named plain "Jerboa". Large jerboa tail is 1/50 and
+rumour-conditional, so omitted.

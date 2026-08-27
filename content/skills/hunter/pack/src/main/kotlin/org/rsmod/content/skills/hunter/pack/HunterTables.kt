@@ -12,7 +12,8 @@ import dev.openrune.definition.util.VarType
  *
  * Row order is load-bearing: a sprung trap persists its creature as an index into the combined
  * creature list, read back sorted by dbrow id - a new technique's rows must sort after every row
- * already shipped, never between them.
+ * already shipped, never between them. The wagtail, ferret and jerboa rows carry deliberately late
+ * ids for the same reason (docs/hunter.md).
  */
 object HunterTables {
     // Column ids must form a dense 0..n-1 set per table: the encoder writes columns sorted by id
@@ -152,6 +153,27 @@ object HunterTables {
                 column(COL_CAUGHT_MAX, 1, 1, 10)
                 column(LocKeyed.COL_LOC_KEY, "polar")
             }
+
+            // The bird a `hunting_bird_*` search does not find: `npc.multicoloured_bird`. The
+            // chart alone does not pin the pair; the page's prose endpoints decide (75, 370) over
+            // (74, 371). See docs/hunter.md.
+            row("dbrow.hunter_tropical_wagtail") {
+                columnRSCM(COL_NPC, "npc.multicoloured_bird")
+                column(COL_LEVEL, 19)
+                column(COL_XP, 952)
+                column(COL_SUCCESS_LOW, 75)
+                column(COL_SUCCESS_HIGH, 370)
+                columnRSCM(
+                    COL_CAUGHT_ITEMS,
+                    "obj.bones",
+                    "obj.spit_raw_bird_meat",
+                    "obj.hunting_stripy_bird_feather",
+                )
+                column(COL_CAUGHT_MIN, 1, 1, 5)
+                column(COL_CAUGHT_MAX, 1, 1, 10)
+                // Not "multicoloured_bird": the trap states are the `_coloured` set, 9347/9348.
+                column(LocKeyed.COL_LOC_KEY, "coloured")
+            }
         }
 
     /**
@@ -198,6 +220,38 @@ object HunterTables {
                 column(COL_CAUGHT_MIN, 1)
                 column(COL_CAUGHT_MAX, 1)
                 column(LocKeyed.COL_LOC_KEY, "chinchompa_black")
+            }
+
+            // The two rate-blocked creatures: no chart or prose endpoints exist anywhere, so both
+            // pairs are derived guesses - the chinchompa's curve translated to each creature's own
+            // requirement. Derivation and anchors: docs/hunter.md.
+            row("dbrow.hunter_ferret") {
+                columnRSCM(COL_NPC, "npc.hunting_ferret")
+                column(COL_LEVEL, 27)
+                column(COL_XP, 1152)
+                // Derived guess, not published - see docs/hunter.md.
+                column(COL_SUCCESS_LOW, 75)
+                column(COL_SUCCESS_HIGH, 338)
+                // The item Ferret; `npc.hunting_ferret` is the creature (the claws pattern).
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.hunting_ferret")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                column(LocKeyed.COL_LOC_KEY, "ferret")
+            }
+
+            row("dbrow.hunter_embertailed_jerboa") {
+                // Not `npc.varlamore_jerboa`, which is ambient scenery named plain "Jerboa".
+                columnRSCM(COL_NPC, "npc.varlamore_hunterjerboa01")
+                column(COL_LEVEL, 39)
+                column(COL_XP, 1370)
+                // Derived guess, not published - see docs/hunter.md.
+                column(COL_SUCCESS_LOW, 43)
+                column(COL_SUCCESS_HIGH, 306)
+                // Large jerboa tail is rumour-conditional, omitted like Kebbity tuft.
+                columnRSCM(COL_CAUGHT_ITEMS, "obj.hunting_jerboa_tail")
+                column(COL_CAUGHT_MIN, 1)
+                column(COL_CAUGHT_MAX, 1)
+                column(LocKeyed.COL_LOC_KEY, "jerboa")
             }
         }
 

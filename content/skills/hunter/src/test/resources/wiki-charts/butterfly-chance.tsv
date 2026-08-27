@@ -1,0 +1,60 @@
+# creature	level	chance256
+# Butterfly netting + tropical wagtail catch-chance charts, extracted 2026-08-24 from the
+# offline wiki snapshot 20260817 via the `osrs-cache` MCP `get_wiki_section` (the sqlite
+# `chunks` route truncates at ~1KB and silently loses most points).
+# Revisions fitted against:
+#   Black warlock    oldid=15288148  section "Hunter info > Hunting chance" (41+34 points)
+#   Sunlight Moth    oldid=15197088  section "Hunter info > Hunting chance" (21+14 points)
+#   Tropical wagtail oldid=15259195  section "Hunter info"                  (43 points)
+# The `_magicnet` series are the magic butterfly net's separate, faster curve. Recorded here
+# but NOT shipped: see HunterTables.butterflyCreatures for why.
+# Ruby harvest, Sapphire glacialis and Snowy knight carry NO chart on any page - their pairs
+# are the annotated guesses, derived from the two published curves below.
+# Appended 2026-08-25: Moonlight moth oldid=15208105, section "Hunter info > Hunting chance"
+# (18+14 points). NOT a shipped creature - it has zero spawns - but it is the third published
+# member of this family and it does NOT share the other two's curve: it fits (0, 276) plain and
+# (20, 286) magic, each a unique exact fit. Kept here because it is the counterexample that
+# bounds what the three guessed rows may claim; see HunterRateTablesTest.
+tropical_wagtail	19	130
+tropical_wagtail	20	133
+tropical_wagtail	21	136
+tropical_wagtail	22	139
+tropical_wagtail	23	142
+tropical_wagtail	24	145
+tropical_wagtail	25	148
+tropical_wagtail	26	151
+tropical_wagtail	27	154
+tropical_wagtail	28	157
+tropical_wagtail	29	160
+tropical_wagtail	30	163
+tropical_wagtail	31	166
+tropical_wagtail	32	169
+tropical_wagtail	33	172
+tropical_wagtail	34	175
+tropical_wagtail	35	178
+tropical_wagtail	36	181
+tropical_wagtail	37	184
+tropical_wagtail	38	187
+tropical_wagtail	39	190
+tropical_wagtail	40	193
+tropical_wagtail	41	196
+tropical_wagtail	42	199
+tropical_wagtail	43	202
+tropical_wagtail	44	205
+tropical_wagtail	45	208
+tropical_wagtail	46	211
+tropical_wagtail	47	214
+tropical_wagtail	48	217
+tropical_wagtail	49	220
+tropical_wagtail	50	224
+tropical_wagtail	51	227
+tropical_wagtail	52	230
+tropical_wagtail	53	233
+tropical_wagtail	54	236
+tropical_wagtail	55	239
+tropical_wagtail	56	242
+tropical_wagtail	57	245
+tropical_wagtail	58	248
+tropical_wagtail	59	251
+tropical_wagtail	60	254
+tropical_wagtail	61	256

@@ -29,6 +29,11 @@ hunter_red_salamander = 56322
 hunter_black_salamander = 56323
 hunter_tecu_salamander = 56324
 hunter_imp = 56330
+# The closers join already-shipped tables, so their ids sit above every id in use anywhere in the
+# hunter block - not merely their own table's (docs/hunter.md).
+hunter_tropical_wagtail = 56360
+hunter_ferret = 56361
+hunter_embertailed_jerboa = 56362
 
 [gamevals.controller]
 hunter_trap = 2

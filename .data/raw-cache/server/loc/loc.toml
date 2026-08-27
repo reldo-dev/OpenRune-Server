@@ -2374,3 +2374,18 @@ contentGroup = "content.hunter_magic_box"
 # site's own varbit, and `LocInteractions.opTrigger` resolves the same child before it looks for a
 # handler. The group therefore belongs on the children, and it has to be on all nine or the trap
 # becomes unclickable in exactly the state that is missing one.
+
+[[object]]
+id = "loc.hunting_ojibway_trap_full_coloured"
+inherit = "loc.hunting_ojibway_trap_full_coloured"
+contentGroup = "content.hunter_bird_snare"
+
+[[object]]
+id = "loc.hunting_boxtrap_full_ferret"
+inherit = "loc.hunting_boxtrap_full_ferret"
+contentGroup = "content.hunter_box_trap"
+
+[[object]]
+id = "loc.hunting_boxtrap_full_jerboa"
+inherit = "loc.hunting_boxtrap_full_jerboa"
+contentGroup = "content.hunter_box_trap"
