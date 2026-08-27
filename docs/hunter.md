@@ -1016,3 +1016,93 @@ variable-length ones) and footprint order/orientation (segment draw order does
 not always read as walking order, and the mid-segment orientation flip vs
 live is unverified) are known, disclosed display-level divergences — the
 catch, xp and loot are unaffected.
+
+## Pitfall
+
+Structurally a crab trap, not a trap: the map places `hunting_pitfall_<n>`
+locs whose `multiloc` children render from the viewing player's own 3-bit
+`hunt_pitfall_state<n>` varbit. `locRepo` is never touched (the never-delete
+invariant is unrepresentable here); pits are private; writes go through
+`VarPlayerIntMapSetter` by gameval name and **never a computed bit offset** —
+the layout has a hole (site 18 ends at bit 23 of its varp, site 19 starts at
+bit 25). The one repository held is `NpcRepository`, because a caught creature
+dies.
+
+### The chase
+
+`Tease` (`op1`, the only op any of the five creatures declares — none has
+`Attack`) sets the engine's own `NpcMode.PlayerFollow`; no walk loop, no
+timer. `PlayerFollow` was chosen over the combat chase because the combat
+leash (8 tiles from spawn on these defaults) is far shorter than the run to a
+pit — but `PlayerFollow` has *no* leash at all, and the follow processor
+teleports the creature onto the player past 15 tiles' gap, so the per-cycle
+`tick` is a prerequisite, not a refinement: without it a teased larupia
+follows its hunter to Varrock forever. The leash is spawn-anchored distance
+(`CHASE_RANGE`), matching the engine's own combat-leash shape; a cycle cap
+would punish the slow hunter, and a chase that never leaves the hunting
+ground is deliberately uncapped. Chases are keyed by npc identity to a
+`PlayerUid` (never a slot — slots are reused at logout), the `FalconLinks`
+reasoning again.
+
+**"Will not jump the same pit twice in a row"** is read literally: one
+remembered pit per creature, replaced by the next failure, dropped with the
+chase — *not* an accumulating set, which would quietly retire the whole
+hunting ground. A re-tease of the same creature deliberately does not clear
+it.
+
+### The catch
+
+`Jump` filters the chase ledger three ways (teaser is this player; species is
+the pit's own; within catch range), takes the nearest, and rolls only for the
+three cats: both antelopes' pairs are null because their catch is published
+as certain — a null pair means *no draw taken*, not a rate that always wins,
+and the tests count draws to keep those distinct. The cats' pairs are derived,
+not published. **The hunter's spear's +5% is deliberately not implemented and
+must not be moved to the catch**: it modifies the *tease* (per the Pitfall
+page and the Jagex newspost it cites; the Hunter's spear page's own reading
+contradicts both), the base tease rate is published nowhere and no source
+describes a failed tease, so the tease is modelled certain and a relative
+bonus on a certainty has nothing to modify. Retaliation (5–7 melee max hit)
+is not modelled either — and with no `Attack` op the player could never
+fight back, so a chase-termination rule is a prerequisite of retaliation;
+whoever builds the combat half inherits the leash. The player's own vault
+animation (`exactMove`) is not modelled; the catch resolves without moving
+anybody. The catch message is filterable on live (so a string exists) but
+unrecoverable; the collapse in front of the player says it.
+
+### The collapse ledger and the two-creature window
+
+A pit's saved state is one 3-bit varbit; the in-memory `Collapse` ledger
+carries what the varbit has no room for (whose catch, which creature, cycles
+to landing) and is deliberately transient — a restart keeps the varbit and
+loses the ledger, which reads as a fresh arming. The wiki documents catching
+two creatures on one log ("tease a second one into the same trap as the first
+is still walking over it… Dismantle the results of A… Dismantle the results
+of B"), so the ledger is a list per site: one dismantle pays one creature;
+`PIT_CAPACITY` (2) is counted against catches *this arming* (not the ledger,
+which shrinks on collect — counting it let one log take unlimited creatures);
+and `PitState.Empty` may only be written when nothing of the player's is
+pending, or an in-flight sibling lands unpaid. The landing rides the same
+`LateCycle` hook as the leash rather than a queue, so the pair cannot be
+half-wired. `Full` vs `FullRotated` is cosmetic: the cache pairs every
+collapsed loc with a `_180` twin, and the side the creature crossed from
+picks the twin (a diagonal split, since the 25 sites are not axis-aligned).
+
+### Dismantle asymmetry with the deadfall
+
+Dismantling an armed pit returns nothing: the deadfall refunds its log only
+because it *remembers* it (its controller stores the obj id); a pitfall's
+entire per-site state is the 3-bit varbit, the cache defines no companion log
+varbit on any of the 25 sites, and a generic-logs refund would be an item
+transmute. `Catching` is refused by every op (the cache gives it none), and a
+logout mid-collapse is resolved by the login rebuild queue — a soft queue,
+because of the login-transmit varp trap yet again.
+
+### Sourcing
+
+Set: knife/fletching knife kept, exactly one log consumed, no delay (nothing
+to protect against, unlike the deadfall's charge-after-delay dance). Refusal
+strings are ours; success is silent (the pit visibly changes). The trap cap is
+the shared `TrapLadder`. All 25 authored site coordinates are proven against
+the packed map by `PitfallSitesTest` reading the map files the way
+`GameMapDecoder` does.

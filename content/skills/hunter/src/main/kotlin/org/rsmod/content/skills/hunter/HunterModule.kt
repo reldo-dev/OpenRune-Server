@@ -13,5 +13,6 @@ class HunterModule : PluginModule() {
         bindSingleton<BirdHouseClock>(SystemBirdHouseClock)
         bindInstance<HunterBirdHouse>()
         bindInstance<HunterTracking>()
+        bindInstance<HunterPitfall>()
     }
 }
