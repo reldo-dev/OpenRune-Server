@@ -9,8 +9,15 @@ import org.rsmod.api.random.GameRandom
 import org.rsmod.game.entity.Controller
 import org.rsmod.game.inv.Inventory
 import org.rsmod.game.loc.BoundLocInfo
+import org.rsmod.map.CoordGrid
 
 // Rules shared by every hunter technique. Design notes: docs/hunter.md.
+
+/**
+ * Whether this tile is inside Puro-Puro (exactly map square 40,67). A coordinate check rather than
+ * an area lookup because [ImplingSpawner] must ask the same question of a non-player marker.
+ */
+internal fun CoordGrid.inPuroPuro(): Boolean = (x shr 6) == 40 && (z shr 6) == 67
 
 /** The `maxLevel` SkillingSuccessRate interpolates against; published charts run to level 99. */
 internal const val MAX_HUNTER_LEVEL: Int = 99

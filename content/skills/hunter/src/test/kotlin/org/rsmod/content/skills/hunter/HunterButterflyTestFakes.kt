@@ -7,9 +7,12 @@ import dev.openrune.rscm.RSCMType
 import org.rsmod.api.player.protect.ProtectedAccess
 import org.rsmod.api.player.protect.ProtectedAccessContextFactory
 import org.rsmod.api.registry.npc.NpcRegistry
+import org.rsmod.api.registry.obj.ObjRegistry
 import org.rsmod.api.registry.player.PlayerRegistry
 import org.rsmod.api.registry.zone.ZonePlayerActivityBitSet
+import org.rsmod.api.registry.zone.ZoneUpdateMap
 import org.rsmod.api.repo.npc.NpcRepository
+import org.rsmod.api.repo.obj.ObjRepository
 import org.rsmod.coroutine.GameCoroutine
 import org.rsmod.events.EventBus
 import org.rsmod.game.MapClock
@@ -50,13 +53,31 @@ class HunterButterflyTestWorld(hunterXpBonus: Double = 0.0) {
     private val eventBus = EventBus()
     private val zoneActivity = ZonePlayerActivityBitSet()
 
+    private val zoneUpdates = ZoneUpdateMap()
+    private val objRegistry = ObjRegistry(zoneUpdates)
+
     private val npcRegistry = NpcRegistry(npcList, collision, eventBus)
     private val playerRegistry = PlayerRegistry(playerList, collision, zoneActivity, eventBus)
 
     val npcRepo: NpcRepository = NpcRepository(mapClock, npcRegistry, npcList)
 
+    /** Implings need one where butterflies do not: opening a jar can overflow to the floor. */
+    val objRepo: ObjRepository = ObjRepository(mapClock, objRegistry)
+
     val butterfly: HunterButterfly =
         HunterButterfly(npcRepo = npcRepo, gameRandom = random, xpMods = hunterXpModifiers(hunterXpBonus))
+
+    /** Exposed so the wiring test can build [ImplingEvents] without a second world. */
+    val implingSpawner: ImplingSpawner = ImplingSpawner(npcList, npcRepo, random)
+
+    val impling: HunterImpling =
+        HunterImpling(
+            npcRepo = npcRepo,
+            objRepo = objRepo,
+            spawner = implingSpawner,
+            gameRandom = random,
+            xpMods = hunterXpModifiers(hunterXpBonus),
+        )
 
     private var nextUuid: Long = 1L
 
@@ -133,8 +154,26 @@ class HunterButterflyTestWorld(hunterXpBonus: Double = 0.0) {
         return butterfly.op(access)
     }
 
+    /** [run] for the impling half of the world; `catchImpling` does not suspend either. */
+    fun <T> runImpling(player: Player, op: HunterImpling.(ProtectedAccess) -> T): T {
+        val access = protectedAccess(player)
+        player.currentMapClock = mapClock.cycle
+        player.processedMapClock = mapClock.cycle
+        return impling.op(access)
+    }
+
     companion object {
         /** Well clear of `RegionRegistry.INSTANCE_MIN_X`, and mid-zone. */
         val BUTTERFLY_TILE: CoordGrid = CoordGrid(3204, 3204, 0)
+
+        /**
+         * A tile inside Puro-Puro, which the jar rule turns on.
+         *
+         * Not a made-up coordinate: `0_40_67_10_10` is one of the four guaranteed rare-impling
+         * markers `.data/raw-cache/map/npcs/mainland_extensions.toml` places in the maze, so this
+         * is a tile the game really does spawn implings on. [BUTTERFLY_TILE] is mapsquare 50,50 and
+         * is therefore ordinary Gielinor, which is what makes the pair usable as a contrast.
+         */
+        val PURO_PURO_TILE: CoordGrid = CoordGrid(2570, 4298, 0)
     }
 }

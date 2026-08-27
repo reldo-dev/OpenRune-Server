@@ -752,3 +752,91 @@ The automatic re-bait ("after 3 ticks... reduced to just one tick by
 immediately clicking again") — an ergonomic accelerator whose second half has
 no state to hang off yet; and the crab visibly walking to the trap (the trap
 simply fills).
+
+## Implings and the Puro-Puro spawner
+
+Impling catching is butterfly netting with one extra rule — the two share the
+nets, the +10 barehanded cost, the +20 faster curve and the jar-swap reward.
+Nothing is laid or remembered, so no `TrapFamily`, controller or varcon.
+
+### The jar rule and the two npc ids
+
+"Unlike elsewhere on Gielinor, impling jars must be used when catching
+implings in Puro-Puro" (*Puro-Puro*, oldid=15196042); elsewhere a jarless
+catch is legal and "the player will immediately receive the loot from the
+impling, instead of the impling itself" (*Baby impling*, oldid=15297388) —
+rolled off the very table its jar would have carried, not a second table.
+
+**Where the player stands decides the jar; the npc id decides the
+experience.** Every impling has two npc ids (a Puro-Puro `_maze` form and an
+overworld form — one row covers both), and the wiki ties experience to the
+*spawn's* origin: an overworld impling caught inside Puro-Puro still pays the
+overworld value, which for the magpie is 216 against 44. The crystal impling
+has no `_maze` form (Prifddinas-only), so both npc columns hold the same id.
+`inPuroPuro` is a coordinate check (map square 40,67) rather than an area
+lookup because the spawner must ask the same question of a marker that has no
+area membership.
+
+### Rates: the one table with no guesses
+
+All twelve pairs are the chart template's own published parameters, read from
+Parsoid transclusion metadata — no fit, no guess. Every impling page labels
+its second series "Barehanded or magic butterfly net", and *Impling*
+(oldid=15303398) states it in prose, so the +20 faster-curve rule is
+unambiguous here in a way it is not for butterflies. Levels are twice-sourced
+(the client's own skill-guide dbrows, `data=skill,23,<level>,4`, and the
+infoboxes).
+
+### Jar loot
+
+Every rate is published under the wiki's "provided by Jagex" banner; the
+extract with per-page oldids is a test resource, and `ImplingLootTest`
+asserts every row against it. Main tables sum to exactly 1 (out of 100 where
+rates are tenths/hundredths; high-tier jars publish one flat rate, so unit
+weights out of the slot count). Three shapes are not "roll one item": the
+baby jar's real 1/10 `nothing()` (the only impling that can pay nothing),
+Gourmet's Grubby key as a pre-roll (folding its 1/500 into the main table
+would push the sum to 1.002), and clue scrolls as tertiaries with the usual
+scroll-box transform. Noted rewards resolve through `certlink`, not a `cert_`
+prefix guess — three of seventeen do not follow the naming. Opening a jar
+returns the empty one with a 10% break chance — sourced to Mod Ash ("10% flat
+rate, I think", *Baby impling jar* oldid=15185112), the one hedged number in
+the feature.
+
+**The lucky impling is catchable but its jar is inert**: its published loot
+is one roll on a clue-tier *reward* table, and this server has no casket
+rewards anywhere — writing item rows would mean inventing five reward
+tables. `ImplingLootTest` names it as the single permitted exception. A
+jarless lucky catch likewise pays nothing but the experience.
+
+### The spawner
+
+`.data` ships 61 invisible "precursor" markers (`vislevel=0`, no models, no
+ops) and not one spawn of a catchable impling outside Puro-Puro — the
+precursors *are* the spawn data, matching *Impling*'s "they initially spawn
+as an invisible NPC, and 'roam' invisibly for two minutes". Which impling a
+marker produces is decided by which marker it is: 33 common (10 in
+Puro-Puro), 19 uncommon (12), 4 rare, 4 rare `_maze`, one Prifddinas. All
+four tier tables are published with explicit numerators (*Impling*, *Types of
+spawn*): low/mid out of 100, overworld-high out of 101, Puro-Puro-high out of
+301 — the differing denominators are the wiki's. Timings: 200 cycles
+invisible roam ("two minutes"), ~30 minutes wander before despawn; a captured
+impling's marker waits the full two minutes again (the wiki's "immediate
+respawn" is of the *invisible* npc).
+
+**Deliberately not the wiki's global 30-minute batch cycle.** Each marker
+counts down independently; the observable difference is that implings do not
+all vanish on the same tick. The global model needs spawn-point selection we
+would have to invent, while Puro-Puro's own description ("35 spawn points...
+respawns immediately upon capture") is exactly per-anchor behaviour.
+
+A caught impling is released two ways, and only the spawner can tell them
+apart: a map-placed one (the 51 fixed low-tier Puro-Puro spawns) is
+`despawn`ed so the engine returns it to its tile; a spawner-made one must be
+`del`eted, because `despawn` schedules an engine respawn of that same npc and
+would quietly defeat the tier roll forever.
+
+### Not modelled
+
+Imp defenders, Puro-Puro retaliation, and crop circles — their own features,
+not branches of this one.

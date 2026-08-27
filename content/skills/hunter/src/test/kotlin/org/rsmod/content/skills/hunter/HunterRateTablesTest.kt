@@ -33,7 +33,7 @@ class HunterRateTablesTest {
                 checked++
             }
         }
-        assertEquals(870, checked, "Chart point count changed; confirm the resources are intact.")
+        assertEquals(1682, checked, "Chart point count changed; confirm the resources are intact.")
     }
 
     /**
@@ -229,6 +229,9 @@ class HunterRateTablesTest {
             } +
             ButterflyCreatures.all.map {
                 ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
+            } +
+            ImplingCreatures.all.map {
+                ShippedRate(it.npc, it.level, it.successLow, it.successHigh)
             }
 
     private fun firstCertainLevel(rate: ShippedRate): Int =
@@ -278,6 +281,7 @@ class HunterRateTablesTest {
                 "butterfly-chance.tsv",
                 "deadfall-chance.tsv",
                 "falconry-chance.tsv",
+                "impling-chance.tsv",
                 "magicbox-chance.tsv",
                 "nettrap-chance.tsv",
             )
@@ -306,6 +310,78 @@ class HunterRateTablesTest {
                 Charted("spotted_kebbit", "npc.huntingbeast_speedy"),
                 Charted("dark_kebbit", "npc.huntingbeast_silent"),
                 Charted("dashing_kebbit", "npc.huntingbeast_speedy2"),
+                Charted("baby_impling", "npc.ii_impling_type_1_maze"),
+                Charted(
+                    "baby_impling_magicnet",
+                    "npc.ii_impling_type_1_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("young_impling", "npc.ii_impling_type_2_maze"),
+                Charted(
+                    "young_impling_magicnet",
+                    "npc.ii_impling_type_2_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("gourmet_impling", "npc.ii_impling_type_3_maze"),
+                Charted(
+                    "gourmet_impling_magicnet",
+                    "npc.ii_impling_type_3_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("earth_impling", "npc.ii_impling_type_4_maze"),
+                Charted(
+                    "earth_impling_magicnet",
+                    "npc.ii_impling_type_4_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("essence_impling", "npc.ii_impling_type_5_maze"),
+                Charted(
+                    "essence_impling_magicnet",
+                    "npc.ii_impling_type_5_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("eclectic_impling", "npc.ii_impling_type_6_maze"),
+                Charted(
+                    "eclectic_impling_magicnet",
+                    "npc.ii_impling_type_6_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("nature_impling", "npc.ii_impling_type_7_maze"),
+                Charted(
+                    "nature_impling_magicnet",
+                    "npc.ii_impling_type_7_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("magpie_impling", "npc.ii_impling_type_8_maze"),
+                Charted(
+                    "magpie_impling_magicnet",
+                    "npc.ii_impling_type_8_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("ninja_impling", "npc.ii_impling_type_9_maze"),
+                Charted(
+                    "ninja_impling_magicnet",
+                    "npc.ii_impling_type_9_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("crystal_impling", "npc.ii_impling_type_12_johnny"),
+                Charted(
+                    "crystal_impling_magicnet",
+                    "npc.ii_impling_type_12_johnny",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("dragon_impling", "npc.ii_impling_type_10_maze"),
+                Charted(
+                    "dragon_impling_magicnet",
+                    "npc.ii_impling_type_10_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Charted("lucky_impling", "npc.ii_impling_type_11_maze"),
+                Charted(
+                    "lucky_impling_magicnet",
+                    "npc.ii_impling_type_11_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
                 Charted("black_warlock", "npc.butterfly_warlock"),
                 Charted("sunlight_moth", "npc.moth_sunlight"),
                 // The magic net's separate, faster curve, modelled as a flat bonus on both
@@ -347,6 +423,90 @@ class HunterRateTablesTest {
                 Published("Spotted kebbit", "Spotted kebbit", "npc.huntingbeast_speedy"),
                 Published("Dark kebbit", "Dark kebbit", "npc.huntingbeast_silent"),
                 Published("Dashing kebbit", "Dashing kebbit", "npc.huntingbeast_speedy2"),
+                Published("Baby impling", "Butterfly net", "npc.ii_impling_type_1_maze"),
+                Published(
+                    "Baby impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_1_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Young impling", "Butterfly net", "npc.ii_impling_type_2_maze"),
+                Published(
+                    "Young impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_2_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Gourmet impling", "Butterfly net", "npc.ii_impling_type_3_maze"),
+                Published(
+                    "Gourmet impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_3_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Earth impling", "Butterfly net", "npc.ii_impling_type_4_maze"),
+                Published(
+                    "Earth impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_4_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Essence impling", "Butterfly net", "npc.ii_impling_type_5_maze"),
+                Published(
+                    "Essence impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_5_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Eclectic impling", "Butterfly net", "npc.ii_impling_type_6_maze"),
+                Published(
+                    "Eclectic impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_6_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Nature impling", "Butterfly net", "npc.ii_impling_type_7_maze"),
+                Published(
+                    "Nature impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_7_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Magpie impling", "Butterfly net", "npc.ii_impling_type_8_maze"),
+                Published(
+                    "Magpie impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_8_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Ninja impling", "Butterfly net", "npc.ii_impling_type_9_maze"),
+                Published(
+                    "Ninja impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_9_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Crystal impling", "Butterfly net", "npc.ii_impling_type_12_johnny"),
+                Published(
+                    "Crystal impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_12_johnny",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Dragon impling", "Butterfly net", "npc.ii_impling_type_10_maze"),
+                Published(
+                    "Dragon impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_10_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
+                Published("Lucky impling", "Butterfly net", "npc.ii_impling_type_11_maze"),
+                Published(
+                    "Lucky impling",
+                    "Barehanded or magic butterfly net",
+                    "npc.ii_impling_type_11_maze",
+                    HunterButterfly.NET_BONUS,
+                ),
                 Published("Black warlock", "Butterfly net", "npc.butterfly_warlock"),
                 Published(
                     "Black warlock",
